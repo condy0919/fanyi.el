@@ -1,0 +1,1 @@
+# fanyi.el
