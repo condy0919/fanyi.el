@@ -33,7 +33,7 @@
 (require 'thingatpt)
 (require 'url)
 
-;; Silence compile warnings
+;; Silence compile warnings.
 (defvar url-http-end-of-headers)
 
 (defgroup fanyi nil
