@@ -86,7 +86,7 @@
   "Face used for paraphrase of word."
   :group 'fanyi)
 
-(defface fanyi-word-category-face
+(defface fanyi-word-pos-face
   '((((background dark)) :foreground "light slate gray")
     (((background light)) :foreground "dark slate gray"))
   "Face used for highlight the part of speech."
@@ -249,7 +249,7 @@ It could be either British pronunciation or American pronunciation.")
       ;; Clear.
       (erase-buffer)
       ;; Syllable division and star/level description.
-      (insert (format "Syllable division: %s %s %s\n"
+      (insert (format "Syllable division: %s %s %s\n\n"
                       (propertize (oref this :syllable) 'face 'fanyi-syllable-face)
                       (propertize (s-repeat (oref this :star) "★") 'face 'fanyi-star-face)
                       (oref this :level)))
@@ -259,25 +259,36 @@ It could be either British pronunciation or American pronunciation.")
       (let ((phonetics (oref this :phonetics)))
         (cl-assert (equal (length phonetics) 2))
         (cl-loop
-         for i from 0 to 1 do
-         (cl-destructuring-bind (pronunciation female male) (nth i phonetics)
-           (if (equal i 0)
-               (insert "英")
-             (insert "  美"))
-           (insert (format " %s " pronunciation))
-           (insert-button "♀"
-                          'action (lambda (url) (fanyi-play-sound url))
-                          'button-data (format (oref this :sound-url) female)
-                          'face 'fanyi-female-speaker-face
-                          'follow-link t)
-           (insert " ")
-           (insert-button "♂"
-                          'action (lambda (url) (fanyi-play-sound url))
-                          'button-data (format (oref this :sound-url) male)
-                          'face 'fanyi-male-speaker-face
-                          'follow-link t)
-           ))
-        )
+         for i from 0 to 1
+         do (cl-destructuring-bind (pronunciation female male) (nth i phonetics)
+              (if (equal i 0)
+                  (insert "英")
+                (insert "  美"))
+              (insert (format " %s " pronunciation))
+              (insert-button "♀"
+                             'action #'fanyi-play-sound
+                             'button-data (format (oref this :sound-url) female)
+                             'face 'fanyi-female-speaker-face
+                             'follow-link t)
+              (insert " ")
+              (insert-button "♂"
+                             'action #'fanyi-play-sound
+                             'button-data (format (oref this :sound-url) male)
+                             'face 'fanyi-male-speaker-face
+                             'follow-link t)))
+        (insert "\n\n"))
+      ;; Paraphrases.
+      ;; - n. 荣誉；荣幸；尊敬；信用；正直；贞洁
+      ;; - vt. 尊敬；使荣幸；对...表示敬意；兑现
+      ;; ...
+      (cl-loop
+       for pa in (oref this :paraphrases)
+       do (cl-destructuring-bind (pos p) pa
+            (insert (format "- %s %s\n"
+                            (propertize pos 'face 'fanyi-word-pos-face)
+                            (propertize p 'face 'fanyi-word-paraphrase-face)))))
+      (insert "\n\n")
+
     )))
   ;; (let* ((dist (oref this :distribution))
   ;;        (chart (chart-bar-quickie
@@ -287,11 +298,13 @@ It could be either British pronunciation or American pronunciation.")
       ;;                (mapcar #'car dist) "Percent")))
 
 (setq xxx-buf (get-buffer-create "*xxx*"))
+(setq yyy-buf (get-buffer-create "*yyy*"))
 
 (fanyi-render fanyi-haici-instance xxx-buf)
 (oref fanyi-haici-instance :star)
 
 (oref fanyi-haici-instance :distribution)
+(oref fanyi-haici-instance :paraphrases)
 
 (defvar fanyi-haici-instance
   (fanyi-haici-service :url "https://dict.cn/%s"
