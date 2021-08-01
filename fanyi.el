@@ -160,7 +160,8 @@ It could be either British pronunciation or American pronunciation.")
   "The HaiCi translation service.")
 
 ;; Silence unknown slots warning.
-(eieio-declare-slots :url :sound-url :syllable :star :level :phonetics :paraphrases :distribution)
+(eieio-declare-slots :url :sound-url)
+(eieio-declare-slots :syllable :star :level :phonetics :paraphrases :distribution)
 
 (cl-defmethod fanyi-parse-from ((this fanyi-haici-service) dom)
   "Complete the fields of THIS from DOM tree."
@@ -169,14 +170,12 @@ It could be either British pronunciation or American pronunciation.")
          (matches (s-match "\\([a-zA-Z·]+\\)" str)))
     (cl-assert matches)
     (oset this :syllable (nth 1 matches)))
-
   ;; star and level description.
   (let* ((str (dom-attr (dom-by-class dom "level-title") 'level))
          (matches (s-match "\\([12345]\\)" str)))
     (cl-assert matches)
     (oset this :star (string-to-number (nth 1 matches)))
     (oset this :level str))
-
   ;; phonetics, a list of (pronunciation, female sound url, male sound url)
   ;;
   ;; British: female, male
@@ -206,14 +205,12 @@ It could be either British pronunciation or American pronunciation.")
                       'naudio))
                     collection)))
     (oset this :phonetics (nreverse collection)))
-
   ;; paraphrases, list of (pos, paraphrase)
   (let ((paraphrases (butlast (dom-by-tag (dom-by-class dom "dict-basic-ul") 'li))))
     (oset this :paraphrases
           (cl-loop for p in paraphrases
                    collect (list (dom-text (nth 3 p)) (dom-text (nth 5 p))))))
-
-  ;; distribution of paraphrases.
+  ;; distribution of senses.
   (let* ((chart (dom-attr (dom-by-id dom "dict-chart-basic") 'data))
          (json (json-read-from-string (url-unhex-string chart))))
     (oset this :distribution
@@ -230,24 +227,10 @@ It could be either British pronunciation or American pronunciation.")
 ;; 其他
 (cl-defmethod fanyi-render ((this fanyi-haici-service) buf)
   "Render THIS page into BUF and return it."
-  ;; (chart-bar-quickie
-  ;;  'horizontal
-  ;;  "Eye Colors - Descending"
-  ;;  (mapcar #'car eye-color-groups) "Colors"
-  ;;  (mapcar #'cdr eye-color-groups) "Frequency"
-  ;;  nil
-  ;;  (on #'cdr #'>) ;; A compar
-
-;;    (paraphrases :initarg :paraphrase
-;;                 :type list
-;;                 :documentation "List of (pos . paraphrase).")
-;;    (distribution :initarg :distribution
-;;                  :type list
-;;                  :documentation "List of (percent . sense)."))
   (with-current-buffer buf
     (let ((inhibit-read-only t))
-      ;; Clear.
-      (erase-buffer)
+      ;; TODO mutex
+      (goto-char (point-max))
       ;; Syllable division and star/level description.
       (insert (format "Syllable division: %s %s %s\n\n"
                       (propertize (oref this :syllable) 'face 'fanyi-syllable-face)
@@ -287,15 +270,18 @@ It could be either British pronunciation or American pronunciation.")
             (insert (format "- %s %s\n"
                             (propertize pos 'face 'fanyi-word-pos-face)
                             (propertize p 'face 'fanyi-word-paraphrase-face)))))
-      (insert "\n\n")
-
+      (insert "\n")
+      ;; Make a button for sense distribution.
+      (insert-button "Click me to view the distribution chart"
+                     'action (lambda (dist)
+                               (chart-bar-quickie
+                                'vertical
+                                "*fanyi-haici-senses-chart*"
+                                (mapcar #'cadr dist) "Senses"
+                                (mapcar #'car dist) "percent"))
+                     'button-data (oref this :distribution)
+                     'follow-link t)
     )))
-  ;; (let* ((dist (oref this :distribution))
-  ;;        (chart (chart-bar-quickie
-  ;;                'vertical
-  ;;                "fanyi-haici-render"
-  ;;                (mapcar #'cadr dist) "Sense"
-      ;;                (mapcar #'car dist) "Percent")))
 
 (setq xxx-buf (get-buffer-create "*xxx*"))
 (setq yyy-buf (get-buffer-create "*yyy*"))
@@ -303,14 +289,11 @@ It could be either British pronunciation or American pronunciation.")
 (fanyi-render fanyi-haici-instance xxx-buf)
 (oref fanyi-haici-instance :star)
 
-(oref fanyi-haici-instance :distribution)
-(oref fanyi-haici-instance :paraphrases)
-
 (defvar fanyi-haici-instance
   (fanyi-haici-service :url "https://dict.cn/%s"
                        :sound-url "https://audio.dict.cn/%s"))
 
-(defun fanyi--insert-header (text)
+(defun fanyi-insert-header (text)
   "The header about current TEXT."
   (insert (format "Translating %s\n\n\n" (propertize text 'face 'fanyi-word-face))))
 
@@ -342,7 +325,7 @@ It could be either British pronunciation or American pronunciation.")
                               ;; Clear the previous search result.
                               (erase-buffer)
                               ;; Make the user searched WORD more perceptible.
-                              (fanyi--insert-header word)
+                              (fanyi-insert-header word)
 
                               (fanyi-parse-from fanyi-haici-instance dom)
                               (insert (fanyi-render fanyi-haici-instance))
