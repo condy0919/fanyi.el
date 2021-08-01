@@ -271,8 +271,8 @@ It could be either British pronunciation or American pronunciation.")
                             (propertize pos 'face 'fanyi-word-pos-face)
                             (propertize p 'face 'fanyi-word-paraphrase-face)))))
       (insert "\n")
-      ;; Make a button for sense distribution.
-      (insert-button "Click me to view the distribution chart"
+      ;; Make a button for senses distribution.
+      (insert-button "Click me to view the senses chart"
                      'action (lambda (dist)
                                (chart-bar-quickie
                                 'vertical
@@ -328,7 +328,7 @@ It could be either British pronunciation or American pronunciation.")
                               (fanyi-insert-header word)
 
                               (fanyi-parse-from fanyi-haici-instance dom)
-                              (insert (fanyi-render fanyi-haici-instance))
+                              (fanyi-render fanyi-haici-instance xxx-buf)
 
                               )
                             (pop-to-buffer buf))
