@@ -81,17 +81,6 @@
   "Face used for male speaker button."
   :group 'fanyi)
 
-(defface fanyi-word-paraphrase-face
-  '((t (:weight bold)))
-  "Face used for paraphrase of word."
-  :group 'fanyi)
-
-(defface fanyi-word-pos-face
-  '((((background dark)) :foreground "light slate gray")
-    (((background light)) :foreground "dark slate gray"))
-  "Face used for highlight the part of speech."
-  :group 'fanyi)
-
 (defun fanyi-play-sound (url)
   "Play URL via external program.
 See `fanyi-sound-player'."
@@ -264,12 +253,9 @@ It could be either British pronunciation or American pronunciation.")
       ;; - n. 荣誉；荣幸；尊敬；信用；正直；贞洁
       ;; - vt. 尊敬；使荣幸；对...表示敬意；兑现
       ;; ...
-      (cl-loop
-       for pa in (oref this :paraphrases)
-       do (cl-destructuring-bind (pos p) pa
-            (insert (format "- %s %s\n"
-                            (propertize pos 'face 'fanyi-word-pos-face)
-                            (propertize p 'face 'fanyi-word-paraphrase-face)))))
+      (cl-loop for pa in (oref this :paraphrases)
+               do (cl-destructuring-bind (pos p) pa
+                    (insert (format "- %s %s\n" pos p))))
       (insert "\n")
       ;; Make a button for senses distribution.
       (insert-button "Click me to view the senses chart"
@@ -307,10 +293,10 @@ It could be either British pronunciation or American pronunciation.")
                                   (format "Search Word (default \"%s\"): " default)
                                 "Search Word: ")))
                  (list (read-string prompt nil nil default))))
+  ;; libxml2 is required.
+  (when (not (fboundp 'libxml-parse-html-region))
+    (error "This function requires Emacs to be compiled with libxml2"))
   (let ((url (format (oref fanyi-haici-instance :url) word)))
-    ;; libxml2 is required.
-    (when (not (fboundp 'libxml-parse-html-region))
-      (error "This function requires Emacs to be compiled with libxml2"))
     (url-retrieve url (lambda (status)
                         ;; Something went wrong.
                         (when (or (not status) (plist-member status :error))
