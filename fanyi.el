@@ -36,6 +36,7 @@
 (require 'json)
 (require 'chart)
 (require 'eieio)
+(require 'button)
 (require 'thingatpt)
 
 ;; Silence compile warnings.
@@ -47,17 +48,37 @@
   :group 'tools
   :link '(url-link "https://github.com/condy0919/fanyi.el"))
 
-(defcustom fanyi-voice-player
+(defcustom fanyi-sound-player
   (or (executable-find "mpv")
       (executable-find "mplayer")
       (executable-find "mpg123"))
-  "Program to play voice."
+  "Program to play sound."
   :type 'string
   :group 'fanyi)
 
 (defface fanyi-word-face
   '((t (:height 1.75 :weight bold :foreground "#d08770")))
   "Face used for user requested word."
+  :group 'fanyi)
+
+(defface fanyi-syllable-face
+  '((t (:weight bold :foreground "#ff0000")))
+  "Face used for syllable of word."
+  :group 'fanyi)
+
+(defface fanyi-star-face
+  '((t (:foreground "#ffff00")))
+  "Face used for star of word."
+  :group 'fanyi)
+
+(defface fanyi-female-speaker-face
+  '((t (:foreground "#ec5e66")))
+  "Face used for female speaker button."
+  :group 'fanyi)
+
+(defface fanyi-male-speaker-face
+  '((t (:foreground "#57a7b7")))
+  "Face used for male speaker button."
   :group 'fanyi)
 
 (defface fanyi-word-paraphrase-face
@@ -71,6 +92,13 @@
   "Face used for highlight the part of speech."
   :group 'fanyi)
 
+(defun fanyi-play-sound (url)
+  "Play URL via external program.
+See `fanyi-sound-player'."
+  (if (not fanyi-sound-player)
+      (user-error "`fanyi-sound-player' is needed to play sound")
+    (start-process fanyi-sound-player nil fanyi-sound-player url)))
+
 (defconst fanyi-buffer-name "*fanyi*"
   "The default name of translation buffer.")
 
@@ -79,10 +107,10 @@
         :type string
         :protection :protected
         :documentation "Dictionary translation url.")
-   (voice-url :initarg :voice-url
+   (sound-url :initarg :sound-url
               :type string
               :protection :protected
-              :documentation "Dictionary voice url."))
+              :documentation "Dictionary sound url."))
   "The base class of translation service."
   :abstract t)
 
@@ -119,17 +147,20 @@
    (level :initarg :level
           :type string
           :documentation "Level description of the word.")
-   (phonetics :initarg :phonetic
+   (phonetics :initarg :phonetics
               :type list
               :documentation "Phonetics of the word.
 It could be either British pronunciation or American pronunciation.")
-   (paraphrases :initarg :paraphrase
+   (paraphrases :initarg :paraphrases
                 :type list
                 :documentation "List of (pos . paraphrase).")
    (distribution :initarg :distribution
                  :type list
                  :documentation "List of (percent . sense)."))
   "The HaiCi translation service.")
+
+;; Silence unknown slots warning.
+(eieio-declare-slots :url :sound-url :syllable :star :level :phonetics :paraphrases :distribution)
 
 (cl-defmethod fanyi-parse-from ((this fanyi-haici-service) dom)
   "Complete the fields of THIS from DOM tree."
@@ -146,7 +177,7 @@ It could be either British pronunciation or American pronunciation.")
     (oset this :star (string-to-number (nth 1 matches)))
     (oset this :level str))
 
-  ;; phonetics, a list of (pronunciation, female voice url, male voice url)
+  ;; phonetics, a list of (pronunciation, female sound url, male sound url)
   ;;
   ;; British: female, male
   ;; American: female, male
@@ -161,24 +192,24 @@ It could be either British pronunciation or American pronunciation.")
                       (dom-search node
                                   (lambda (x)
                                     (string= (dom-attr x 'lang) "EN-US"))))
-                     ;; female voice url
+                     ;; female sound url
                      (dom-attr
                       (dom-search node
                                   (lambda (x)
                                     (string= (dom-attr x 'class) "sound fsound")))
                       'naudio)
-                     ;; male voice url
+                     ;; male sound url
                      (dom-attr
                       (dom-search node
                                   (lambda (x)
                                     (string= (dom-attr x 'class) "sound")))
                       'naudio))
                     collection)))
-    (oset this :phonetic (nreverse collection)))
+    (oset this :phonetics (nreverse collection)))
 
   ;; paraphrases, list of (pos, paraphrase)
   (let ((paraphrases (butlast (dom-by-tag (dom-by-class dom "dict-basic-ul") 'li))))
-    (oset this :paraphrase
+    (oset this :paraphrases
           (cl-loop for p in paraphrases
                    collect (list (dom-text (nth 3 p)) (dom-text (nth 5 p))))))
 
@@ -197,8 +228,8 @@ It could be either British pronunciation or American pronunciation.")
 ;; 分布图
 ;; 相关扩展
 ;; 其他
-(cl-defmethod fanyi-render ((this fanyi-haici-service))
-  "Render THIS page."
+(cl-defmethod fanyi-render ((this fanyi-haici-service) buf)
+  "Render THIS page into BUF and return it."
   ;; (chart-bar-quickie
   ;;  'horizontal
   ;;  "Eye Colors - Descending"
@@ -206,29 +237,65 @@ It could be either British pronunciation or American pronunciation.")
   ;;  (mapcar #'cdr eye-color-groups) "Frequency"
   ;;  nil
   ;;  (on #'cdr #'>) ;; A compar
-  (let* ((dist (oref this :distribution))
-         (chart (chart-bar-quickie
-                 'horizontal
-                 "fanyi-haici-render"
-                 (mapcar #'cadr dist) "Sense"
-                 (mapcar #'car dist) "Percent")))
-  (concat
-   (format "%s %d %s\n"
-           (oref this :syllable)
-           (oref this :star)
-           (oref this :level))
-   (format "%s" chart)
-   )
-  ))
 
-(fanyi-render fanyi-haici-instance)
+;;    (paraphrases :initarg :paraphrase
+;;                 :type list
+;;                 :documentation "List of (pos . paraphrase).")
+;;    (distribution :initarg :distribution
+;;                  :type list
+;;                  :documentation "List of (percent . sense)."))
+  (with-current-buffer buf
+    (let ((inhibit-read-only t))
+      ;; Clear.
+      (erase-buffer)
+      ;; Syllable division and star/level description.
+      (insert (format "Syllable division: %s %s %s\n"
+                      (propertize (oref this :syllable) 'face 'fanyi-syllable-face)
+                      (propertize (s-repeat (oref this :star) "★") 'face 'fanyi-star-face)
+                      (oref this :level)))
+      ;; Phonetics.
+      ;; British: pronunciation, female sound url, male sound url
+      ;; American: pronunciation, female sound url, male sound url
+      (let ((phonetics (oref this :phonetics)))
+        (cl-assert (equal (length phonetics) 2))
+        (cl-loop
+         for i from 0 to 1 do
+         (cl-destructuring-bind (pronunciation female male) (nth i phonetics)
+           (if (equal i 0)
+               (insert "英")
+             (insert "  美"))
+           (insert (format " %s " pronunciation))
+           (insert-button "♀"
+                          'action (lambda (url) (fanyi-play-sound url))
+                          'button-data (format (oref this :sound-url) female)
+                          'face 'fanyi-female-speaker-face
+                          'follow-link t)
+           (insert " ")
+           (insert-button "♂"
+                          'action (lambda (url) (fanyi-play-sound url))
+                          'button-data (format (oref this :sound-url) male)
+                          'face 'fanyi-male-speaker-face
+                          'follow-link t)
+           ))
+        )
+    )))
+  ;; (let* ((dist (oref this :distribution))
+  ;;        (chart (chart-bar-quickie
+  ;;                'vertical
+  ;;                "fanyi-haici-render"
+  ;;                (mapcar #'cadr dist) "Sense"
+      ;;                (mapcar #'car dist) "Percent")))
 
-;; (mapcar #'cadr 
-(oref fanyi-haici-instance :distribution))
+(setq xxx-buf (get-buffer-create "*xxx*"))
+
+(fanyi-render fanyi-haici-instance xxx-buf)
+(oref fanyi-haici-instance :star)
+
+(oref fanyi-haici-instance :distribution)
 
 (defvar fanyi-haici-instance
   (fanyi-haici-service :url "https://dict.cn/%s"
-                       :voice-url "https://audio.dict.cn/%s"))
+                       :sound-url "https://audio.dict.cn/%s"))
 
 (defun fanyi--insert-header (text)
   "The header about current TEXT."
