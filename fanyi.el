@@ -36,6 +36,7 @@
 (require 'json)
 (require 'chart)
 (require 'eieio)
+(require 'cl-lib)
 (require 'button)
 (require 'thingatpt)
 
@@ -90,6 +91,13 @@ See `fanyi-sound-player'."
 
 (defconst fanyi-buffer-name "*fanyi*"
   "The default name of translation buffer.")
+
+(defconst fanyi-haici-distribution-chart-buffer-name
+  "*fanyi-haici-distribution-chart*"
+  "The default name of HaiCi distribution chart buffer.")
+
+(defvar fanyi-buffer-mtx (make-mutex)
+  "The mutex for \"*fanyi*\" buffer.")
 
 (defclass fanyi-service ()
   ((url :initarg :url
@@ -154,11 +162,11 @@ It could be either British pronunciation or American pronunciation.")
 
 (cl-defmethod fanyi-parse-from ((this fanyi-haici-service) dom)
   "Complete the fields of THIS from DOM tree."
-  ;; syllable.
-  (let* ((str (dom-attr (dom-by-class dom "keyword") 'tip))
-         (matches (s-match "\\([a-zA-Z·]+\\)" str)))
-    (cl-assert matches)
-    (oset this :syllable (nth 1 matches)))
+  ;; syllable, it could be nil.
+  (if-let* ((str (dom-attr (dom-by-class dom "keyword") 'tip))
+            (matches (s-match "\\([a-zA-Z·]+\\)" str)))
+      (oset this :syllable (nth 1 matches))
+    (oset this :syllable "-"))
   ;; star and level description.
   (let* ((str (dom-attr (dom-by-class dom "level-title") 'level))
          (matches (s-match "\\([12345]\\)" str)))
@@ -214,11 +222,13 @@ It could be either British pronunciation or American pronunciation.")
 ;; 分布图
 ;; 相关扩展
 ;; 其他
-(cl-defmethod fanyi-render ((this fanyi-haici-service) buf)
-  "Render THIS page into BUF and return it."
-  (with-current-buffer buf
+(cl-defmethod fanyi-render ((this fanyi-haici-service))
+  "Render THIS page into a buffer named `fanyi-buffer-name'.
+It's NOT thread-safe, caller should hold `fanyi-buffer-mtx' for
+synchronization."
+  (with-current-buffer (get-buffer-create fanyi-buffer-name :inhibit-buffer-hooks)
     (let ((inhibit-read-only t))
-      ;; TODO mutex
+      ;; Go to the end of buffer.
       (goto-char (point-max))
       ;; Syllable division and star/level description.
       (insert (format "Syllable division: %s %s %s\n\n"
@@ -238,6 +248,7 @@ It could be either British pronunciation or American pronunciation.")
                 (insert "  美"))
               (insert (format " %s " pronunciation))
               (insert-button "♀"
+                             'display nil
                              'action #'fanyi-play-sound
                              'button-data (format (oref this :sound-url) female)
                              'face 'fanyi-female-speaker-face
@@ -257,14 +268,14 @@ It could be either British pronunciation or American pronunciation.")
                do (cl-destructuring-bind (pos p) pa
                     (insert (format "- %s %s\n" pos p))))
       (insert "\n")
-      ;; Make a button for senses distribution.
-      (insert-button "Click me to view the senses chart"
+      ;; Make a button for distribution chart.
+      (insert-button "Click to view the distribution chart"
                      'action (lambda (dist)
                                (chart-bar-quickie
                                 'vertical
-                                "*fanyi-haici-senses-chart*"
-                                (mapcar #'cadr dist) "Senses"
-                                (mapcar #'car dist) "percent"))
+                                fanyi-haici-distribution-chart-buffer-name
+                                (seq-map #'cadr dist) "Senses"
+                                (seq-map #'car dist) "Percent"))
                      'button-data (oref this :distribution)
                      'follow-link t)
     )))
@@ -272,7 +283,7 @@ It could be either British pronunciation or American pronunciation.")
 (setq xxx-buf (get-buffer-create "*xxx*"))
 (setq yyy-buf (get-buffer-create "*yyy*"))
 
-(fanyi-render fanyi-haici-instance xxx-buf)
+(fanyi-render fanyi-haici-instance)
 (oref fanyi-haici-instance :star)
 
 (defvar fanyi-haici-instance
@@ -314,7 +325,7 @@ It could be either British pronunciation or American pronunciation.")
                               (fanyi-insert-header word)
 
                               (fanyi-parse-from fanyi-haici-instance dom)
-                              (fanyi-render fanyi-haici-instance xxx-buf)
+                              (fanyi-render fanyi-haici-instance)
 
                               )
                             (pop-to-buffer buf))
