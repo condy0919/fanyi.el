@@ -101,8 +101,8 @@ See `fanyi-sound-player'."
 (defconst fanyi-buffer-name "*fanyi*"
   "The default name of translation buffer.")
 
-(defconst fanyi-haici-distribution-chart-buffer-name
-  "*fanyi-haici-distribution-chart*"
+(defconst fanyi-haici-distribution-chart-title
+  "fanyi-haici-distribution-chart"
   "The default name of HaiCi distribution chart buffer.")
 
 (defvar fanyi-buffer-mtx (make-mutex)
@@ -133,7 +133,11 @@ static char* speaker_xpm[] = {
   "The speaker xpm image.")
 
 (defclass fanyi-service ()
-  ((url :initarg :url
+  ((word :initarg :word
+         :type string
+         :protection :protected
+         :documentation "The query word.")
+   (url :initarg :url
         :type string
         :protection :protected
         :documentation "Dictionary translation url.")
@@ -144,37 +148,17 @@ static char* speaker_xpm[] = {
   "The base class of translation service."
   :abstract t)
 
-;;
-;; honor 音节划分 难度
-;; 发音: 英式 女，男 美式 女，男
-;; 翻译
-;;
-;; 释义常用度分布图
-;;
-;; 发音
-;;
-;; * 相关扩展链接，如异体字、名词复数等
-;; (dom-texts (dom-by-class xxx "shape"))
-;; ;;=> 名词: honorer 过去式: honored 过去分词: honored 现在分词: honoring 第三人称单数: honors
-;; ;; => ((div ((class . "shape")) " "
-;; ;;          (label nil "名词:") " " (a (...) " honorer				") " "
-;; ;;          (label nil "过去式:") " " (a (...) " honored				") " "
-;; ;;          (label nil "过去分词:") ...))
-;;
-;; 音节划分 词频 星级
-;; 发音: 英 女，男 美 女，男
-;; 释义
-;; 分布图
-;; 相关扩展
-;; 其他
 (defclass fanyi-haici-service (fanyi-service)
   ((syllable :initarg :syllable
+             :initform "-"
              :type string
              :documentation "Syllable of the word.")
    (star :initarg :star
+         :initform 0
          :type number
          :documentation "Frequency of the word.")
    (level :initarg :level
+          :initform ""
           :type string
           :documentation "Level description of the word.")
    (phonetics :initarg :phonetics
@@ -186,24 +170,29 @@ It could be either British pronunciation or American pronunciation.")
                 :documentation "List of (pos . paraphrase).")
    (distribution :initarg :distribution
                  :type list
-                 :documentation "List of (percent . sense)."))
+                 :documentation "List of (percent . sense).")
+   (related :initarg :related
+            :type list
+            :documentation "List of related words. e.g. noun, adj and more forms."))
   "The HaiCi translation service.")
 
 ;; Silence unknown slots warning.
-(eieio-declare-slots :url :sound-url)
-(eieio-declare-slots :syllable :star :level :phonetics :paraphrases :distribution)
+(eieio-declare-slots :word :url :sound-url)
+(eieio-declare-slots :syllable :star :level :phonetics :paraphrases :distribution :related)
 
 (cl-defmethod fanyi-parse-from ((this fanyi-haici-service) dom)
-  "Complete the fields of THIS from DOM tree."
-  ;; syllable, it could be nil.
-  (if-let* ((str (dom-attr (dom-by-class dom "keyword") 'tip))
-            (matches (s-match "\\([a-zA-Z·]+\\)" str)))
-      (oset this :syllable (nth 1 matches))
-    (oset this :syllable "-"))
-  ;; star and level description.
-  (let* ((str (dom-attr (dom-by-class dom "level-title") 'level))
-         (matches (s-match "\\([12345]\\)" str)))
-    (cl-assert matches)
+  "Complete the fields of THIS from DOM tree.
+A 'not-found exception may be thrown."
+  ;; No brief paraphrase is found, return early.
+  (unless (dom-by-class dom "dict-basic-ul")
+    (throw 'not-found nil))
+  ;; syllable, could be nil.
+  (when-let* ((str (dom-attr (dom-by-class dom "keyword") 'tip))
+              (matches (s-match "\\([a-zA-Z·]+\\)" str)))
+    (oset this :syllable (nth 1 matches)))
+  ;; star and level description, could be nil.
+  (when-let* ((str (dom-attr (dom-by-class dom "level-title") 'level))
+              (matches (s-match "\\([12345]\\)" str)))
     (oset this :star (string-to-number (nth 1 matches)))
     (oset this :level str))
   ;; phonetics, a list of (pronunciation, female sound url, male sound url)
@@ -235,7 +224,7 @@ It could be either British pronunciation or American pronunciation.")
                       'naudio))
                     collection)))
     (oset this :phonetics (nreverse collection)))
-  ;; paraphrases, list of (pos, paraphrase)
+  ;; brief paraphrases, list of (pos, paraphrase)
   (let ((paraphrases (butlast (dom-by-tag (dom-by-class dom "dict-basic-ul") 'li))))
     (oset this :paraphrases
           (cl-loop for p in paraphrases
@@ -247,22 +236,24 @@ It could be either British pronunciation or American pronunciation.")
           ;; transform (\1 (percent . 55) (sense . "abc"))
           (cl-loop for j in json
                    collect (seq-map #'cdr (seq-drop j 1)))))
-  )
+  ;; the related words, could be nil.
+  (let ((shapes (dom-children (dom-by-class dom "shape"))))
+    (oset this :related
+          (seq-partition (cl-loop for i in shapes
+                                  when (consp i)
+                                  collect (s-trim (dom-text i)))
+                         2))))
 
-;; 音节划分 词频 星级
-;; 发音: 英 女，男 美 女，男
-;; 释义
-;; 分布图
-;; 相关扩展
-;; 其他
 (cl-defmethod fanyi-render ((this fanyi-haici-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
-It's NOT thread-safe, caller should hold `fanyi-buffer-mtx' for
-synchronization."
+It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
+before calling this method."
   (with-current-buffer (get-buffer-create fanyi-buffer-name :inhibit-buffer-hooks)
     (let ((inhibit-read-only t))
       ;; Go to the end of buffer.
       (goto-char (point-max))
+      ;; The headline about HaiCi service.
+      (insert "# 海词\n\n")
       ;; Syllable division and star/level description.
       (insert (format "Syllable division: %s %s %s\n\n"
                       (propertize (oref this :syllable) 'face 'fanyi-syllable-face)
@@ -317,26 +308,61 @@ synchronization."
                      'action (lambda (dist)
                                (chart-bar-quickie
                                 'vertical
-                                fanyi-haici-distribution-chart-buffer-name
+                                fanyi-haici-distribution-chart-title
                                 (seq-map #'cadr dist) "Senses"
                                 (seq-map #'car dist) "Percent"))
                      'button-data (oref this :distribution)
                      'follow-link t)
-    )))
+      (insert "\n\n")
+      ;; Make buttons for word kinds.
+      (cl-loop for kind in (oref this :related)
+               do (cl-destructuring-bind (k v) kind
+                    (insert k)
+                    (insert " ")
+                    (insert-button v
+                                   'action #'fanyi-dwim
+                                   'button-data v
+                                   'follow-link t)
+                    (insert " ")))
+      (insert "\n\n")
+      ;; Visit the url for more information.
+      (insert-button "Browse the full page via eww"
+                     'action #'eww
+                     'button-data (format (oref this :url) (oref this :word))
+                     'follow-link t)
+      (insert "\n\n"))))
 
-(setq xxx-buf (get-buffer-create "*xxx*"))
-(setq yyy-buf (get-buffer-create "*yyy*"))
-
-(fanyi-render fanyi-haici-instance)
-(oref fanyi-haici-instance :star)
-
-(defvar fanyi-haici-instance
-  (fanyi-haici-service :url "https://dict.cn/%s"
+(defconst fanyi-provider-haici
+  (fanyi-haici-service :word "dummy"
+                       :url "https://dict.cn/%s"
                        :sound-url "https://audio.dict.cn/%s"))
 
-(defun fanyi-insert-header (text)
-  "The header about current TEXT."
-  (insert (format "Translating %s\n\n\n" (propertize text 'face 'fanyi-word-face))))
+(defcustom fanyi-providers '(fanyi-provider-haici)
+  "The providers used by `fanyi-dwim'."
+  :type '(repeat fanyi-service)
+  :group 'fanyi)
+
+(defun fanyi--spawn (instance)
+  "Spawn a thread for searching. The result is powered by INSTANCE."
+  (let ((url (format (oref instance :url)
+                     (oref instance :word))))
+    (make-thread
+     (lambda ()
+       (url-retrieve url (lambda (status)
+                           ;; Something went wrong.
+                           (when (or (not status) (plist-member status :error))
+                             (user-error "Something went wrong.\n\n%s" (pp-to-string (plist-get status :error))))
+                           ;; Move point to the real http content.
+                           (goto-char url-http-end-of-headers)
+                           ;; Parse the html into a dom tree.
+                           (let ((dom (libxml-parse-html-region (point) (point-max) url)))
+                             (catch 'not-found
+                               ;; Extract information.
+                               (fanyi-parse-from instance dom)
+                               ;; Since `fanyi-render' manipulates `fanyi-buffer-name',
+                               ;; a mutex is required in multi-thread situation.
+                               (with-mutex fanyi-buffer-mtx
+                                 (fanyi-render instance))))))))))
 
 ;;;###autoload
 (defun fanyi-dwim (word)
@@ -351,31 +377,26 @@ synchronization."
   ;; libxml2 is required.
   (when (not (fboundp 'libxml-parse-html-region))
     (error "This function requires Emacs to be compiled with libxml2"))
-  (let ((url (format (oref fanyi-haici-instance :url) word)))
-    (url-retrieve url (lambda (status)
-                        ;; Something went wrong.
-                        (when (or (not status) (plist-member status :error))
-                          (user-error "Something went wrong.\n\n%s" (pp-to-string (plist-get status :error))))
-                        ;; Move point to the real http content.
-                        (goto-char url-http-end-of-headers)
-                        (let ((buf (get-buffer-create fanyi-buffer-name))
-                              (dom (libxml-parse-html-region (point) (point-max) url)))
-                          (with-current-buffer buf
-                            (let ((inhibit-read-only t)
-                                  (inhibit-point-motion-hooks t))
-                              ;; Clear the previous search result.
-                              (erase-buffer)
-                              ;; Make the user searched WORD more perceptible.
-                              (fanyi-insert-header word)
+  (let ((buf (get-buffer-create fanyi-buffer-name :inhibit-buffer-hooks)))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t)
+            (inhibit-point-motion-hooks t))
+        ;; Clear the previous search result.
+        (erase-buffer)
+        ;; The headerline about current word.
+        (insert (format "Translating %s\n\n\n" (propertize word 'face 'fanyi-word-face)))
+        ;; TODO setup mode
+        ))
 
-                              (fanyi-parse-from fanyi-haici-instance dom)
-                              (fanyi-render fanyi-haici-instance)
-
-                              )
-                            (pop-to-buffer buf))
-                          (setq xxx dom))))))
-
+    ;; Create a new instance per search.
+    (let ((instances (seq-map #'clone fanyi-providers)))
+      (seq-do (lambda (i)
+                ;; Overwrite the dummy word.
+                (oset i :word word)
+                ;; Do search.
+                (fanyi--spawn i))
+              instances))
+    (pop-to-buffer buf)))
 
 (provide 'fanyi)
-
 ;;; fanyi.el ends here
