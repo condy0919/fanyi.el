@@ -390,6 +390,18 @@ before calling this method."
                      t
                      t)))))
 
+(defvar fanyi-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "q" #'quit-window)
+    (define-key map "s" #'fanyi-dwim)
+    map)
+  "Keymap for `fanyi-mode'.")
+
+(define-derived-mode fanyi-mode special-mode "Fanyi"
+  "Major mode for viewing multi translators result.
+\\{fanyi-mode-map}"
+  )
+
 ;;;###autoload
 (defun fanyi-dwim (word)
   "Translate WORD."
@@ -407,11 +419,11 @@ before calling this method."
     (with-current-buffer buf
       (let ((inhibit-read-only t)
             (inhibit-point-motion-hooks t))
+        (fanyi-mode)
         ;; Clear the previous search result.
         (erase-buffer)
         ;; The headerline about current word.
         (insert (format "Translating %s\n\n\n" (propertize word 'face 'fanyi-word-face)))
-        ;; TODO setup mode
         ))
 
     ;; Create a new instance per search.
