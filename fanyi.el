@@ -360,7 +360,7 @@ before calling this method."
                                ;; Extract information.
                                (fanyi-parse-from instance dom)
                                ;; Since `fanyi-render' manipulates `fanyi-buffer-name',
-                               ;; a mutex is required in multi-thread situation.
+                               ;; a mutex is required in multi-threaded situation.
                                (with-mutex fanyi-buffer-mtx
                                  (fanyi-render instance))))))))))
 
