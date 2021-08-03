@@ -23,8 +23,9 @@
 
 ;;; Commentary:
 ;;
-
-
+;; A multi translators interface for Emacs.
+;;
+;; There is only one command to users: `fanyi-dwim'.
 
 ;;; Code:
 
