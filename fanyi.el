@@ -36,6 +36,7 @@
 (require 'json)
 (require 'chart)
 (require 'eieio)
+(require 'imenu)
 (require 'cl-lib)
 (require 'button)
 (require 'thingatpt)
@@ -108,7 +109,7 @@ See `fanyi-sound-player'."
 (defvar fanyi-buffer-mtx (make-mutex)
   "The mutex for \"*fanyi*\" buffer.")
 
-(defvar fanyi-haici-speaker-xpm
+(defvar fanyi-speaker-xpm
   "\
 /* XPM */
 static char* speaker_xpm[] = {
@@ -173,12 +174,15 @@ It could be either British pronunciation or American pronunciation.")
                  :documentation "List of (percent . sense).")
    (related :initarg :related
             :type list
-            :documentation "List of related words. e.g. noun, adj and more forms."))
+            :documentation "List of related words. e.g. noun, adj and more forms.")
+   (origins :initarg :origins
+            :type list
+            :documentation "The origins of the word."))
   "The HaiCi translation service.")
 
 ;; Silence unknown slots warning.
 (eieio-declare-slots :word :url :sound-url)
-(eieio-declare-slots :syllable :star :level :phonetics :paraphrases :distribution :related)
+(eieio-declare-slots :syllable :star :level :phonetics :paraphrases :distribution :related :origins)
 
 (cl-defmethod fanyi-parse-from ((this fanyi-haici-service) dom)
   "Complete the fields of THIS from DOM tree.
@@ -242,7 +246,16 @@ A 'not-found exception may be thrown."
           (seq-partition (cl-loop for i in shapes
                                   when (consp i)
                                   collect (s-trim (dom-text i)))
-                         2))))
+                         2)))
+  ;; The origins of the word, could be nil.
+  (let ((origins (dom-attributes (dom-children (dom-by-class dom "layout etm")))))
+    (oset this :origins (cl-loop for i in origins
+                                 when (consp i)
+                                 collect (dom-texts i)))))
+
+;; (cl-loop for i in (dom-attributes (dom-children (dom-by-class xxx "layout etm")))
+;;          when (consp i)
+;;          collect (dom-text i))
 
 (cl-defmethod fanyi-render ((this fanyi-haici-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
@@ -274,7 +287,7 @@ before calling this method."
               (insert-button "♀"
                              'display (when (fanyi-display-glyphs-p)
                                         (find-image `((:type xpm
-                                                       :data ,fanyi-haici-speaker-xpm
+                                                       :data ,fanyi-speaker-xpm
                                                        :ascent center
                                                        :color-symbols
                                                        (("color" . ,(face-attribute 'fanyi-female-speaker-face :foreground)))))))
@@ -286,7 +299,7 @@ before calling this method."
               (insert-button "♂"
                              'display (when (fanyi-display-glyphs-p)
                                         (find-image `((:type xpm
-                                                       :data ,fanyi-haici-speaker-xpm
+                                                       :data ,fanyi-speaker-xpm
                                                        :ascent center
                                                        :color-symbols
                                                        (("color" . ,(face-attribute 'fanyi-male-speaker-face :foreground)))))))
@@ -315,16 +328,26 @@ before calling this method."
                      'follow-link t)
       (insert "\n\n")
       ;; Make buttons for word kinds.
-      (cl-loop for kind in (oref this :related)
-               do (cl-destructuring-bind (k v) kind
-                    (insert k)
-                    (insert " ")
-                    (insert-button v
-                                   'action #'fanyi-dwim
-                                   'button-data v
-                                   'follow-link t)
-                    (insert " ")))
-      (insert "\n\n")
+      (let ((rs (oref this :related)))
+        (cl-loop for r in rs
+                 do (cl-destructuring-bind (k v) r
+                      (insert k)
+                      (insert " ")
+                      (insert-button v
+                                     'action #'fanyi-dwim
+                                     'button-data v
+                                     'follow-link t)
+                      (insert " ")))
+        (when rs
+          (insert "\n\n")))
+      ;; The origins.
+      (let ((origins (oref this :origins)))
+        (when origins
+          (insert "## 起源\n\n"))
+        (cl-loop for o in origins
+                 do (insert (format "- %s" o)))
+        (when origins
+          (insert "\n\n")))
       ;; Visit the url for more information.
       (insert-button "Browse the full page via eww"
                      'action #'eww
@@ -337,7 +360,7 @@ before calling this method."
                        :url "https://dict.cn/%s"
                        :sound-url "https://audio.dict.cn/%s"))
 
-(defcustom fanyi-providers '(fanyi-provider-haici)
+(defcustom fanyi-providers `(,fanyi-provider-haici)
   "The providers used by `fanyi-dwim'."
   :type '(repeat fanyi-service)
   :group 'fanyi)
@@ -362,7 +385,10 @@ before calling this method."
                                ;; Since `fanyi-render' manipulates `fanyi-buffer-name',
                                ;; a mutex is required in multi-threaded situation.
                                (with-mutex fanyi-buffer-mtx
-                                 (fanyi-render instance))))))))))
+                                 (fanyi-render instance)))))
+                     nil
+                     t
+                     t)))))
 
 ;;;###autoload
 (defun fanyi-dwim (word)
@@ -375,7 +401,7 @@ before calling this method."
                                 "Search Word: ")))
                  (list (read-string prompt nil nil default))))
   ;; libxml2 is required.
-  (when (not (fboundp 'libxml-parse-html-region))
+  (unless (fboundp 'libxml-parse-html-region)
     (error "This function requires Emacs to be compiled with libxml2"))
   (let ((buf (get-buffer-create fanyi-buffer-name :inhibit-buffer-hooks)))
     (with-current-buffer buf
@@ -392,7 +418,7 @@ before calling this method."
     (let ((instances (seq-map #'clone fanyi-providers)))
       (seq-do (lambda (i)
                 ;; Overwrite the dummy word.
-                (oset i :word word)
+                (oset i :word (url-hexify-string word))
                 ;; Do search.
                 (fanyi--spawn i))
               instances))
