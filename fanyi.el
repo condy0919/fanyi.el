@@ -57,6 +57,11 @@
   :type 'string
   :group 'fanyi)
 
+(defcustom fanyi-use-glyphs t
+  "Non-nil means use glyphs when available."
+  :type 'boolean
+  :group 'fanyi)
+
 (defface fanyi-word-face
   '((t (:height 1.75 :weight bold :foreground "#d08770")))
   "Face used for user requested word."
@@ -82,11 +87,15 @@
   "Face used for male speaker button."
   :group 'fanyi)
 
+(defun fanyi-display-glyphs-p ()
+  "Can we use glyphs instead of plain text?"
+  (and fanyi-use-glyphs (display-images-p)))
+
 (defun fanyi-play-sound (url)
   "Play URL via external program.
 See `fanyi-sound-player'."
   (if (not fanyi-sound-player)
-      (user-error "`fanyi-sound-player' is needed to play sound")
+      (user-error "Set `fanyi-sound-player' first")
     (start-process fanyi-sound-player nil fanyi-sound-player url)))
 
 (defconst fanyi-buffer-name "*fanyi*"
@@ -98,6 +107,30 @@ See `fanyi-sound-player'."
 
 (defvar fanyi-buffer-mtx (make-mutex)
   "The mutex for \"*fanyi*\" buffer.")
+
+(defvar fanyi-haici-speaker-xpm
+  "\
+/* XPM */
+static char* speaker_xpm[] = {
+\"13 14 3 1\",
+\" 	c None\",
+\".	c #000000\",
+\"+	s color\",
+\"        +++  \",
+\"       ++++  \",
+\"      +++++ +\",
+\"     +++++++ \",
+\"     ++++++  \",
+\"++++ ++++++  \",
+\"++++ ++++++++\",
+\"++++ ++++++  \",
+\"++++ ++++++  \",
+\"     ++++++  \",
+\"     +++++++ \",
+\"      +++++ +\",
+\"       ++++  \",
+\"        +++  \"};"
+  "The speaker xpm image.")
 
 (defclass fanyi-service ()
   ((url :initarg :url
@@ -248,13 +281,24 @@ synchronization."
                 (insert "  美"))
               (insert (format " %s " pronunciation))
               (insert-button "♀"
-                             'display nil
+                             'display (when (fanyi-display-glyphs-p)
+                                        (find-image `((:type xpm
+                                                       :data ,fanyi-haici-speaker-xpm
+                                                       :ascent center
+                                                       :color-symbols
+                                                       (("color" . ,(face-attribute 'fanyi-female-speaker-face :foreground)))))))
                              'action #'fanyi-play-sound
                              'button-data (format (oref this :sound-url) female)
                              'face 'fanyi-female-speaker-face
                              'follow-link t)
               (insert " ")
               (insert-button "♂"
+                             'display (when (fanyi-display-glyphs-p)
+                                        (find-image `((:type xpm
+                                                       :data ,fanyi-haici-speaker-xpm
+                                                       :ascent center
+                                                       :color-symbols
+                                                       (("color" . ,(face-attribute 'fanyi-male-speaker-face :foreground)))))))
                              'action #'fanyi-play-sound
                              'button-data (format (oref this :sound-url) male)
                              'face 'fanyi-male-speaker-face
