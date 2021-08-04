@@ -69,6 +69,11 @@
   "Face used for user requested word."
   :group 'fanyi)
 
+(defface fanyi-dict-face
+  '((t (:height 1.25 :weight bold :foreground "#ff6c6b")))
+  "Face used for dictionary name."
+  :group 'fanyi)
+
 (defface fanyi-syllable-face
   '((t (:weight bold :foreground "#ff0000")))
   "Face used for syllable of word."
@@ -267,7 +272,7 @@ before calling this method."
       ;; Go to the end of buffer.
       (goto-char (point-max))
       ;; The headline about HaiCi service.
-      (insert "# 海词\n\n")
+      (insert (propertize "# 海词\n\n" 'face 'fanyi-dict-face))
       ;; Syllable division and star/level description.
       (insert (format "Syllable division: %s %s %s\n\n"
                       (propertize (oref this :syllable) 'face 'fanyi-syllable-face)
@@ -409,8 +414,8 @@ before calling this method."
 (define-derived-mode fanyi-mode special-mode "Fanyi"
   "Major mode for viewing multi translators result.
 \\{fanyi-mode-map}"
-  (setq header-line-format '("%e" (:eval (fanyi-format-header-line))))
-  (setq imenu-generic-expression '(("Dict" "^# \\(.*\\)" 1))))
+  (setq imenu-generic-expression '(("Dict" "^# \\(.*\\)" 1)))
+  (setq header-line-format '("%e" (:eval (fanyi-format-header-line)))))
 
 ;;;###autoload
 (defun fanyi-dwim (word)
