@@ -25,7 +25,7 @@
 ;;
 ;; A multi translators interface for Emacs.
 ;;
-;; There is only one command to users: `fanyi-dwim'.
+;; There is only one public command to users: `fanyi-dwim'.
 
 ;;; Code:
 
@@ -393,6 +393,8 @@ before calling this method."
 
 (defvar fanyi-mode-map
   (let ((map (make-sparse-keymap)))
+    (define-key map [tab] #'forward-button)
+    (define-key map [backtab] #'backward-button)
     (define-key map "q" #'quit-window)
     (define-key map "s" #'fanyi-dwim)
     map)
