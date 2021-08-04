@@ -391,6 +391,12 @@ before calling this method."
                      t
                      t)))))
 
+(defvar fanyi--current-word nil)
+
+(defun fanyi-format-header-line ()
+  "Used as `header-line-format'."
+  (format "Translating %s" (propertize fanyi--current-word 'face 'fanyi-word-face)))
+
 (defvar fanyi-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map [tab] #'forward-button)
@@ -403,8 +409,8 @@ before calling this method."
 (define-derived-mode fanyi-mode special-mode "Fanyi"
   "Major mode for viewing multi translators result.
 \\{fanyi-mode-map}"
-  (setq imenu-generic-expression '(("Dict" "^# \\(.*\\)" 1)))
-  )
+  (setq header-line-format '("%e" (:eval (fanyi-format-header-line))))
+  (setq imenu-generic-expression '(("Dict" "^# \\(.*\\)" 1))))
 
 ;;;###autoload
 (defun fanyi-dwim (word)
@@ -419,20 +425,15 @@ before calling this method."
   ;; libxml2 is required.
   (unless (fboundp 'libxml-parse-html-region)
     (error "This function requires Emacs to be compiled with libxml2"))
+  ;; Save current query word.
+  (setq fanyi--current-word word)
   (let ((buf (get-buffer-create fanyi-buffer-name :inhibit-buffer-hooks)))
     (with-current-buffer buf
       (let ((inhibit-read-only t)
             (inhibit-point-motion-hooks t))
         ;; Clear the previous search result.
         (erase-buffer)
-
-        (fanyi-mode)
-        ;; The headerline about current word.
-        ;;
-        ;; It must be placed after `fanyi-mode' since `fanyi-mode' can reset
-        ;; `header-line-format'.
-        (setq header-line-format `("Translating " (:propertize ,word face fanyi-word-face)))
-        ))
+        (fanyi-mode)))
 
     ;; Create a new instance per search.
     (let ((instances (seq-map #'clone fanyi-providers)))
