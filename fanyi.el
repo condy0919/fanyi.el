@@ -333,7 +333,7 @@ before calling this method."
                      'button-data (oref this :distribution)
                      'follow-link t)
       (insert "\n\n")
-      ;; Make buttons for word kinds.
+      ;; Make buttons for related words.
       (let ((rs (oref this :related)))
         (cl-loop for r in rs
                  do (cl-destructuring-bind (k v) r
