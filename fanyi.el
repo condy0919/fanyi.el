@@ -403,6 +403,7 @@ before calling this method."
 (define-derived-mode fanyi-mode special-mode "Fanyi"
   "Major mode for viewing multi translators result.
 \\{fanyi-mode-map}"
+  (setq imenu-generic-expression '(("Dict" "^# \\(.*\\)" 1)))
   )
 
 ;;;###autoload
