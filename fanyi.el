@@ -422,11 +422,15 @@ before calling this method."
     (with-current-buffer buf
       (let ((inhibit-read-only t)
             (inhibit-point-motion-hooks t))
-        (fanyi-mode)
         ;; Clear the previous search result.
         (erase-buffer)
+
+        (fanyi-mode)
         ;; The headerline about current word.
-        (insert (format "Translating %s\n\n\n" (propertize word 'face 'fanyi-word-face)))
+        ;;
+        ;; It must be placed after `fanyi-mode' since `fanyi-mode' can reset
+        ;; `header-line-format'.
+        (setq header-line-format `("Translating " (:propertize ,word face fanyi-word-face)))
         ))
 
     ;; Create a new instance per search.
