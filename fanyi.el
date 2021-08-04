@@ -346,9 +346,9 @@ before calling this method."
         (when origins
           (insert "## 起源\n\n"))
         (cl-loop for o in origins
-                 do (insert (format "- %s" o)))
+                 do (insert (format "- %s\n" o)))
         (when origins
-          (insert "\n\n")))
+          (insert "\n")))
       ;; Visit the url for more information.
       (insert-button "Browse the full page via eww"
                      'action #'eww
