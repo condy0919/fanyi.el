@@ -187,9 +187,16 @@ It could be either British pronunciation or American pronunciation.")
             :documentation "The origins of the word."))
   "The HaiCi translation service.")
 
+(defclass fanyi-etymon-service (fanyi-service)
+  ((definitions :initarg :definitions
+                :type list
+                :documentation "List of (word . def)."))
+  "The etymonline service.")
+
 ;; Silence unknown slots warning.
 (eieio-declare-slots :word :url :sound-url)
 (eieio-declare-slots :syllable :star :level :phonetics :paraphrases :distribution :related :origins)
+(eieio-declare-slots :definitions)
 
 (cl-defmethod fanyi-parse-from ((this fanyi-haici-service) dom)
   "Complete the fields of THIS from DOM tree.
@@ -358,12 +365,50 @@ before calling this method."
                      'follow-link t)
       (insert "\n\n"))))
 
+(cl-defmethod fanyi-parse-from ((this fanyi-etymon-service) dom)
+  "Complete the fields of THIS from DOM tree.
+If the definitions of word is not found, http 404 error is
+expected."
+  (let ((defs (dom-by-class dom "word--C9UPa")))
+    (oset this :definitions (cl-loop for d in defs
+                                     collect (list
+                                              (dom-texts (dom-by-class d "word__name--TTbAA"))
+                                              (dom-texts (dom-by-class d "word__defination--2q7ZH")))))))
+
+(cl-defmethod fanyi-render ((this fanyi-etymon-service))
+  "Render THIS page into a buffer named `fanyi-buffer-name'.
+It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
+before calling this method."
+  (with-current-buffer (get-buffer-create fanyi-buffer-name :inhibit-buffer-hooks)
+    (let ((inhibit-read-only t))
+      ;; Go to the end of buffer.
+      (goto-char (point-max))
+      ;; The headline about HaiCi service.
+      (insert (propertize "# Etymonline\n\n" 'face 'fanyi-dict-face))
+      (cl-loop for i in (oref this :definitions)
+               do (cl-destructuring-bind (word def) i
+                    (insert (concat "## " word "\n"))
+                    (insert def)
+                    (insert "\n"))))))
+
+;; (dom-texts (dom-by-class (dom-by-class xxx "word--C9UPa") "word__defination--2q7ZH"))
+
+
+
+
 (defconst fanyi-provider-haici
   (fanyi-haici-service :word "dummy"
                        :url "https://dict.cn/%s"
                        :sound-url "https://audio.dict.cn/%s"))
 
-(defcustom fanyi-providers `(,fanyi-provider-haici)
+(defconst fanyi-provider-etymon
+  (fanyi-etymon-service :word "dummy"
+                        :url "https://www.etymonline.com/word/%s"
+                        :sound-url "unused"))
+
+(defcustom fanyi-providers `(,fanyi-provider-haici
+                             ,fanyi-provider-etymon
+                             )
   "The providers used by `fanyi-dwim'."
   :type '(repeat fanyi-service)
   :group 'fanyi)
