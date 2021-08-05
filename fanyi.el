@@ -176,6 +176,7 @@ It could be either British pronunciation or American pronunciation.")
                 :type list
                 :documentation "List of (pos . paraphrase).")
    (distribution :initarg :distribution
+                 :initform nil
                  :type list
                  :documentation "List of (percent . sense).")
    (related :initarg :related
@@ -239,9 +240,9 @@ A 'not-found exception may be thrown."
     (oset this :paraphrases
           (cl-loop for p in paraphrases
                    collect (list (dom-text (nth 3 p)) (dom-text (nth 5 p))))))
-  ;; distribution of senses.
-  (let* ((chart (dom-attr (dom-by-id dom "dict-chart-basic") 'data))
-         (json (json-read-from-string (url-unhex-string chart))))
+  ;; distribution of senses, could be nil
+  (when-let* ((chart (dom-attr (dom-by-id dom "dict-chart-basic") 'data))
+              (json (json-read-from-string (url-unhex-string chart))))
     (oset this :distribution
           ;; transform (\1 (percent . 55) (sense . "abc"))
           (cl-loop for j in json
@@ -258,10 +259,6 @@ A 'not-found exception may be thrown."
     (oset this :origins (cl-loop for i in origins
                                  when (consp i)
                                  collect (dom-texts i)))))
-
-;; (cl-loop for i in (dom-attributes (dom-children (dom-by-class xxx "layout etm")))
-;;          when (consp i)
-;;          collect (dom-text i))
 
 (cl-defmethod fanyi-render ((this fanyi-haici-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
@@ -415,7 +412,7 @@ before calling this method."
   "Major mode for viewing multi translators result.
 \\{fanyi-mode-map}"
   (setq imenu-generic-expression '(("Dict" "^# \\(.*\\)" 1)))
-  (setq header-line-format '("%e" (:eval (fanyi-format-header-line)))))
+  (setq header-line-format '((:eval (fanyi-format-header-line)))))
 
 ;;;###autoload
 (defun fanyi-dwim (word)
