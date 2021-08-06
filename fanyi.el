@@ -70,17 +70,17 @@
   :group 'fanyi)
 
 (defface fanyi-dict-face
-  '((t (:height 1.25 :weight bold :foreground "#ff6c6b")))
+  '((t (:height 1.25 :weight bold :foreground "#a9a1e1" :extend t)))
   "Face used for dictionary name."
   :group 'fanyi)
 
 (defface fanyi-syllable-face
-  '((t (:weight bold :foreground "#ff0000")))
+  '((t (:weight bold :foreground "dark cyan")))
   "Face used for syllable of word."
   :group 'fanyi)
 
 (defface fanyi-star-face
-  '((t (:foreground "#ffff00")))
+  '((t (:foreground "gold")))
   "Face used for star of word."
   :group 'fanyi)
 
@@ -278,7 +278,7 @@ before calling this method."
       ;; The headline about HaiCi service.
       (insert (propertize "# 海词\n\n" 'face 'fanyi-dict-face))
       ;; Syllable division and star/level description.
-      (insert (format "Syllable division: %s %s %s\n\n"
+      (insert (format "%s %s %s\n\n"
                       (propertize (oref this :syllable) 'face 'fanyi-syllable-face)
                       (propertize (s-repeat (oref this :star) "★") 'face 'fanyi-star-face)
                       (oref this :level)))
