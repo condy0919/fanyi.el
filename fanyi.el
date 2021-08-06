@@ -1,4 +1,4 @@
-;;; fanyi.el --- English-Chinese translator for Emacs -*- lexical-binding: t -*-
+;;; fanyi.el --- English-Chinese translator -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021 Zhiwei Chen
 ;; SPDX-License-Identifier: GPL-3.0-or-later
@@ -6,7 +6,7 @@
 ;; Keywords: convenience, tools
 ;; URL: https://github.com/condy0919/fanyi.el
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "24.4")) ((s "1.12.0"))
+;; Package-Requires: ((emacs "27.1") (s "1.12.0"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -399,8 +399,7 @@ expected."
                                                                ((dom-by-class arg "crossreference notranslate")
                                                                 (list (dom-text arg) 'button (dom-text arg)))))
                                                        (cddr node))))))
-                                      details))
-                               ))))))
+                                      details))))))))
 
 (cl-defmethod fanyi-render ((this fanyi-etymon-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
@@ -444,8 +443,7 @@ before calling this method."
                         :sound-url "unused"))
 
 (defcustom fanyi-providers `(,fanyi-provider-haici
-                             ,fanyi-provider-etymon
-                             )
+                             ,fanyi-provider-etymon)
   "The providers used by `fanyi-dwim'."
   :type '(repeat fanyi-service)
   :group 'fanyi)
