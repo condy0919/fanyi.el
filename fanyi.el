@@ -272,98 +272,99 @@ A 'not-found exception may be thrown."
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
 before calling this method."
   (with-current-buffer (get-buffer-create fanyi-buffer-name :inhibit-buffer-hooks)
-    (let ((inhibit-read-only t))
+    (save-excursion
       ;; Go to the end of buffer.
       (goto-char (point-max))
-      ;; The headline about HaiCi service.
-      (insert (propertize "# 海词\n\n" 'face 'fanyi-dict-face))
-      ;; Syllable division and star/level description.
-      (insert (format "%s %s %s\n\n"
-                      (propertize (oref this :syllable) 'face 'fanyi-syllable-face)
-                      (propertize (s-repeat (oref this :star) "★") 'face 'fanyi-star-face)
-                      (oref this :level)))
-      ;; Phonetics.
-      ;; British: pronunciation, female sound url, male sound url
-      ;; American: pronunciation, female sound url, male sound url
-      (let ((phonetics (oref this :phonetics)))
-        (cl-assert (equal (length phonetics) 2))
-        (cl-loop
-         for i from 0 to 1
-         do (cl-destructuring-bind (pronunciation female male) (nth i phonetics)
-              (if (equal i 0)
-                  (insert "英")
-                (insert "  美"))
-              (insert (format " %s " pronunciation))
-              (insert-button "♀"
-                             'display (when (fanyi-display-glyphs-p)
-                                        (find-image `((:type xpm
-                                                       :data ,fanyi-speaker-xpm
-                                                       :ascent center
-                                                       :color-symbols
-                                                       (("color" . ,(face-attribute 'fanyi-female-speaker-face :foreground)))))))
-                             'action #'fanyi-play-sound
-                             'button-data (format (oref this :sound-url) female)
-                             'face 'fanyi-female-speaker-face
-                             'follow-link t)
-              (insert " ")
-              (insert-button "♂"
-                             'display (when (fanyi-display-glyphs-p)
-                                        (find-image `((:type xpm
-                                                       :data ,fanyi-speaker-xpm
-                                                       :ascent center
-                                                       :color-symbols
-                                                       (("color" . ,(face-attribute 'fanyi-male-speaker-face :foreground)))))))
-                             'action #'fanyi-play-sound
-                             'button-data (format (oref this :sound-url) male)
-                             'face 'fanyi-male-speaker-face
-                             'follow-link t)))
-        (insert "\n\n"))
-      ;; Paraphrases.
-      ;; - n. 荣誉；荣幸；尊敬；信用；正直；贞洁
-      ;; - vt. 尊敬；使荣幸；对...表示敬意；兑现
-      ;; ...
-      (cl-loop for pa in (oref this :paraphrases)
-               do (cl-destructuring-bind (pos p) pa
-                    (insert (format "- %s %s\n" pos p))))
-      (insert "\n")
-      ;; Make a button for distribution chart.
-      (insert-button "Click to view the distribution chart"
-                     'action (lambda (dist)
-                               (chart-bar-quickie
-                                'vertical
-                                fanyi-haici-distribution-chart-title
-                                (seq-map #'cadr dist) "Senses"
-                                (seq-map #'car dist) "Percent"))
-                     'button-data (oref this :distribution)
-                     'follow-link t)
-      (insert "\n\n")
-      ;; Make buttons for related words.
-      (let ((rs (oref this :related)))
-        (cl-loop for r in rs
-                 do (cl-destructuring-bind (k v) r
-                      (insert k)
-                      (insert " ")
-                      (insert-button v
-                                     'action #'fanyi-dwim
-                                     'button-data v
-                                     'follow-link t)
-                      (insert " ")))
-        (when rs
-          (insert "\n\n")))
-      ;; The origins.
-      (let ((origins (oref this :origins)))
-        (when origins
-          (insert "## 起源\n\n"))
-        (cl-loop for o in origins
-                 do (insert (format "- %s\n" o)))
-        (when origins
-          (insert "\n")))
-      ;; Visit the url for more information.
-      (insert-button "Browse the full page via eww"
-                     'action #'eww
-                     'button-data (format (oref this :url) (oref this :word))
-                     'follow-link t)
-      (insert "\n\n"))))
+      (let ((inhibit-read-only t))
+        ;; The headline about HaiCi service.
+        (insert (propertize "# 海词\n\n" 'face 'fanyi-dict-face))
+        ;; Syllable division and star/level description.
+        (insert (format "%s %s %s\n\n"
+                        (propertize (oref this :syllable) 'face 'fanyi-syllable-face)
+                        (propertize (s-repeat (oref this :star) "★") 'face 'fanyi-star-face)
+                        (oref this :level)))
+        ;; Phonetics.
+        ;; British: pronunciation, female sound url, male sound url
+        ;; American: pronunciation, female sound url, male sound url
+        (let ((phonetics (oref this :phonetics)))
+          (cl-assert (equal (length phonetics) 2))
+          (cl-loop
+           for i from 0 to 1
+           do (cl-destructuring-bind (pronunciation female male) (nth i phonetics)
+                (if (equal i 0)
+                    (insert "英")
+                  (insert "  美"))
+                (insert (format " %s " pronunciation))
+                (insert-button "♀"
+                               'display (when (fanyi-display-glyphs-p)
+                                          (find-image `((:type xpm
+                                                               :data ,fanyi-speaker-xpm
+                                                               :ascent center
+                                                               :color-symbols
+                                                               (("color" . ,(face-attribute 'fanyi-female-speaker-face :foreground)))))))
+                               'action #'fanyi-play-sound
+                               'button-data (format (oref this :sound-url) female)
+                               'face 'fanyi-female-speaker-face
+                               'follow-link t)
+                (insert " ")
+                (insert-button "♂"
+                               'display (when (fanyi-display-glyphs-p)
+                                          (find-image `((:type xpm
+                                                               :data ,fanyi-speaker-xpm
+                                                               :ascent center
+                                                               :color-symbols
+                                                               (("color" . ,(face-attribute 'fanyi-male-speaker-face :foreground)))))))
+                               'action #'fanyi-play-sound
+                               'button-data (format (oref this :sound-url) male)
+                               'face 'fanyi-male-speaker-face
+                               'follow-link t)))
+          (insert "\n\n"))
+        ;; Paraphrases.
+        ;; - n. 荣誉；荣幸；尊敬；信用；正直；贞洁
+        ;; - vt. 尊敬；使荣幸；对...表示敬意；兑现
+        ;; ...
+        (cl-loop for pa in (oref this :paraphrases)
+                 do (cl-destructuring-bind (pos p) pa
+                      (insert (format "- %s %s\n" pos p))))
+        (insert "\n")
+        ;; Make a button for distribution chart.
+        (insert-button "Click to view the distribution chart"
+                       'action (lambda (dist)
+                                 (chart-bar-quickie
+                                  'vertical
+                                  fanyi-haici-distribution-chart-title
+                                  (seq-map #'cadr dist) "Senses"
+                                  (seq-map #'car dist) "Percent"))
+                       'button-data (oref this :distribution)
+                       'follow-link t)
+        (insert "\n\n")
+        ;; Make buttons for related words.
+        (let ((rs (oref this :related)))
+          (cl-loop for r in rs
+                   do (cl-destructuring-bind (k v) r
+                        (insert k)
+                        (insert " ")
+                        (insert-button v
+                                       'action #'fanyi-dwim
+                                       'button-data v
+                                       'follow-link t)
+                        (insert " ")))
+          (when rs
+            (insert "\n\n")))
+        ;; The origins.
+        (let ((origins (oref this :origins)))
+          (when origins
+            (insert "## 起源\n\n"))
+          (cl-loop for o in origins
+                   do (insert (format "- %s\n" o)))
+          (when origins
+            (insert "\n")))
+        ;; Visit the url for more information.
+        (insert-button "Browse the full page via eww"
+                       'action #'eww
+                       'button-data (format (oref this :url) (oref this :word))
+                       'follow-link t)
+        (insert "\n\n")))))
 
 (cl-defmethod fanyi-parse-from ((this fanyi-etymon-service) dom)
   "Complete the fields of THIS from DOM tree.
@@ -456,6 +457,9 @@ before calling this method."
 (define-derived-mode fanyi-mode special-mode "Fanyi"
   "Major mode for viewing multi translators result.
 \\{fanyi-mode-map}"
+  :interactive nil
+  :group 'fanyi
+
   (setq imenu-generic-expression '(("Dict" "^# \\(.*\\)" 1)))
   (setq header-line-format '((:eval (fanyi-format-header-line)))))
 
