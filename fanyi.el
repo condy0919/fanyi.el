@@ -94,6 +94,11 @@
   "Face used for male speaker button."
   :group 'fanyi)
 
+(defface fanyi-quote-face
+  '((t (:inherit font-lock-comment-face)))
+  "Face used for quotes of word."
+  :group 'fanyi)
+
 (defun fanyi-display-glyphs-p ()
   "Can we use glyphs instead of plain text?"
   (and fanyi-use-glyphs (display-images-p)))
@@ -190,7 +195,8 @@ It could be either British pronunciation or American pronunciation.")
 (defclass fanyi-etymon-service (fanyi-service)
   ((definitions :initarg :definitions
                 :type list
-                :documentation "List of (word . def)."))
+                :documentation "List of (word . def).
+Where def could be a list of string/(string 'face face)/(string 'button data)."))
   "The etymonline service.")
 
 ;; Silence unknown slots warning.
@@ -277,11 +283,11 @@ before calling this method."
       (goto-char (point-max))
       (let ((inhibit-read-only t))
         ;; The headline about HaiCi service.
-        (insert (propertize "# 海词\n\n" 'face 'fanyi-dict-face))
+        (insert "# 海词\n\n")
         ;; Syllable division and star/level description.
         (insert (format "%s %s %s\n\n"
-                        (propertize (oref this :syllable) 'face 'fanyi-syllable-face)
-                        (propertize (s-repeat (oref this :star) "★") 'face 'fanyi-star-face)
+                        (oref this :syllable)
+                        (s-repeat (oref this :star) "★")
                         (oref this :level)))
         ;; Phonetics.
         ;; British: pronunciation, female sound url, male sound url
@@ -371,10 +377,30 @@ before calling this method."
 If the definitions of word is not found, http 404 error is
 expected."
   (let ((defs (dom-by-class dom "word--C9UPa")))
-    (oset this :definitions (cl-loop for d in defs
-                                     collect (list
-                                              (dom-texts (dom-by-class d "word__name--TTbAA"))
-                                              (dom-texts (dom-by-class d "word__defination--2q7ZH")))))))
+    (oset this :definitions
+          (cl-loop for def in defs
+                   collect (progn
+                             (let ((title (dom-text (dom-by-class def "word__name--TTbAA")))
+                                   (details (dom-children (dom-by-class def "word__defination--2q7ZH"))))
+                               (list title
+                                     (seq-mapcat
+                                      (lambda (node)
+                                        (pcase node
+                                          ('(p nil) "\n\n")
+                                          (_ (cl-assert (length> node 2))
+                                             (seq-concatenate
+                                              'list
+                                              (when (equal (car node) 'blockquote)
+                                                '("> "))
+                                              (seq-map (lambda (arg)
+                                                         (cond ((stringp arg) arg)
+                                                               ((dom-by-class arg "foreign notranslate")
+                                                                (list (dom-text arg) 'face 'italic))
+                                                               ((dom-by-class arg "crossreference notranslate")
+                                                                (list (dom-text arg) 'button (dom-text arg)))))
+                                                       (cddr node))))))
+                                      details))
+                               ))))))
 
 (cl-defmethod fanyi-render ((this fanyi-etymon-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
@@ -384,18 +410,28 @@ before calling this method."
     (let ((inhibit-read-only t))
       ;; Go to the end of buffer.
       (goto-char (point-max))
-      ;; The headline about HaiCi service.
-      (insert (propertize "# Etymonline\n\n" 'face 'fanyi-dict-face))
+      ;; The headline about Etymology service.
+      (insert "# Etymonline\n\n")
       (cl-loop for i in (oref this :definitions)
                do (cl-destructuring-bind (word def) i
-                    (insert (concat "## " word "\n"))
-                    (insert def)
-                    (insert "\n"))))))
+                    (insert (concat "## " word "\n\n"))
+                    (seq-do (lambda (arg)
+                              (pcase arg
+                                (`(,s face italic)
+                                 (insert "/" s "/"))
+                                (`(,s button ,word)
+                                 (insert-button s
+                                                'action #'fanyi-dwim
+                                                'button-data word
+                                                'follow-link t))
+                                (s
+                                 (insert s))))
+                            def)))
+      (while (equal (char-before) ?\n)
+        (delete-char -1))
+      (insert "\n\n"))))
 
-;; (dom-texts (dom-by-class (dom-by-class xxx "word--C9UPa") "word__defination--2q7ZH"))
-
-
-
+;; Translation services.
 
 (defconst fanyi-provider-haici
   (fanyi-haici-service :word "dummy"
@@ -445,6 +481,17 @@ before calling this method."
   "Used as `header-line-format'."
   (format "Translating %s" (propertize fanyi--current-word 'face 'fanyi-word-face)))
 
+(defvar fanyi-mode-font-lock-keywords
+  '(;; Dictionary name
+    ("^# .*" . 'fanyi-dict-face)
+    ;; Quotes
+    ("^> .*" . 'fanyi-quote-face)
+    ;; Fancy star
+    ("★" . 'fanyi-star-face)
+    ;; Italic
+    ("/\\([^/]+?\\)/" . 'italic))
+  "Keywords to highlight in `fanyi-mode'.")
+
 (defvar fanyi-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map [tab] #'forward-button)
@@ -460,6 +507,7 @@ before calling this method."
   :interactive nil
   :group 'fanyi
 
+  (setq font-lock-defaults '(fanyi-mode-font-lock-keywords))
   (setq imenu-generic-expression '(("Dict" "^# \\(.*\\)" 1)))
   (setq header-line-format '((:eval (fanyi-format-header-line)))))
 
