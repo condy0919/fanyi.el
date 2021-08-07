@@ -353,13 +353,11 @@ before calling this method."
           (when rs
             (insert "\n\n")))
         ;; The origins.
-        (let ((origins (oref this :origins)))
-          (when origins
-            (insert "## 起源\n\n"))
+        (when-let ((origins (oref this :origins)))
+          (insert "## 起源\n\n")
           (cl-loop for o in origins
                    do (insert (format "- %s\n" o)))
-          (when origins
-            (insert "\n")))
+          (insert "\n"))
         ;; Visit the url for more information.
         (insert-button "Browse the full page via eww"
                        'action #'eww
@@ -369,7 +367,7 @@ before calling this method."
 
 (cl-defmethod fanyi-parse-from ((this fanyi-etymon-service) dom)
   "Complete the fields of THIS from DOM tree.
-If the definitions of word is not found, http 404 error is
+If the definitions of word are not found, http 404 error is
 expected."
   (let ((defs (dom-by-class dom "word--C9UPa")))
     (oset this :definitions
@@ -402,7 +400,10 @@ expected."
 (cl-defmethod fanyi-render ((this fanyi-etymon-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
-before calling this method."
+before calling this method.
+
+The /italic/ and *bold* styles are borrowed from `org-mode',
+while the quote style is from mailing list."
   (with-current-buffer (get-buffer-create fanyi-buffer-name)
     (save-excursion
       ;; Go to the end of buffer.
@@ -533,7 +534,7 @@ before calling this method."
     (error "This function requires Emacs to be compiled with libxml2"))
   ;; Save current query word.
   (setq fanyi--current-word word)
-  ;; Reset the counter of completed tasks
+  ;; Reset the counter of completed tasks.
   (setq fanyi--tasks-completed 0)
   (let ((buf (get-buffer-create fanyi-buffer-name)))
     (with-current-buffer buf
