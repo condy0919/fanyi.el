@@ -382,7 +382,7 @@ expected."
                                       (lambda (node)
                                         (pcase node
                                           ('(p nil) "\n\n")
-                                          (_ (cl-assert (length> node 2))
+                                          (_ (cl-assert (> (length node) 2))
                                              (seq-concatenate
                                               'list
                                               (when (equal (car node) 'blockquote)
@@ -483,7 +483,7 @@ before calling this method."
   "Used as `header-line-format'."
   (concat "Translating "
           (propertize fanyi--current-word 'face 'fanyi-word-face)
-          (when (length> fanyi-providers fanyi--tasks-completed)
+          (when (< fanyi--tasks-completed (length fanyi-providers))
             (format " %d/%d" fanyi--tasks-completed (length fanyi-providers)))))
 
 (defvar fanyi-mode-font-lock-keywords
