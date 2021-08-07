@@ -390,7 +390,10 @@ expected."
                                               (seq-map (lambda (arg)
                                                          (cond ((stringp arg) arg)
                                                                ((dom-by-class arg "foreign notranslate")
-                                                                (list (dom-text arg) 'face 'italic))
+                                                                (cond ((dom-by-tag arg 'strong)
+                                                                       (list (dom-texts arg) 'face 'bold))
+                                                                      (t
+                                                                       (list (dom-text arg) 'face 'italic))))
                                                                ((dom-by-class arg "crossreference notranslate")
                                                                 (list (dom-text arg) 'button (dom-text arg)))))
                                                        (cddr node))))))
@@ -414,6 +417,8 @@ before calling this method."
                                 (pcase arg
                                   (`(,s face italic)
                                    (insert "/" s "/"))
+                                  (`(,s face bold)
+                                   (insert "*" s "*"))
                                   (`(,s button ,word)
                                    (insert-button s
                                                   'action #'fanyi-dwim
@@ -489,7 +494,9 @@ before calling this method."
     ;; Fancy star
     ("★" . 'fanyi-star-face)
     ;; Italic
-    ("/\\([^/]+?\\)/" . 'italic))
+    ("/\\([^/]+?\\)/" . 'italic)
+    ;; Bold
+    ("\\*\\([^\\*]+?\\)\\*" . 'bold))
   "Keywords to highlight in `fanyi-mode'.")
 
 (defvar fanyi-mode-map
