@@ -272,7 +272,7 @@ A 'not-found exception may be thrown."
   "Render THIS page into a buffer named `fanyi-buffer-name'.
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
 before calling this method."
-  (with-current-buffer (get-buffer-create fanyi-buffer-name :inhibit-buffer-hooks)
+  (with-current-buffer (get-buffer-create fanyi-buffer-name)
     (save-excursion
       ;; Go to the end of buffer.
       (goto-char (point-max))
@@ -403,7 +403,7 @@ expected."
   "Render THIS page into a buffer named `fanyi-buffer-name'.
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
 before calling this method."
-  (with-current-buffer (get-buffer-create fanyi-buffer-name :inhibit-buffer-hooks)
+  (with-current-buffer (get-buffer-create fanyi-buffer-name)
     (save-excursion
       ;; Go to the end of buffer.
       (goto-char (point-max))
@@ -535,7 +535,7 @@ before calling this method."
   (setq fanyi--current-word word)
   ;; Reset the counter of completed tasks
   (setq fanyi--tasks-completed 0)
-  (let ((buf (get-buffer-create fanyi-buffer-name :inhibit-buffer-hooks)))
+  (let ((buf (get-buffer-create fanyi-buffer-name)))
     (with-current-buffer buf
       (let ((inhibit-read-only t)
             (inhibit-point-motion-hooks t))
