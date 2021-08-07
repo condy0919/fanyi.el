@@ -249,8 +249,8 @@ A 'not-found exception may be thrown."
           (cl-loop for p in paraphrases
                    collect (list (dom-text (nth 3 p)) (dom-text (nth 5 p))))))
   ;; distribution of senses, could be nil
-  (when-let* ((chart (dom-attr (dom-by-id dom "dict-chart-basic") 'data))
-              (json (json-read-from-string (url-unhex-string chart))))
+  (when-let* ((chart-basic (dom-attr (dom-by-id dom "dict-chart-basic") 'data))
+              (json (json-read-from-string (url-unhex-string chart-basic))))
     (oset this :distribution
           ;; transform (\1 (percent . 55) (sense . "abc"))
           (cl-loop for j in json
