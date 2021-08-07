@@ -25,6 +25,12 @@ M-x package-install RET fanyi RET
 
 `fanyi-dwim`, that's all!
 
+# Screenshots
+
+![海词](https://user-images.githubusercontent.com/4024656/128582690-2af2bb4a-46aa-4241-bdc0-6a5bb5e2db38.png)
+![分布](https://user-images.githubusercontent.com/4024656/128582703-3e62cd17-a778-4982-9872-98e8697e333e.png)
+![Etymon](https://user-images.githubusercontent.com/4024656/128583142-dfd26d67-45c5-482a-9268-d7482dbe65f3.png)
+
 ## Similar projects
 
 - [youdao-dictionary](https://github.com/xuchunyang/youdao-dictionary.el)
