@@ -449,6 +449,8 @@ before calling this method."
   :type '(repeat fanyi-service)
   :group 'fanyi)
 
+(defvar fanyi--tasks-completed 0)
+
 (defun fanyi--spawn (instance)
   "Spawn a thread for searching. The result is powered by INSTANCE."
   (let ((url (format (oref instance :url)
@@ -469,7 +471,8 @@ before calling this method."
                                ;; Since `fanyi-render' manipulates `fanyi-buffer-name',
                                ;; a mutex is required in multi-threaded situation.
                                (with-mutex fanyi-buffer-mtx
-                                 (fanyi-render instance)))))
+                                 (fanyi-render instance))
+                               (cl-incf fanyi--tasks-completed))))
                      nil
                      t
                      t)))))
@@ -478,7 +481,10 @@ before calling this method."
 
 (defun fanyi-format-header-line ()
   "Used as `header-line-format'."
-  (format "Translating %s" (propertize fanyi--current-word 'face 'fanyi-word-face)))
+  (concat "Translating "
+          (propertize fanyi--current-word 'face 'fanyi-word-face)
+          (when (length> fanyi-providers fanyi--tasks-completed)
+            (format " %d/%d" fanyi--tasks-completed (length fanyi-providers)))))
 
 (defvar fanyi-mode-font-lock-keywords
   '(;; Dictionary name
@@ -525,6 +531,8 @@ before calling this method."
     (error "This function requires Emacs to be compiled with libxml2"))
   ;; Save current query word.
   (setq fanyi--current-word word)
+  ;; Reset the counter of completed tasks
+  (setq fanyi--tasks-completed 0)
   (let ((buf (get-buffer-create fanyi-buffer-name :inhibit-buffer-hooks)))
     (with-current-buffer buf
       (let ((inhibit-read-only t)
