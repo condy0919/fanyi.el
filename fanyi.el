@@ -65,18 +65,13 @@
   :group 'fanyi)
 
 (defface fanyi-word-face
-  '((t (:height 1.75 :weight bold :foreground "#d08770")))
+  '((t (:height 1.75 :weight bold :foreground "dark cyan")))
   "Face used for user requested word."
   :group 'fanyi)
 
 (defface fanyi-dict-face
   '((t (:height 1.25 :weight bold :foreground "#a9a1e1" :extend t)))
   "Face used for dictionary name."
-  :group 'fanyi)
-
-(defface fanyi-syllable-face
-  '((t (:weight bold :foreground "dark cyan")))
-  "Face used for syllable of word."
   :group 'fanyi)
 
 (defface fanyi-star-face
@@ -284,7 +279,7 @@ before calling this method."
       (let ((inhibit-read-only t))
         ;; The headline about HaiCi service.
         (insert "# 海词\n\n")
-        ;; Syllable division and star/level description.
+        ;; Syllables and star/level description.
         (insert (format "%s %s %s\n\n"
                         (oref this :syllable)
                         (s-repeat (oref this :star) "★")
