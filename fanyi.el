@@ -406,29 +406,30 @@ expected."
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
 before calling this method."
   (with-current-buffer (get-buffer-create fanyi-buffer-name :inhibit-buffer-hooks)
-    (let ((inhibit-read-only t))
+    (save-excursion
       ;; Go to the end of buffer.
       (goto-char (point-max))
-      ;; The headline about Etymology service.
-      (insert "# Etymonline\n\n")
-      (cl-loop for i in (oref this :definitions)
-               do (cl-destructuring-bind (word def) i
-                    (insert (concat "## " word "\n\n"))
-                    (seq-do (lambda (arg)
-                              (pcase arg
-                                (`(,s face italic)
-                                 (insert "/" s "/"))
-                                (`(,s button ,word)
-                                 (insert-button s
-                                                'action #'fanyi-dwim
-                                                'button-data word
-                                                'follow-link t))
-                                (s
-                                 (insert s))))
-                            def)))
-      (while (equal (char-before) ?\n)
-        (delete-char -1))
-      (insert "\n\n"))))
+      (let ((inhibit-read-only t))
+        ;; The headline about Etymology service.
+        (insert "# Etymonline\n\n")
+        (cl-loop for i in (oref this :definitions)
+                 do (cl-destructuring-bind (word def) i
+                      (insert (concat "## " word "\n\n"))
+                      (seq-do (lambda (arg)
+                                (pcase arg
+                                  (`(,s face italic)
+                                   (insert "/" s "/"))
+                                  (`(,s button ,word)
+                                   (insert-button s
+                                                  'action #'fanyi-dwim
+                                                  'button-data word
+                                                  'follow-link t))
+                                  (s
+                                   (insert s))))
+                              def)))
+        (while (equal (char-before) ?\n)
+          (delete-char -1))
+        (insert "\n\n")))))
 
 ;; Translation services.
 
