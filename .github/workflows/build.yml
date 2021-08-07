@@ -24,4 +24,4 @@ jobs:
     - run: echo "/home/runner/.cask/bin" >> $GITHUB_PATH
     - run: cask install
     - run: make compile
-          
+    - run: make lint
