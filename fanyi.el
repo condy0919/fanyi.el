@@ -455,33 +455,36 @@ while the quote style is from mailing list."
   :type '(repeat fanyi-service)
   :group 'fanyi)
 
+(defvar fanyi--tasks nil)
 (defvar fanyi--tasks-completed 0)
 
 (defun fanyi--spawn (instance)
   "Spawn a thread for searching. The result is powered by INSTANCE."
   (let ((url (format (oref instance :url)
                      (oref instance :word))))
-    (make-thread
-     (lambda ()
-       (url-retrieve url (lambda (status)
-                           ;; Something went wrong.
-                           (when (or (not status) (plist-member status :error))
-                             (user-error "Something went wrong.\n\n%s" (pp-to-string (plist-get status :error))))
-                           ;; Move point to the real http content.
-                           (goto-char url-http-end-of-headers)
-                           ;; Parse the html into a dom tree.
-                           (let ((dom (libxml-parse-html-region (point) (point-max) url)))
-                             (catch 'not-found
-                               ;; Extract information.
-                               (fanyi-parse-from instance dom)
-                               ;; Since `fanyi-render' manipulates `fanyi-buffer-name',
-                               ;; a mutex is required in multi-threaded situation.
-                               (with-mutex fanyi-buffer-mtx
-                                 (fanyi-render instance))
-                               (cl-incf fanyi--tasks-completed))))
-                     nil
-                     t
-                     t)))))
+    (cl-pushnew
+     (make-thread
+      (lambda ()
+        (url-retrieve url (lambda (status)
+                            ;; Something went wrong.
+                            (when (or (not status) (plist-member status :error))
+                              (user-error "Something went wrong.\n\n%s" (pp-to-string (plist-get status :error))))
+                            ;; Move point to the real http content.
+                            (goto-char url-http-end-of-headers)
+                            ;; Parse the html into a dom tree.
+                            (let ((dom (libxml-parse-html-region (point) (point-max) url)))
+                              (catch 'not-found
+                                ;; Extract information.
+                                (fanyi-parse-from instance dom)
+                                ;; Since `fanyi-render' manipulates `fanyi-buffer-name',
+                                ;; a mutex is required in multi-threaded situation.
+                                (with-mutex fanyi-buffer-mtx
+                                  (fanyi-render instance))
+                                (cl-incf fanyi--tasks-completed))))
+                      nil
+                      t
+                      t)))
+     fanyi--tasks)))
 
 (defvar fanyi--current-word nil)
 
@@ -541,8 +544,15 @@ while the quote style is from mailing list."
     (error "This function requires Emacs to be compiled with libxml2"))
   ;; Save current query word.
   (setq fanyi--current-word word)
+  ;; Cancel the still pending threads.
+  (seq-do (lambda (th)
+            (when (thread-live-p th)
+              (thread-signal th nil nil)))
+          fanyi--tasks)
+  (setq fanyi--tasks nil)
   ;; Reset the counter of completed tasks.
   (setq fanyi--tasks-completed 0)
+
   (let ((buf (get-buffer-create fanyi-buffer-name)))
     (with-current-buffer buf
       (let ((inhibit-read-only t)
