@@ -89,6 +89,11 @@
   "Face used for male speaker button."
   :group 'fanyi)
 
+(defface fanyi-list-face
+  '((t (:foreground "#51afef")))
+  "Face used for list."
+  :group 'fanyi)
+
 (defface fanyi-quote-face
   '((t (:inherit font-lock-comment-face)))
   "Face used for quotes of word."
@@ -494,6 +499,8 @@ while the quote style is from mailing list."
     ("^> .*" . 'fanyi-quote-face)
     ;; Fancy star
     ("★" . 'fanyi-star-face)
+    ;; List
+    ("^-" . 'fanyi-list-face)
     ;; Italic
     ("/\\([^/]+?\\)/" . 'italic)
     ;; Bold
