@@ -418,7 +418,7 @@ while the quote style is from mailing list."
         (insert "# Etymonline\n\n")
         (cl-loop for i in (oref this :definitions)
                  do (cl-destructuring-bind (word def) i
-                      (insert (concat "## " word "\n\n"))
+                      (insert "## " word "\n\n")
                       (seq-do (lambda (arg)
                                 (pcase arg
                                   (`(,s face italic)
