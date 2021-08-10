@@ -346,7 +346,7 @@ before calling this method."
                          'follow-link t)
           (insert "\n\n"))
         ;; Make buttons for related words.
-        (let ((rs (oref this :related)))
+        (when-let ((rs (oref this :related)))
           (cl-loop for r in rs
                    do (cl-destructuring-bind (k v) r
                         (insert k)
@@ -356,8 +356,7 @@ before calling this method."
                                        'button-data v
                                        'follow-link t)
                         (insert " ")))
-          (when rs
-            (insert "\n\n")))
+          (insert "\n\n"))
         ;; The origins.
         (when-let ((origins (oref this :origins)))
           (insert "## 起源\n\n")
