@@ -285,10 +285,12 @@ before calling this method."
         ;; The headline about HaiCi service.
         (insert "# 海词\n\n")
         ;; Syllables and star/level description.
-        (insert (format "%s %s %s\n\n"
-                        (oref this :syllable)
-                        (s-repeat (oref this :star) "★")
-                        (oref this :level)))
+        (insert (oref this :syllable)
+                " "
+                (s-repeat (oref this :star) "★")
+                " "
+                (oref this :level)
+                "\n\n")
         ;; Phonetics.
         ;; British: pronunciation, female sound url, male sound url
         ;; American: pronunciation, female sound url, male sound url
