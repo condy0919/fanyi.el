@@ -334,16 +334,17 @@ before calling this method."
                       (insert (format "- %s %s\n" pos p))))
         (insert "\n")
         ;; Make a button for distribution chart.
-        (insert-button "Click to view the distribution chart"
-                       'action (lambda (dist)
-                                 (chart-bar-quickie
-                                  'vertical
-                                  fanyi-haici-distribution-chart-title
-                                  (seq-map #'cadr dist) "Senses"
-                                  (seq-map #'car dist) "Percent"))
-                       'button-data (oref this :distribution)
-                       'follow-link t)
-        (insert "\n\n")
+        (when-let ((dist (oref this :distribution)))
+          (insert-button "Click to view the distribution chart"
+                         'action (lambda (dist)
+                                   (chart-bar-quickie
+                                    'vertical
+                                    fanyi-haici-distribution-chart-title
+                                    (seq-map #'cadr dist) "Senses"
+                                    (seq-map #'car dist) "Percent"))
+                         'button-data dist
+                         'follow-link t)
+          (insert "\n\n"))
         ;; Make buttons for related words.
         (let ((rs (oref this :related)))
           (cl-loop for r in rs
