@@ -198,10 +198,24 @@ It could be either British pronunciation or American pronunciation.")
 Where def could be a list of string/(string 'face face)/(string 'button data)."))
   "The etymonline service.")
 
+(defclass fanyi-ah-service (fanyi-service)
+  ((syllable :initarg :syllable
+             :type string
+             :documentation "Syllable.")
+   (sound :initarg :sound
+          :type string
+          :documentation "Sound uri.")
+   (pronunciation :initarg :pronunciation
+                  :type string
+                  :documentation "Pronunciation.")
+   )
+  "The American Heritage dictionary service.")
+
 ;; Silence unknown slots warning.
 (eieio-declare-slots :word :url :sound-url)
 (eieio-declare-slots :syllable :star :level :phonetics :paraphrases :distribution :related :origins)
 (eieio-declare-slots :definitions)
+(eieio-declare-slots :syllable :sound :pronunciation)
 
 (cl-defmethod fanyi-parse-from ((this fanyi-haici-service) dom)
   "Complete the fields of THIS from DOM tree.
@@ -302,7 +316,7 @@ before calling this method."
                     (insert "英")
                   (insert "  美"))
                 (insert (format " %s " pronunciation))
-                (insert-button "♀"
+                (insert-button "🔊"
                                'display (when (fanyi-display-glyphs-p)
                                           (find-image `((:type xpm
                                                                :data ,fanyi-speaker-xpm
@@ -314,7 +328,7 @@ before calling this method."
                                'face 'fanyi-female-speaker-face
                                'follow-link t)
                 (insert " ")
-                (insert-button "♂"
+                (insert-button "🔊"
                                'display (when (fanyi-display-glyphs-p)
                                           (find-image `((:type xpm
                                                                :data ,fanyi-speaker-xpm
@@ -432,10 +446,70 @@ while the quote style is from mailing list."
                                                   'follow-link t))
                                   (s
                                    (insert s))))
-                              def)))
-        (while (equal (char-before) ?\n)
-          (delete-char -1))
-        (insert "\n\n")))))
+                              def)
+                      (while (equal (char-before) ?\n)
+                        (delete-char -1))
+                      (insert "\n\n")))))))
+
+(cl-defmethod fanyi-parse-from ((this fanyi-ah-service) dom)
+  "Complete the fields of THIS from DOM tree.
+A 'not-found exception may be thrown."
+  (setq xxx dom)
+  (let ((results (dom-by-id dom "results")))
+    ;; Nothing is found.
+    (when (string= (dom-text results) "No word definition found")
+      (throw 'not-found nil))
+    ;; Syllable, sound and pronunciation.
+    (let ((rtseg (dom-by-class results "rtseg")))
+      (oset this :syllable (dom-texts (dom-child-by-tag rtseg 'b)))
+      (oset this :sound (dom-attr (dom-child-by-tag rtseg 'a) 'href))
+      ;; The original pronunciation contains private unicodes, let's fix that.
+      (let ((pron (s-trim (s-join ""
+                                  (seq-map (lambda (arg)
+                                             (pcase arg
+                                               (`(font ,_face ,s) s)
+                                               ((pred stringp) arg)
+                                               (_ "")))
+                                           (dom-children rtseg))))))
+        (oset this :pronunciation "empty now")
+        )
+      )
+    )
+  )
+
+;;=> " (ə-kymyə-lāt′)"
+  ;; ac·cu·mu·late (ə-kymyə-lāt′)
+  ;; 
+  ;; (ə-kyo͞om′yə-lāt′)
+
+  ;; (ə-kyo͞om′yə-lāt′)
+  ;; -kyo͞om′y
+
+;;=> " (-kymy-lt)"
+
+(cl-defmethod fanyi-render ((this fanyi-ah-service))
+  "Render THIS page into a buffer named `fanyi-buffer-name'.
+It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
+before calling this method."
+  (with-current-buffer (get-buffer-create fanyi-buffer-name)
+    (save-excursion
+      ;; Go to the end of buffer.
+      (goto-char (point-max))
+      (let ((inhibit-read-only t))
+        ;; The headline about American Heritage dictionary.
+        (insert "# American Heritage\n\n")
+        ;; Syllable, sound and pronunciation.
+        (insert (oref this :syllable))
+        (insert " ")
+        (insert-button "🔊"
+                       'action #'fanyi-play-sound
+                       'button-data (format (oref this :sound-url) (oref this :sound))
+                       'face 'fanyi-male-speaker-face
+                       'follow-link t)
+        (insert " ")
+        (insert (oref this :pronunciation) "\n\n")
+        )))
+  )
 
 ;; Translation services.
 
@@ -449,8 +523,14 @@ while the quote style is from mailing list."
                         :url "https://www.etymonline.com/word/%s"
                         :sound-url "unused"))
 
+(defconst fanyi-provider-ah
+  (fanyi-ah-service :word "dummy"
+                    :url "https://ahdictionary.com/word/search.html?q=%s"
+                    :sound-url "https://ahdictionary.com/%s"))
+
 (defcustom fanyi-providers `(,fanyi-provider-haici
-                             ,fanyi-provider-etymon)
+                             ,fanyi-provider-etymon
+                             ,fanyi-provider-ah)
   "The providers used by `fanyi-dwim'."
   :type '(repeat fanyi-service)
   :group 'fanyi)
@@ -522,12 +602,13 @@ while the quote style is from mailing list."
     map)
   "Keymap for `fanyi-mode'.")
 
-(define-derived-mode fanyi-mode special-mode "Fanyi"
+(define-derived-mode fanyi-mode outline-mode "Fanyi"
   "Major mode for viewing multi translators result.
 \\{fanyi-mode-map}"
   :interactive nil
   :group 'fanyi
 
+  (setq-local outline-regexp "^#+")
   (setq font-lock-defaults '(fanyi-mode-font-lock-keywords))
   (setq imenu-generic-expression '(("Dict" "^# \\(.*\\)" 1)))
   (setq header-line-format '((:eval (fanyi-format-header-line)))))
