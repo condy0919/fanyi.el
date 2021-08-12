@@ -40,7 +40,6 @@
 (require 'imenu)
 (require 'cl-lib)
 (require 'button)
-(require 'thingatpt)
 
 ;; Silence compile warnings.
 (defvar url-http-end-of-headers)
