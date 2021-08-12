@@ -379,30 +379,29 @@ expected."
   (let ((defs (dom-by-class dom "word--C9UPa")))
     (oset this :definitions
           (cl-loop for def in defs
-                   collect (progn
-                             (let ((title (dom-text (dom-by-class def "word__name--TTbAA")))
-                                   (details (dom-children (dom-by-class def "word__defination--2q7ZH"))))
-                               (list title
-                                     (seq-mapcat
-                                      (lambda (node)
-                                        (pcase node
-                                          ('(p nil) "\n\n")
-                                          (_ (cl-assert (> (length node) 2))
-                                             (seq-concatenate
-                                              'list
-                                              (when (equal (car node) 'blockquote)
-                                                '("> "))
-                                              (seq-map (lambda (arg)
-                                                         (cond ((stringp arg) arg)
-                                                               ((dom-by-class arg "foreign notranslate")
-                                                                (cond ((dom-by-tag arg 'strong)
-                                                                       (list (dom-texts arg) 'face 'bold))
-                                                                      (t
-                                                                       (list (dom-text arg) 'face 'italic))))
-                                                               ((dom-by-class arg "crossreference notranslate")
-                                                                (list (dom-text arg) 'button (dom-text arg)))))
-                                                       (cddr node))))))
-                                      details))))))))
+                   collect (let ((title (dom-text (dom-by-class def "word__name--TTbAA")))
+                                 (details (dom-children (dom-by-class def "word__defination--2q7ZH"))))
+                             (list title
+                                   (seq-mapcat
+                                    (lambda (node)
+                                      (pcase node
+                                        ('(p nil) "\n\n")
+                                        (_ (cl-assert (> (length node) 2))
+                                           (seq-concatenate
+                                            'list
+                                            (when (equal (car node) 'blockquote)
+                                              '("> "))
+                                            (seq-map (lambda (arg)
+                                                       (cond ((stringp arg) arg)
+                                                             ((dom-by-class arg "foreign notranslate")
+                                                              (cond ((dom-by-tag arg 'strong)
+                                                                     (list (dom-texts arg) 'face 'bold))
+                                                                    (t
+                                                                     (list (dom-text arg) 'face 'italic))))
+                                                             ((dom-by-class arg "crossreference notranslate")
+                                                              (list (dom-text arg) 'button (dom-text arg)))))
+                                                     (cddr node))))))
+                                    details)))))))
 
 (cl-defmethod fanyi-render ((this fanyi-etymon-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
@@ -471,6 +470,9 @@ while the quote style is from mailing list."
                             ;; Something went wrong.
                             (when (or (not status) (plist-member status :error))
                               (user-error "Something went wrong.\n\n%s" (pp-to-string (plist-get status :error))))
+                            ;; Redirection is inhibited.
+                            (when (plist-member status :redirect)
+                              (user-error "Redirection is inhibited.\n\n%s" (pp-to-string (plist-get status :redirect))))
                             ;; Move point to the real http content.
                             (goto-char url-http-end-of-headers)
                             ;; Parse the html into a dom tree.
