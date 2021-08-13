@@ -214,14 +214,25 @@ Where def could be a list of string/(string 'face face)/(string 'button data).")
    (pronunciation :initarg :pronunciation
                   :type string
                   :documentation "Pronunciation.")
-   )
+   (paraphrases :initarg :paraphrases
+                :type list
+                :documentation "List of (pos . paraphrase).")
+   (idioms :initarg :idioms
+           :type list
+           :documentation "Idioms of the word.")
+   (etymon :initarg :etymon
+           :type string
+           :documentation "Etymon of the word.")
+   (synonyms :initarg :synonyms
+             :type list
+             :documentation "Synonyms of the word."))
   "The American Heritage dictionary service.")
 
 ;; Silence unknown slots warning.
 (eieio-declare-slots :word :url :sound-url)
 (eieio-declare-slots :syllable :star :level :phonetics :paraphrases :distribution :related :origins)
 (eieio-declare-slots :definitions)
-(eieio-declare-slots :syllable :sound :pronunciation)
+(eieio-declare-slots :syllable :sound :pronunciation :paraphrases :idioms :etymon :synonyms)
 
 (cl-defmethod fanyi-parse-from ((this fanyi-haici-service) dom)
   "Complete the fields of THIS from DOM tree.

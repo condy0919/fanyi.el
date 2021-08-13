@@ -1,11 +1,7 @@
-<div align="center">
-
 [![build](https://github.com/condy0919/fanyi.el/actions/workflows/build.yml/badge.svg)](https://github.com/condy0919/fanyi.el/actions/workflows/build.yml)
 [![License](http://img.shields.io/:license-gpl3-blue.svg)](LICENSE)
 ![Supports Emacs 27.1-28.x](https://img.shields.io/badge/Supports-Emacs_27.1_--_28.x-blueviolet.svg?style=flat-square&logo=GNU%20Emacs&logoColor=white)
 [![MELPA](https://melpa.org/packages/fanyi-badge.svg)](https://melpa.org/#/fanyi)
-
-</div>
 
 # fanyi.el
 
@@ -14,6 +10,11 @@
 - [`海词`](https://dict.cn/)
 - [`etymonline`](https://www.etymonline.com/)
 - [`American Heritage dictionary`](https://ahdictionary.com/)
+
+`fanyi.el` has integrations with:
+
+- `imenu`, <kbd>M-x imenu</kbd> to jump to dictionary section directly
+- `outline-mode`, <kbd>TAB</kbd> to collapse on section
 
 ## Installation
 
