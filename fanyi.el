@@ -40,6 +40,7 @@
 (require 'imenu)
 (require 'cl-lib)
 (require 'button)
+(require 'outline)
 
 ;; Silence compile warnings.
 (defvar url-http-end-of-headers)
@@ -593,22 +594,39 @@ before calling this method."
     ("\\*\\([^\\*]+?\\)\\*" . 'bold))
   "Keywords to highlight in `fanyi-mode'.")
 
+(defun fanyi-tab ()
+  "Smart tab in `fanyi-mode'."
+  (interactive nil fanyi-mode)
+  (if (outline-on-heading-p)
+      (outline-cycle)
+    (forward-button 1 t t t)))
+
+(defun fanyi-backtab ()
+  "Smart backtab in `fanyi-mode'."
+  (interactive nil fanyi-mode)
+  (if (outline-on-heading-p)
+      (outline-cycle-buffer)
+    (backward-button 1 t t t)))
+
 (defvar fanyi-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [tab] #'forward-button)
-    (define-key map [backtab] #'backward-button)
+    (define-key map [tab] #'fanyi-tab)
+    (define-key map [backtab] #'fanyi-backtab)
     (define-key map "q" #'quit-window)
     (define-key map "s" #'fanyi-dwim)
     map)
   "Keymap for `fanyi-mode'.")
 
-(define-derived-mode fanyi-mode outline-mode "Fanyi"
+(define-derived-mode fanyi-mode special-mode "Fanyi"
   "Major mode for viewing multi translators result.
 \\{fanyi-mode-map}"
   :interactive nil
   :group 'fanyi
 
+  ;; Make it foldable.
   (setq-local outline-regexp "^#+")
+  (setq-local outline-minor-mode t)
+
   (setq font-lock-defaults '(fanyi-mode-font-lock-keywords))
   (setq imenu-generic-expression '(("Dict" "^# \\(.*\\)" 1)))
   (setq header-line-format '((:eval (fanyi-format-header-line)))))
