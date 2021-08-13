@@ -99,6 +99,11 @@
   "Face used for quotes of word."
   :group 'fanyi)
 
+(defface fanyi-ah-pronunciation-face
+  '((t (:family "Minion New")))
+  "Face used for pronunciation of American Heritage dictionary."
+  :group 'fanyi)
+
 (defun fanyi-display-glyphs-p ()
   "Can we use glyphs instead of plain text?"
   (and fanyi-use-glyphs (display-images-p)))
@@ -464,29 +469,18 @@ A 'not-found exception may be thrown."
     (let ((rtseg (dom-by-class results "rtseg")))
       (oset this :syllable (dom-texts (dom-child-by-tag rtseg 'b)))
       (oset this :sound (dom-attr (dom-child-by-tag rtseg 'a) 'href))
-      ;; The original pronunciation contains private unicodes, let's fix that.
-      (let ((pron (s-trim (s-join ""
-                                  (seq-map (lambda (arg)
-                                             (pcase arg
-                                               (`(font ,_face ,s) s)
-                                               ((pred stringp) arg)
-                                               (_ "")))
-                                           (dom-children rtseg))))))
-        (oset this :pronunciation "empty now")
-        )
-      )
+      ;; The original pronunciation contains private unicodes, which conflict
+      ;; with `all-the-icons'.
+      (oset this :pronunciation (s-trim (s-join ""
+                                                (seq-map (lambda (arg)
+                                                           (pcase arg
+                                                             (`(font ,_face ,s) s)
+                                                             ((pred stringp) arg)
+                                                             (_ "")))
+                                                         (dom-children rtseg))))))
+    
     )
   )
-
-;;=> " (ə-kymyə-lāt′)"
-  ;; ac·cu·mu·late (ə-kymyə-lāt′)
-  ;; 
-  ;; (ə-kyo͞om′yə-lāt′)
-
-  ;; (ə-kyo͞om′yə-lāt′)
-  ;; -kyo͞om′y
-
-;;=> " (-kymy-lt)"
 
 (cl-defmethod fanyi-render ((this fanyi-ah-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
@@ -508,8 +502,13 @@ before calling this method."
                        'face 'fanyi-male-speaker-face
                        'follow-link t)
         (insert " ")
-        (insert (oref this :pronunciation) "\n\n")
-        )))
+        ;; Use zero width space as boundary to fontify pronunciation.
+        (insert "\u200b"
+                (oref this :pronunciation)
+                "\u200b"
+                "\n\n")
+        )
+      ))
   )
 
 ;; Translation services.
@@ -588,25 +587,14 @@ before calling this method."
     ("★" . 'fanyi-star-face)
     ;; List
     ("^-" . 'fanyi-list-face)
+    ;; Use Minion New font to fontify pronunciation of American Heritage
+    ;; dictionary.
+    ("\u200b\\([^\u200b]+?\\)\u200b" . 'fanyi-ah-pronunciation-face)
     ;; Italic
     ("/\\([^/]+?\\)/" . 'italic)
     ;; Bold
     ("\\*\\([^\\*]+?\\)\\*" . 'bold))
   "Keywords to highlight in `fanyi-mode'.")
-
-(defun fanyi-tab ()
-  "Smart tab in `fanyi-mode'."
-  (interactive nil fanyi-mode)
-  (if (outline-on-heading-p)
-      (outline-cycle)
-    (forward-button 1 t t t)))
-
-(defun fanyi-backtab ()
-  "Smart backtab in `fanyi-mode'."
-  (interactive nil fanyi-mode)
-  (if (outline-on-heading-p)
-      (outline-cycle-buffer)
-    (backward-button 1 t t t)))
 
 (defvar fanyi-mode-map
   (let ((map (make-sparse-keymap)))
@@ -672,6 +660,26 @@ before calling this method."
                 (fanyi--spawn i))
               instances))
     (pop-to-buffer buf)))
+
+;; Internals
+
+(defun fanyi-tab ()
+  "Smart tab in `fanyi-mode'."
+  (interactive nil fanyi-mode)
+  (unless (derived-mode-p 'fanyi-mode)
+    (error "Not in fanyi-mode"))
+  (if (outline-on-heading-p)
+      (outline-cycle)
+    (forward-button 1 t t t)))
+
+(defun fanyi-backtab ()
+  "Smart backtab in `fanyi-mode'."
+  (interactive nil fanyi-mode)
+  (unless (derived-mode-p 'fanyi-mode)
+    (error "Not in fanyi-mode"))
+  (if (outline-on-heading-p)
+      (outline-cycle-buffer)
+    (backward-button 1 t t t)))
 
 (provide 'fanyi)
 ;;; fanyi.el ends here

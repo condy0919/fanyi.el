@@ -13,6 +13,7 @@
 
 - [`海词`](https://dict.cn/)
 - [`etymonline`](https://www.etymonline.com/)
+- [`American Heritage dictionary`](https://ahdictionary.com/)
 
 ## Installation
 
@@ -20,6 +21,25 @@ Install `fanyi.el` from [MELPA](https://melpa.org) with:
 
 ```
 M-x package-install RET fanyi RET
+```
+
+If you're a American Heritage Dictionary user, make sure `Minion New` font is
+installed. Otherwise the pronunciation may be displayed in tofu, or an
+`all-the-icons` icon if you have `all-the-icons` installed.
+
+``` shell
+# family: Minion New Bold
+# https://ahdictionary.com/application/resources/fonts/MinionNew-Bold.ttf
+#
+# family: Minion New Italic
+# https://ahdictionary.com/application/resources/fonts/MinionNew-Italic.ttf
+curl https://ahdictionary.com/application/resources/fonts/MININ___.TTF -o Minion.ttf
+
+# linux
+mv Minion.ttf ~/.local/share/fonts/
+
+# macOS
+mv Minion.ttf ~/Library/Fonts/
 ```
 
 ## Usage
