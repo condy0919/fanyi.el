@@ -1,4 +1,4 @@
-;;; fanyi.el --- English-Chinese translator -*- lexical-binding: t -*-
+;;; fanyi.el --- Not only English-Chinese translator -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021 Zhiwei Chen
 ;; SPDX-License-Identifier: GPL-3.0-or-later
@@ -46,7 +46,7 @@
 (defvar url-http-end-of-headers)
 
 (defgroup fanyi nil
-  "English-Chinese translator for Emacs."
+  "Not only English-Chinese translator for Emacs."
   :prefix "fanyi-"
   :group 'tools
   :link '(url-link "https://github.com/condy0919/fanyi.el"))
@@ -216,7 +216,8 @@ Where def could be a list of string/(string 'face face)/(string 'button data).")
                   :documentation "Pronunciation.")
    (paraphrases :initarg :paraphrases
                 :type list
-                :documentation "List of (pos . paraphrase).")
+                :documentation "List of (pos . paraphrase).
+Where paraphrase can be a string or a list of strings.")
    (idioms :initarg :idioms
            :type list
            :documentation "Idioms of the word.")
@@ -282,7 +283,9 @@ A 'not-found exception may be thrown."
   (let ((paraphrases (butlast (dom-by-tag (dom-by-class dom "dict-basic-ul") 'li))))
     (oset this :paraphrases
           (cl-loop for p in paraphrases
-                   collect (list (dom-text (nth 3 p)) (dom-text (nth 5 p))))))
+                   for pos = (dom-text (nth 3 p))
+                   for para = (dom-text (nth 5 p))
+                   collect (list pos para))))
   ;; distribution of senses, could be nil
   (when-let* ((chart-basic (dom-attr (dom-by-id dom "dict-chart-basic") 'data))
               (json (json-read-from-string (url-unhex-string chart-basic))))
@@ -326,44 +329,41 @@ before calling this method."
         ;; American: pronunciation, female sound url, male sound url
         (let ((phonetics (oref this :phonetics)))
           (cl-assert (equal (length phonetics) 2))
-          (cl-loop
-           for i from 0 to 1
-           do (cl-destructuring-bind (pronunciation female male) (nth i phonetics)
-                (if (equal i 0)
-                    (insert "英")
-                  (insert "  美"))
-                (insert (format " %s " pronunciation))
-                (insert-button "🔊"
-                               'display (when (fanyi-display-glyphs-p)
-                                          (find-image `((:type xpm
-                                                               :data ,fanyi-speaker-xpm
-                                                               :ascent center
-                                                               :color-symbols
-                                                               (("color" . ,(face-attribute 'fanyi-female-speaker-face :foreground)))))))
-                               'action #'fanyi-play-sound
-                               'button-data (format (oref this :sound-url) female)
-                               'face 'fanyi-female-speaker-face
-                               'follow-link t)
-                (insert " ")
-                (insert-button "🔊"
-                               'display (when (fanyi-display-glyphs-p)
-                                          (find-image `((:type xpm
-                                                               :data ,fanyi-speaker-xpm
-                                                               :ascent center
-                                                               :color-symbols
-                                                               (("color" . ,(face-attribute 'fanyi-male-speaker-face :foreground)))))))
-                               'action #'fanyi-play-sound
-                               'button-data (format (oref this :sound-url) male)
-                               'face 'fanyi-male-speaker-face
-                               'follow-link t)))
+          (cl-loop for i from 0 to 1
+                   for (pronunciation female male) = (nth i phonetics)
+                   do (insert (if (equal i 0) "英" "  美"))
+                   do (insert " " pronunciation " ")
+                   do (insert-button "🔊"
+                                     'display (when (fanyi-display-glyphs-p)
+                                                (find-image `((:type xpm
+                                                                     :data ,fanyi-speaker-xpm
+                                                                     :ascent center
+                                                                     :color-symbols
+                                                                     (("color" . ,(face-attribute 'fanyi-female-speaker-face :foreground)))))))
+                                     'action #'fanyi-play-sound
+                                     'button-data (format (oref this :sound-url) female)
+                                     'face 'fanyi-female-speaker-face
+                                     'follow-link t)
+                   do (insert " ")
+                   do (insert-button "🔊"
+                                     'display (when (fanyi-display-glyphs-p)
+                                                (find-image `((:type xpm
+                                                                     :data ,fanyi-speaker-xpm
+                                                                     :ascent center
+                                                                     :color-symbols
+                                                                     (("color" . ,(face-attribute 'fanyi-male-speaker-face :foreground)))))))
+                                     'action #'fanyi-play-sound
+                                     'button-data (format (oref this :sound-url) male)
+                                     'face 'fanyi-male-speaker-face
+                                     'follow-link t))
           (insert "\n\n"))
         ;; Paraphrases.
         ;; - n. 荣誉；荣幸；尊敬；信用；正直；贞洁
         ;; - vt. 尊敬；使荣幸；对...表示敬意；兑现
         ;; ...
         (cl-loop for pa in (oref this :paraphrases)
-                 do (cl-destructuring-bind (pos p) pa
-                      (insert (format "- %s %s\n" pos p))))
+                 for (pos p) = pa
+                 do (insert "- " pos " " p "\n"))
         (insert "\n")
         ;; Make a button for distribution chart.
         (when-let ((dist (oref this :distribution)))
@@ -380,20 +380,19 @@ before calling this method."
         ;; Make buttons for related words.
         (when-let ((rs (oref this :related)))
           (cl-loop for r in rs
-                   do (cl-destructuring-bind (k v) r
-                        (insert k)
-                        (insert " ")
-                        (insert-button v
-                                       'action #'fanyi-dwim
-                                       'button-data v
-                                       'follow-link t)
-                        (insert " ")))
+                   for (k v) = r
+                   do (insert k " ")
+                   do (insert-button v
+                                     'action #'fanyi-dwim
+                                     'button-data v
+                                     'follow-link t)
+                   do (insert " "))
           (insert "\n\n"))
         ;; The origins.
         (when-let ((origins (oref this :origins)))
           (insert "## 起源\n\n")
           (cl-loop for o in origins
-                   do (insert (format "- %s\n" o)))
+                   do (insert "- " o "\n"))
           (insert "\n"))
         ;; Visit the url for more information.
         (insert-button "Browse the full page via eww"
@@ -409,29 +408,29 @@ expected."
   (let ((defs (dom-by-class dom "word--C9UPa")))
     (oset this :definitions
           (cl-loop for def in defs
-                   collect (let ((title (dom-text (dom-by-class def "word__name--TTbAA")))
-                                 (details (dom-children (dom-by-class def "word__defination--2q7ZH"))))
-                             (list title
-                                   (seq-mapcat
-                                    (lambda (node)
-                                      (pcase node
-                                        ('(p nil) "\n\n")
-                                        (_ (cl-assert (> (length node) 2))
-                                           (seq-concatenate
-                                            'list
-                                            (when (equal (car node) 'blockquote)
-                                              '("> "))
-                                            (seq-map (lambda (arg)
-                                                       (cond ((stringp arg) arg)
-                                                             ((dom-by-class arg "foreign notranslate")
-                                                              (cond ((dom-by-tag arg 'strong)
-                                                                     (list (dom-texts arg) 'face 'bold))
-                                                                    (t
-                                                                     (list (dom-text arg) 'face 'italic))))
-                                                             ((dom-by-class arg "crossreference notranslate")
-                                                              (list (dom-text arg) 'button (dom-text arg)))))
-                                                     (cddr node))))))
-                                    details)))))))
+                   for title = (dom-text (dom-by-class def "word__name--TTbAA"))
+                   for details = (dom-children (dom-by-class def "word__defination--2q7ZH"))
+                   collect (list title
+                                 (seq-mapcat
+                                  (lambda (node)
+                                    (pcase node
+                                      ('(p nil) "\n\n")
+                                      (_ (cl-assert (> (length node) 2))
+                                         (seq-concatenate
+                                          'list
+                                          (when (equal (car node) 'blockquote)
+                                            '("> "))
+                                          (seq-map (lambda (arg)
+                                                     (cond ((stringp arg) arg)
+                                                           ((dom-by-class arg "foreign notranslate")
+                                                            (cond ((dom-by-tag arg 'strong)
+                                                                   (list (dom-texts arg) 'face 'bold))
+                                                                  (t
+                                                                   (list (dom-text arg) 'face 'italic))))
+                                                           ((dom-by-class arg "crossreference notranslate")
+                                                            (list (dom-text arg) 'button (dom-text arg)))))
+                                                   (cddr node))))))
+                                  details))))))
 
 (cl-defmethod fanyi-render ((this fanyi-etymon-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
@@ -448,25 +447,25 @@ while the quote style is from mailing list."
         ;; The headline about Etymology service.
         (insert "# Etymonline\n\n")
         (cl-loop for i in (oref this :definitions)
-                 do (cl-destructuring-bind (word def) i
-                      (insert "## " word "\n\n")
-                      (seq-do (lambda (arg)
-                                (pcase arg
-                                  (`(,s face italic)
-                                   (insert "/" s "/"))
-                                  (`(,s face bold)
-                                   (insert "*" s "*"))
-                                  (`(,s button ,word)
-                                   (insert-button s
-                                                  'action #'fanyi-dwim
-                                                  'button-data word
-                                                  'follow-link t))
-                                  (s
-                                   (insert s))))
-                              def)
-                      (while (equal (char-before) ?\n)
-                        (delete-char -1))
-                      (insert "\n\n")))))))
+                 for (word def) = i
+                 do (insert "## " word "\n\n")
+                 do (seq-do (lambda (arg)
+                              (pcase arg
+                                (`(,s face italic)
+                                 (insert "/" s "/"))
+                                (`(,s face bold)
+                                 (insert "*" s "*"))
+                                (`(,s button ,word)
+                                 (insert-button s
+                                                'action #'fanyi-dwim
+                                                'button-data word
+                                                'follow-link t))
+                                (s
+                                 (insert s))))
+                            def)
+                 do (while (equal (char-before) ?\n)
+                      (delete-char -1))
+                 do (insert "\n\n"))))))
 
 (cl-defmethod fanyi-parse-from ((this fanyi-ah-service) dom)
   "Complete the fields of THIS from DOM tree.
@@ -489,9 +488,52 @@ A 'not-found exception may be thrown."
                                                              ((pred stringp) arg)
                                                              (_ "")))
                                                          (dom-children rtseg))))))
-    
+    ;; Paraphrases.
+    (let ((psegs (dom-by-class results "pseg"))
+          collection)
+      (cl-loop for pseg in psegs
+               collect (
+               )
+      )
+    ;; Idioms.
+    (let ((idms (dom-by-class results "idmseg")))
+      )
+    ;; Etymon.
+    (let ((etyseg (dom-by-class results "etyseg")))
+      )
+    ;; Synonyms.
+    (let ((syntx (dom-by-class results "syntx")))
+      )
     )
-  )
+    )
+)
+
+
+;; (dom-children (car (dom-by-class xxx "pseg")))
+;; ((i nil "v.")
+;;  (span nil " ")
+;;  (span nil " ")
+;;  (b nil (font (... ...) "ac·cu·mu·lat·ed"))
+;;  ", "
+;;  (b nil (font (... ...) "ac·cu·mu·lat·ing"))
+;;  ", "
+;;  (b nil (font (... ...) "ac·cu·mu·lates"))
+;;  (span nil " ")
+;;  )
+
+;; (div
+;;  ((class . "pseg"))
+;;  (i nil "v.")
+;;  (span nil " ")
+;;  (span nil " ")
+;;  (b nil (font (... ...) "ac·cu·mu·lat·ed"))
+;;  ", "
+;;  (b nil (font (... ...) "ac·cu·mu·lat·ing"))
+;;  ", "
+;;  (b nil (font (... ...) "ac·cu·mu·lates"))
+;;  (span nil " "))
+
+
 
 (cl-defmethod fanyi-render ((this fanyi-ah-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
