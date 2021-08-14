@@ -41,6 +41,7 @@
 (require 'cl-lib)
 (require 'button)
 (require 'outline)
+(require 'generator)
 
 ;; Silence compile warnings.
 (defvar url-http-end-of-headers)
@@ -70,8 +71,13 @@
   :group 'fanyi)
 
 (defface fanyi-dict-face
-  '((t (:height 1.25 :weight bold :foreground "#a9a1e1" :extend t)))
+  '((t (:height 1.25 :weight bold :foreground "#ecbe7b" :extend t)))
   "Face used for dictionary name."
+  :group 'fanyi)
+
+(defface fanyi-sub-headline-face
+  '((t (:weight bold :foreground "#a9a1e1" :extend t)))
+  "Face used for sub-headline. Normally it's part of speech."
   :group 'fanyi)
 
 (defface fanyi-star-face
@@ -216,14 +222,11 @@ Where def could be a list of string/(string 'face face)/(string 'button data).")
                   :documentation "Pronunciation.")
    (paraphrases :initarg :paraphrases
                 :type list
-                :documentation "List of (pos . paraphrase).
-Where paraphrase can be a string or a list of strings.")
+                :documentation "List of (pos . examples . paraphrase).
+Where examples could be nil, paraphrase can be a string or a list of strings or a list of lists of strings.")
    (idioms :initarg :idioms
            :type list
            :documentation "Idioms of the word.")
-   (etymon :initarg :etymon
-           :type string
-           :documentation "Etymon of the word.")
    (synonyms :initarg :synonyms
              :type list
              :documentation "Synonyms of the word."))
@@ -233,7 +236,7 @@ Where paraphrase can be a string or a list of strings.")
 (eieio-declare-slots :word :url :sound-url)
 (eieio-declare-slots :syllable :star :level :phonetics :paraphrases :distribution :related :origins)
 (eieio-declare-slots :definitions)
-(eieio-declare-slots :syllable :sound :pronunciation :paraphrases :idioms :etymon :synonyms)
+(eieio-declare-slots :syllable :sound :pronunciation :paraphrases :idioms :synonyms)
 
 (cl-defmethod fanyi-parse-from ((this fanyi-haici-service) dom)
   "Complete the fields of THIS from DOM tree.
@@ -254,31 +257,33 @@ A 'not-found exception may be thrown."
   ;;
   ;; British: female, male
   ;; American: female, male
-  (let ((phonetics (dom-children (dom-by-class dom "phonetic")))
-        collection)
-    ;; British is at index 1, American is at index 3.
-    (dolist (idx (list 1 3))
-      (let ((node (nth idx phonetics)))
-        (cl-pushnew (list
-                     ;; pronunciation
-                     (dom-text
-                      (dom-search node
-                                  (lambda (x)
-                                    (string= (dom-attr x 'lang) "EN-US"))))
-                     ;; female sound url
-                     (dom-attr
-                      (dom-search node
-                                  (lambda (x)
-                                    (string= (dom-attr x 'class) "sound fsound")))
-                      'naudio)
-                     ;; male sound url
-                     (dom-attr
-                      (dom-search node
-                                  (lambda (x)
-                                    (string= (dom-attr x 'class) "sound")))
-                      'naudio))
-                    collection)))
-    (oset this :phonetics (nreverse collection)))
+  (let ((phonetics (dom-children (dom-by-class dom "phonetic"))))
+    (oset this :phonetics
+          (cl-loop for p being the elements of phonetics using (index idx)
+                   ;; British -> 1
+                   ;; American -> 3
+                   when (or (= idx 1) (= idx 3))
+                   collect (list
+                            ;; pronunciation
+                            (dom-text
+                             (dom-search p
+                                         (lambda (x)
+                                           (string= (dom-attr x 'lang) "EN-US"))))
+                            ;; female sound url.
+                            ;;
+                            ;; Since `dom-by-class' uses regexp to match nodes,
+                            ;; "sound" can also match "sound fsound".
+                            (dom-attr
+                             (dom-search p
+                                         (lambda (x)
+                                           (string= (dom-attr x 'class) "sound fsound")))
+                             'naudio)
+                            ;; male sound url
+                            (dom-attr
+                             (dom-search p
+                                         (lambda (x)
+                                           (string= (dom-attr x 'class) "sound")))
+                             'naudio)))))
   ;; brief paraphrases, list of (pos, paraphrase)
   (let ((paraphrases (butlast (dom-by-tag (dom-by-class dom "dict-basic-ul") 'li))))
     (oset this :paraphrases
@@ -412,13 +417,13 @@ expected."
                    for details = (dom-children (dom-by-class def "word__defination--2q7ZH"))
                    collect (list title
                                  (seq-mapcat
-                                  (lambda (node)
-                                    (pcase node
+                                  (lambda (arg)
+                                    (pcase arg
                                       ('(p nil) "\n\n")
-                                      (_ (cl-assert (> (length node) 2))
+                                      (_ (cl-assert (> (length arg) 2))
                                          (seq-concatenate
                                           'list
-                                          (when (equal (car node) 'blockquote)
+                                          (when (equal (car arg) 'blockquote)
                                             '("> "))
                                           (seq-map (lambda (arg)
                                                      (cond ((stringp arg) arg)
@@ -429,7 +434,7 @@ expected."
                                                                    (list (dom-text arg) 'face 'italic))))
                                                            ((dom-by-class arg "crossreference notranslate")
                                                             (list (dom-text arg) 'button (dom-text arg)))))
-                                                   (cddr node))))))
+                                                   (cddr arg))))))
                                   details))))))
 
 (cl-defmethod fanyi-render ((this fanyi-etymon-service))
@@ -467,10 +472,53 @@ while the quote style is from mailing list."
                       (delete-char -1))
                  do (insert "\n\n"))))))
 
+(iter-defun fanyi--parse-ah-pseg (dom)
+  "Helper function to parse the paraphrase segment DOM of American
+Heritage dictionary."
+  ;; Order of `cond' matters.
+  (cond ((dom-by-class dom "ds-single")
+         (let ((ds-single (dom-by-class dom "ds-single")))
+           ;; Seems a space always exists at front, so a space is emitted for
+           ;; indentation.
+           (iter-yield " ")
+           (cl-loop for child in (dom-children ds-single)
+                    do (pcase child
+                         ((pred stringp)
+                          (iter-yield child))
+                         (`(span nil ,s)
+                          (iter-yield s))
+                         (`(font nil (i nil ,s))
+                          (iter-yield (list s 'face 'italic)))
+                         (`(a ,_href (span nil ,s1) ,s2)
+                          (iter-yield s1)
+                          (iter-yield (list s2 'button s2)))
+                         (_ (iter-yield ""))))))
+        ((dom-by-class dom "sds-list")
+         ;; TODO
+         )
+        ((dom-by-class dom "ds-list")
+         (let ((ds-list (dom-by-class dom "ds-list")))
+           (cl-loop for ds in ds-list
+                    ;; There is no space at front, so two spaces are emitted for
+                    ;; indentation.
+                    do (iter-yield "  ")
+                    do (cl-loop for child in (dom-children ds)
+                                do (pcase child
+                                     ((pred stringp)
+                                      (iter-yield child))
+                                     (`(b nil (font ,_face ,s))
+                                      (iter-yield s))
+                                     (`(span nil ,s)
+                                      (iter-yield s))
+                                     (`(font nil (i nil ,s))
+                                      (iter-yield (list s 'face 'italic)))
+                                     (_ (iter-yield ""))))
+                    do (iter-yield "\n\n"))))
+        (t (iter-yield "\n"))))
+
 (cl-defmethod fanyi-parse-from ((this fanyi-ah-service) dom)
   "Complete the fields of THIS from DOM tree.
 A 'not-found exception may be thrown."
-  (setq xxx dom)
   (let ((results (dom-by-id dom "results")))
     ;; Nothing is found.
     (when (string= (dom-text results) "No word definition found")
@@ -479,61 +527,42 @@ A 'not-found exception may be thrown."
     (let ((rtseg (dom-by-class results "rtseg")))
       (oset this :syllable (dom-texts (dom-child-by-tag rtseg 'b)))
       (oset this :sound (dom-attr (dom-child-by-tag rtseg 'a) 'href))
-      ;; The original pronunciation contains private unicodes, which conflict
-      ;; with `all-the-icons'.
+      ;; The pronunciation contains private unicodes, which conflict with
+      ;; `all-the-icons'. Fix later.
       (oset this :pronunciation (s-trim (s-join ""
                                                 (seq-map (lambda (arg)
                                                            (pcase arg
-                                                             (`(font ,_face ,s) s)
                                                              ((pred stringp) arg)
+                                                             (`(font ,_face ,s) s)
                                                              (_ "")))
                                                          (dom-children rtseg))))))
     ;; Paraphrases.
-    (let ((psegs (dom-by-class results "pseg"))
-          collection)
-      (cl-loop for pseg in psegs
-               collect (
-               )
-      )
+    (let ((psegs (dom-by-class results "pseg")))
+      (oset this :paraphrases
+            (cl-loop for pseg in psegs
+                     for pos = (cl-loop for child in (dom-children pseg)
+                                        ;; Italic tags are consecutive, so `while'.
+                                        while (listp child)
+                                        for (i _nil s) = child
+                                        when (and (symbolp i) (eq i 'i) (stringp s))
+                                        concat s)
+                     for examples = (cl-loop for child in (dom-children pseg)
+                                             when (pcase child
+                                                    (`(b nil ,s)
+                                                     s))
+                                             collect (dom-texts child))
+                     collect (list pos
+                                   examples
+                                   (cl-loop for it iter-by (fanyi--parse-ah-pseg pseg)
+                                            collect it)))))
     ;; Idioms.
     (let ((idms (dom-by-class results "idmseg")))
-      )
-    ;; Etymon.
-    (let ((etyseg (dom-by-class results "etyseg")))
       )
     ;; Synonyms.
     (let ((syntx (dom-by-class results "syntx")))
       )
     )
-    )
-)
-
-
-;; (dom-children (car (dom-by-class xxx "pseg")))
-;; ((i nil "v.")
-;;  (span nil " ")
-;;  (span nil " ")
-;;  (b nil (font (... ...) "ac·cu·mu·lat·ed"))
-;;  ", "
-;;  (b nil (font (... ...) "ac·cu·mu·lat·ing"))
-;;  ", "
-;;  (b nil (font (... ...) "ac·cu·mu·lates"))
-;;  (span nil " ")
-;;  )
-
-;; (div
-;;  ((class . "pseg"))
-;;  (i nil "v.")
-;;  (span nil " ")
-;;  (span nil " ")
-;;  (b nil (font (... ...) "ac·cu·mu·lat·ed"))
-;;  ", "
-;;  (b nil (font (... ...) "ac·cu·mu·lat·ing"))
-;;  ", "
-;;  (b nil (font (... ...) "ac·cu·mu·lates"))
-;;  (span nil " "))
-
-
+  )
 
 (cl-defmethod fanyi-render ((this fanyi-ah-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
@@ -555,14 +584,43 @@ before calling this method."
                        'face 'fanyi-male-speaker-face
                        'follow-link t)
         (insert " ")
-        ;; Use zero width space as boundary to fontify pronunciation.
+        ;; Use zero width space as boundary to fontify pronunciation. Since the
+        ;; pronunciation has private unicodes, which conflict with
+        ;; `all-the-icons', we use `fanyi-ah-pronunciation-face' to specify the
+        ;; font family to display.
         (insert "\u200b"
                 (oref this :pronunciation)
                 "\u200b"
                 "\n\n")
-        )
-      ))
-  )
+        ;; Paraphrases.
+        (cl-loop for paraphrase in (oref this :paraphrases)
+                 for (pos examples para) = paraphrase
+                 do (insert "## " pos " "
+                            (s-join ", " (seq-map (lambda (s)
+                                                    ;; A word may end with a comma. Fix it manually.
+                                                    (setq s (s-trim-right s))
+                                                    (when (s-suffix? "," s)
+                                                      (setq s (substring s 0 -1)))
+                                                    (concat "*" s "*"))
+                                                  examples))
+                            "\n")
+                 do (seq-do (lambda (arg)
+                              (pcase arg
+                                ((pred stringp)
+                                 (insert arg))
+                                (`(,s face italic)
+                                 (insert "/" s "/"))
+                                (`(,s face bold)
+                                 (insert "*" s "*"))
+                                (`(,s button ,data)
+                                 (insert-button s
+                                                'action #'fanyi-dwim
+                                                'button-data data
+                                                'follow-link t))))
+                            para))
+        (insert "\n\n")
+        ))
+    ))
 
 ;; Translation services.
 
@@ -634,6 +692,8 @@ before calling this method."
 (defvar fanyi-mode-font-lock-keywords
   '(;; Dictionary name
     ("^# .*" . 'fanyi-dict-face)
+    ;; Sub headline
+    ("^##" . 'fanyi-sub-headline-face)
     ;; Quotes
     ("^> .*" . 'fanyi-quote-face)
     ;; Fancy star
