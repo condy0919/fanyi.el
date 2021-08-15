@@ -640,8 +640,7 @@ before calling this method."
                     :sound-url "https://ahdictionary.com/%s"))
 
 (defcustom fanyi-providers `(,fanyi-provider-haici
-                             ,fanyi-provider-etymon
-                             ,fanyi-provider-ah)
+                             ,fanyi-provider-etymon)
   "The providers used by `fanyi-dwim'."
   :type '(repeat fanyi-service)
   :group 'fanyi)
