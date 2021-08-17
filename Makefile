@@ -13,6 +13,6 @@ lint:
 	--eval "(package-initialize)"													\
 	--eval "(package-refresh-contents)"												\
 	-l package-lint.el																\
-	-f package-lint-batch-and-exit *.el
+	-f package-lint-batch-and-exit fanyi.el
 
 .PHONY: compile lint
