@@ -47,6 +47,13 @@ mv Minion.ttf ~/Library/Fonts/
 
 `fanyi-dwim`, that's all!
 
+If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim`, try
+
+``` emacs-lisp
+;; Emacs 28 only
+(setq read-extended-command-predicate #'command-completion-default-include-p)
+```
+
 # Screenshots
 
 ![海词](https://user-images.githubusercontent.com/4024656/128582690-2af2bb4a-46aa-4241-bdc0-6a5bb5e2db38.png)
