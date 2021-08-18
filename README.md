@@ -9,7 +9,7 @@
 
 - [`海词`](https://dict.cn/)
 - [`etymonline`](https://www.etymonline.com/)
-- [`American Heritage dictionary`](https://ahdictionary.com/)
+- [`American Heritage dictionary`](https://ahdictionary.com/), unusable in China due to high latency
 
 `fanyi.el` has integrations with:
 
