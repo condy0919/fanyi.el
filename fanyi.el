@@ -122,7 +122,9 @@
     ;; Italic
     ("/\\([^/]+?\\)/" . 'italic)
     ;; Bold
-    ("\\*\\([^\\*]+?\\)\\*" . 'bold))
+    ("\\*\\([^\\*]+?\\)\\*" . 'bold)
+    ;; Underline
+    ("_\\([^_]+?\\)_" . 'underline))
   "Keywords to highlight in `fanyi-mode'.")
 
 (defvar fanyi-mode-map
