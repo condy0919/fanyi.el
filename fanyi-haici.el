@@ -134,20 +134,9 @@ A 'not-found exception will be thrown if there is no result."
                                          (lambda (x)
                                            (string= (dom-attr x 'lang) "EN-US"))))
                             ;; female sound url.
-                            ;;
-                            ;; Since `dom-by-class' uses regexp to match nodes,
-                            ;; "sound" can also match "sound fsound".
-                            (dom-attr
-                             (dom-search p
-                                         (lambda (x)
-                                           (string= (dom-attr x 'class) "sound fsound")))
-                             'naudio)
+                            (dom-attr (dom-by-class p "^\\(sound fsound\\)$") 'naudio)
                             ;; male sound url
-                            (dom-attr
-                             (dom-search p
-                                         (lambda (x)
-                                           (string= (dom-attr x 'class) "sound")))
-                             'naudio)))))
+                            (dom-attr (dom-by-class p "^\\(sound\\)$") 'naudio)))))
   ;; brief paraphrases, list of (pos, paraphrase)
   (let ((paraphrases (butlast (dom-by-tag (dom-by-class dom "dict-basic-ul") 'li))))
     (oset this :paraphrases
