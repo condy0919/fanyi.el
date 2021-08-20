@@ -126,5 +126,14 @@ See `fanyi-sound-player'."
   "Implement your own `fanyi-render' for THIS class."
   (error "Implement `fanyi-render' for class '%s'" (eieio-object-class-name this)))
 
+(defmacro fanyi-with-fanyi-buffer (&rest body)
+  "Evaluate BODY with `*fanyi*' buffer temporarily current."
+  `(with-current-buffer (get-buffer-create ,fanyi-buffer-name)
+     (save-excursion
+       ;; Go to the end of buffer.
+       (goto-char (point-max))
+       (let ((inhibit-read-only t))
+         ,@body))))
+
 (provide 'fanyi-base)
 ;;; fanyi-base.el ends here
