@@ -45,8 +45,44 @@
   :group 'tools
   :link '(url-link "https://github.com/condy0919/fanyi.el"))
 
+(defface fanyi-word-face
+  '((t :height 1.75 :weight bold :foreground "dark cyan"))
+  "Face used for user requested word."
+  :group 'fanyi)
+
+(defface fanyi-dict-face
+  '((t :height 1.25 :weight bold :foreground "#ecbe7b" :extend t))
+  "Face used for dictionary name."
+  :group 'fanyi)
+
+(defface fanyi-sub-headline-face
+  '((t :weight bold :foreground "#a9a1e1" :extend t))
+  "Face used for sub-headline. Normally it's part of speech."
+  :group 'fanyi)
+
+(defface fanyi-star-face
+  '((t :foreground "gold"))
+  "Face used for star of word."
+  :group 'fanyi)
+
+(defface fanyi-list-face
+  '((t :foreground "#51afef"))
+  "Face used for list."
+  :group 'fanyi)
+
+(defface fanyi-quote-face
+  '((t :inherit font-lock-comment-face))
+  "Face used for quotes of word."
+  :group 'fanyi)
+
+(defface fanyi-pos-face
+  '((t :foreground "green"))
+  "Face used for part of speech."
+  :group 'fanyi)
+
 (defcustom fanyi-providers '(fanyi-haici-provider
-                             fanyi-etymon-provider)
+                             fanyi-etymon-provider
+                             fanyi-longman-provider)
   "The providers used by `fanyi-dwim'."
   :type '(repeat fanyi-base-service)
   :initialize #'(lambda (var providers)
@@ -116,6 +152,8 @@
     ("★" . 'fanyi-star-face)
     ;; List
     ("^-" . 'fanyi-list-face)
+    ;; Part of speech
+    ("(\\([a-zA-Z\.]+?\\))" . 'fanyi-pos-face)
     ;; Use Minion New font to fontify pronunciation of American Heritage
     ;; dictionary.
     ("\u200b\\([^\u200b]+?\\)\u200b" . 'fanyi-ah-pronunciation-face)

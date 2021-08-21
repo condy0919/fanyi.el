@@ -42,44 +42,14 @@
   :type 'boolean
   :group 'fanyi)
 
-(defface fanyi-word-face
-  '((t (:height 1.75 :weight bold :foreground "dark cyan")))
-  "Face used for user requested word."
-  :group 'fanyi)
-
-(defface fanyi-dict-face
-  '((t (:height 1.25 :weight bold :foreground "#ecbe7b" :extend t)))
-  "Face used for dictionary name."
-  :group 'fanyi)
-
-(defface fanyi-sub-headline-face
-  '((t (:weight bold :foreground "#a9a1e1" :extend t)))
-  "Face used for sub-headline. Normally it's part of speech."
-  :group 'fanyi)
-
-(defface fanyi-star-face
-  '((t (:foreground "gold")))
-  "Face used for star of word."
-  :group 'fanyi)
-
 (defface fanyi-female-speaker-face
-  '((t (:foreground "#ec5e66")))
+  '((t :foreground "#ec5e66"))
   "Face used for female speaker button."
   :group 'fanyi)
 
 (defface fanyi-male-speaker-face
-  '((t (:foreground "#57a7b7")))
+  '((t :foreground "#57a7b7"))
   "Face used for male speaker button."
-  :group 'fanyi)
-
-(defface fanyi-list-face
-  '((t (:foreground "#51afef")))
-  "Face used for list."
-  :group 'fanyi)
-
-(defface fanyi-quote-face
-  '((t (:inherit font-lock-comment-face)))
-  "Face used for quotes of word."
   :group 'fanyi)
 
 (defun fanyi-display-glyphs-p ()
