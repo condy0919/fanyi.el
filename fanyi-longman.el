@@ -51,12 +51,12 @@
   :type 'integer
   :group 'fanyi)
 
-(defcustom fanyi-longman-svg-vertical-offset -4
+(defcustom fanyi-longman-svg-vertical-offset -5
   "Default vertical offset in pixels for text."
   :type 'integer
   :group 'fanyi)
 
-(defcustom fanyi-longman-svg-border-radius 5
+(defcustom fanyi-longman-svg-border-radius 7
   "Default border radius in pixels."
   :type 'integer
   :group 'fanyi)
@@ -127,6 +127,9 @@
    (pos :initarg :pos
         :type string
         :documentation "Part of speech.")
+   (grammar :initarg :grammar
+            :type string
+            :documentation "Grammar.")
    (british :initarg :british
             :documentation "British voice.")
    (american :initarg :american
@@ -168,7 +171,7 @@ Typically it can be a list of strings or \"riched\" strings."))
 
 ;; Silence unknown slots warning.
 (eieio-declare-slots :word-family :dicts :etymon)
-(eieio-declare-slots :name :hyphenation :pronunciation :level :freqs :academy :pos :british :american :senses)
+(eieio-declare-slots :name :hyphenation :pronunciation :level :freqs :academy :pos :grammar :british :american :senses)
 (eieio-declare-slots :signpost :grammar :def :crossref :syn :examples :footnote-expl :footnote-example)
 
 ;; Silence compile warning.
@@ -242,6 +245,7 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                    :academy (let ((ac (dom-by-class head "AC")))
                                                               (cons (dom-text ac) (dom-attr ac 'title)))
                                                    :pos (s-trim (dom-text (dom-by-class head "POS")))
+                                                   :grammar (s-trim (dom-texts (dom-by-class head "GRAM") ""))
                                                    :british (dom-attr (dom-by-class head "brefile") 'data-src-mp3)
                                                    :american (dom-attr (dom-by-class head "amefile") 'data-src-mp3)
                                                    :senses (cl-loop for sense in senses
@@ -262,7 +266,7 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                                                               (t (user-error "Unimplemented. %s" (pp-to-string node)))))
                                                                                                  (_ (user-error "Unimplemented. %s" (pp-to-string node)))))
                                                                                              (dom-children (dom-by-class sense "^\\(DEF\\)$"))))
-                                                                              ;; Crossref.
+                                                                              ;; Crossref, it could be nil.
                                                                               (when-let* ((crossref (dom-by-class sense "Crossref"))
                                                                                           (href (dom-attr (dom-child-by-tag crossref 'a) 'href)))
                                                                                 (cl-assert (s-prefix? "/dictionary/" href))
@@ -308,27 +312,35 @@ before calling this method."
    (cl-loop for dict in (oref this :dicts)
             do (insert "## " (oref dict :name) "\n\n")
             ;; job /dʒɒb $ dʒɑːb/ ●●● S1 W1 AWL (noun) 🔊 🔊
-            do (insert (oref dict :hyphenation)
-                       " "
-                       (oref dict :pronunciation)
-                       " "
-                       (propertize (car (oref dict :level)) 'help-echo (cdr (oref dict :level)))
-                       (s-join " "
-                               (seq-map (pcase-lambda (`(,freq . ,desc))
-                                          (propertize freq
-                                                      'help-echo desc
-                                                      'display (when (fanyi-display-glyphs-p)
-                                                                 (fanyi-longman-svg-tag-make freq 'fanyi-longman-svg-asset-face))))
-                                        (oref dict :freqs)))
-                       " "
-                       (propertize (car (oref dict :academy))
-                                   'help-echo (cdr (oref dict :academy))
-                                   'display (when (fanyi-display-glyphs-p)
-                                              (fanyi-longman-svg-tag-make (car (oref dict :academy)) 'fanyi-longman-svg-asset-face)))
-                       " "
-                       (if (s-present? (oref dict :pos))
-                           (concat "(" (oref dict :pos) ")")
-                         ""))
+            ;; ^            ^       ^               ^
+            ;; hyphenation  pron    level           pos
+            do (insert (oref dict :hyphenation))
+            do (insert " "
+                       (oref dict :pronunciation))
+            do (let ((level (oref dict :level)))
+                 (when (s-present? (car level))
+                   (insert " "
+                           (propertize (car (oref dict :level)) 'help-echo (cdr (oref dict :level))))))
+            do (insert
+                (s-join " "
+                        (seq-map (pcase-lambda (`(,freq . ,desc))
+                                   (propertize freq
+                                               'help-echo desc
+                                               'display (when (fanyi-display-glyphs-p)
+                                                          (fanyi-longman-svg-tag-make freq 'fanyi-longman-svg-asset-face))))
+                                 (oref dict :freqs))))
+            do (let ((ac (oref dict :academy)))
+                 (when (s-present? (car ac))
+                   (insert " "
+                           (propertize (car (oref dict :academy))
+                                       'help-echo (cdr (oref dict :academy))
+                                       'display (when (fanyi-display-glyphs-p)
+                                                  (fanyi-longman-svg-tag-make (car (oref dict :academy)) 'fanyi-longman-svg-asset-face))))))
+            do (when (s-present? (oref dict :pos))
+                 (insert " "
+                         "(" (oref dict :pos) ")"))
+            do (when (s-present? (oref dict :grammar))
+                 (insert " " (oref dict :grammar)))
             unless (s-blank? (oref dict :british))
             do (progn
                  (insert " ")
@@ -384,7 +396,8 @@ before calling this method."
                                             'action #'fanyi-dwim
                                             'button-data (cdr crossref)
                                             'follow-link t))
-                        do (insert "\n")))
+                        do (insert "\n"))
+            do (insert "\n"))
    ;; Etymon.
    (when (s-present? (oref this :etymon))
      (insert "## Etymon\n\n")
