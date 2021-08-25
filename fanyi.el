@@ -60,11 +60,6 @@
   "Face used for sub-headline. Normally it's part of speech."
   :group 'fanyi)
 
-(defface fanyi-star-face
-  '((t :foreground "gold"))
-  "Face used for star of word."
-  :group 'fanyi)
-
 (defface fanyi-list-face
   '((t :foreground "#51afef"))
   "Face used for list."
@@ -154,8 +149,6 @@
     ("^##" . 'fanyi-sub-headline-face)
     ;; Quotes
     ("^> .*" . 'fanyi-quote-face)
-    ;; Fancy star
-    ("★" . 'fanyi-star-face)
     ;; List
     ("^-" . 'fanyi-list-face)
     ;; Part of speech
@@ -188,6 +181,9 @@
   ;; Make it foldable.
   (setq-local outline-regexp "^#+")
   (setq-local outline-minor-mode t)
+
+  ;; Better display
+  (setq-local line-spacing 0.1)
 
   ;; ElDoc integration.
   ;;

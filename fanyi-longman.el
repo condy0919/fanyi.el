@@ -86,6 +86,11 @@
   "Face used for level dot."
   :group 'fanyi)
 
+(defface fanyi-longman-grammar-face
+  '((t :foreground "green" :weight bold))
+  "Face used for grammar."
+  :group 'fanyi)
+
 (defclass fanyi-longman-service (fanyi-base-service)
   ((word-family :initarg :word-family
                 :initform nil
@@ -142,6 +147,9 @@
         :type list
         :documentation "The definition.
 Typically it can be a list of strings or \"riched\" strings.")
+   (crossref :initarg :crossref
+             :initform nil
+             :documentation "Crossref.")
    (syn :initarg :syn
         :initform nil
         :documentation "Synonym.")
@@ -161,7 +169,7 @@ Typically it can be a list of strings or \"riched\" strings."))
 ;; Silence unknown slots warning.
 (eieio-declare-slots :word-family :dicts :etymon)
 (eieio-declare-slots :name :hyphenation :pronunciation :level :freqs :academy :pos :british :american :senses)
-(eieio-declare-slots :signpost :grammar :def :syn :examples :footnote-expl :footnote-example)
+(eieio-declare-slots :signpost :grammar :def :crossref :syn :examples :footnote-expl :footnote-example)
 
 ;; Silence compile warning.
 (autoload 'fanyi-dwim "fanyi")
@@ -243,7 +251,7 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                                 (oset dict-sense :signpost (dom-text signpost)))
                                                                               ;; Grammar, it could be nil.
                                                                               (when-let ((grammar (dom-by-class sense "GRAM")))
-                                                                                (oset dict-sense :grammar (s-trim (dom-text grammar))))
+                                                                                (oset dict-sense :grammar (s-trim (dom-texts grammar ""))))
                                                                               ;; Definition.
                                                                               (oset dict-sense :def
                                                                                     (seq-map (lambda (node)
@@ -254,6 +262,13 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                                                               (t (user-error "Unimplemented. %s" (pp-to-string node)))))
                                                                                                  (_ (user-error "Unimplemented. %s" (pp-to-string node)))))
                                                                                              (dom-children (dom-by-class sense "^\\(DEF\\)$"))))
+                                                                              ;; Crossref.
+                                                                              (when-let* ((crossref (dom-by-class sense "Crossref"))
+                                                                                          (href (dom-attr (dom-child-by-tag crossref 'a) 'href)))
+                                                                                (cl-assert (s-prefix? "/dictionary/" href))
+                                                                                (oset dict-sense :crossref
+                                                                                      (cons (s-trim (dom-texts crossref ""))
+                                                                                            (car (s-split "#" (substring href 12))))))
                                                                               ;; Synonym, it could be nil.
                                                                               (when-let ((syn (dom-by-class sense "^\\(SYN\\)$")))
                                                                                 (oset dict-sense :syn (s-trim (dom-text syn))))
@@ -331,10 +346,13 @@ before calling this method."
                                 'help-echo "Play American pronunciation"
                                 'follow-link t))
             do (insert "\n\n")
+            ;; - work [countable] the regular paid work SYN *foo* link
+            ;;   ^             ^              ^         ^            ^
+            ;;   signpost      grammar        button    synonym      crossref
+            ;;
+            ;; For easy implementation, crossref is put at the end of
+            ;; definition.
             do (cl-loop for sense in (oref dict :senses)
-                        ;; - work [countable] the regular paid work SYN *foo*
-                        ;;   ^             ^              ^         ^
-                        ;;   signpost      grammar        button    synonym
                         do (insert "- ")
                         do (when-let ((signpost (oref sense :signpost)))
                              (insert (propertize signpost
@@ -359,25 +377,31 @@ before calling this method."
                                                  'display (when (fanyi-display-glyphs-p)
                                                             (fanyi-longman-svg-tag-make "SYN" 'fanyi-longman-svg-asset-face)))
                                      " "
-                                     "*" synonym "*"))
-                        do (insert "\n")
-                        )
-            )
+                                     "*" synonym "*"
+                                     " "))
+                        do (when-let ((crossref (oref sense :crossref)))
+                             (insert-button (car crossref)
+                                            'action #'fanyi-dwim
+                                            'button-data (cdr crossref)
+                                            'follow-link t))
+                        do (insert "\n")))
    ;; Etymon.
-   (insert "## Etymon\n\n")
-   (if (fanyi-display-glyphs-p)
-       (insert-image (fanyi-longman-svg-tag-make "Origin" 'fanyi-longman-svg-asset-face))
-     (insert "Origin:"))
-   (insert " ")
-   (insert "*" (oref this :word) "*")
-   (insert " ")
-   (insert (oref this :etymon))
+   (when (s-present? (oref this :etymon))
+     (insert "## Etymon\n\n")
+     (if (fanyi-display-glyphs-p)
+         (insert-image (fanyi-longman-svg-tag-make "Origin" 'fanyi-longman-svg-asset-face))
+       (insert "Origin:"))
+     (insert " ")
+     (insert "*" (oref this :word) "*")
+     (insert " ")
+     (insert (oref this :etymon)))
    ;; The end.
    (insert "\n\n")))
 
 ;; The Longman dict specific font-lock keywords
 (add-to-list 'fanyi-mode-font-lock-keywords-extra '("●" . 'fanyi-longman-dot-face))
 (add-to-list 'fanyi-mode-font-lock-keywords-extra '("○" . 'fanyi-longman-dot-face))
+(add-to-list 'fanyi-mode-font-lock-keywords-extra '("\\[\\([a-zA-Z, ]+?\\)\\]" . 'fanyi-longman-grammar-face))
 
 (defconst fanyi-longman-provider
   (fanyi-longman-service :word "dummy"

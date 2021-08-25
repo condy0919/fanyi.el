@@ -37,6 +37,11 @@
 (require 'cl-lib)
 (require 'button)
 
+(defface fanyi-haici-star-face
+  '((t :foreground "gold"))
+  "Face used for star of word."
+  :group 'fanyi)
+
 (defclass fanyi-haici-service (fanyi-base-service)
   ((syllable :initarg :syllable
              :initform "-"
@@ -254,6 +259,9 @@ before calling this method."
                   'button-data (format (oref this :url) (oref this :word))
                   'follow-link t)
    (insert "\n\n")))
+
+;; The Haici dict specific font-lock keywords
+(add-to-list 'fanyi-mode-font-lock-keywords-extra '("★" . 'fanyi-haici-star-face))
 
 (defconst fanyi-haici-provider
   (fanyi-haici-service :word "dummy"
