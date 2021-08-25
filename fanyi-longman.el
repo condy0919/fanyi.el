@@ -164,6 +164,9 @@
    (registerlab :initarg :registerlab
                 :initform nil
                 :documentation "Register Label.")
+   (lexunit :initarg :lexunit
+            :initform nil
+            :documentation "LEXUNIT.")
    (def :initarg :def
         :type list
         :documentation "The definition.
@@ -192,7 +195,7 @@ Typically it can be a list of strings or \"riched\" strings."))
 ;; Silence unknown slots warning.
 (eieio-declare-slots :word-family :dicts :etymon)
 (eieio-declare-slots :name :hyphenation :pronunciation :level :freqs :academy :pos :grammar :british :american :senses)
-(eieio-declare-slots :signpost :grammar :registerlab :def :crossref :syn :examples :footnote-expl :footnote-example)
+(eieio-declare-slots :signpost :grammar :registerlab :lexunit :def :crossref :syn :examples :footnote-expl :footnote-example)
 
 ;; Silence compile warning.
 (autoload 'fanyi-dwim "fanyi")
@@ -278,6 +281,9 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                               ;; Register label, it could be nil.
                                                                               (when-let ((label (dom-by-class sense "REGISTERLAB")))
                                                                                 (oset dict-sense :registerlab (s-trim (dom-text label))))
+                                                                              ;; LEXUNIT, it could be nil.
+                                                                              (when-let ((unit (dom-by-class sense "LEXUNIT")))
+                                                                                (oset dict-sense :lexunit (s-trim (dom-text unit))))
                                                                               ;; Definition.
                                                                               (oset dict-sense :def
                                                                                     (seq-map (lambda (node)
@@ -397,9 +403,9 @@ before calling this method."
                                 'help-echo "Play American pronunciation"
                                 'follow-link t))
             do (insert "\n\n")
-            ;; - work [countable] informal the regular paid work SYN *foo* link
-            ;;   ^             ^         ^     ^                 ^           ^
-            ;;   signpost      grammar  lbl    button          synonym     crossref
+            ;; - work [countable] informal unit the regular paid work SYN *foo* link
+            ;;   ^             ^         ^    ^     ^                 ^           ^
+            ;;   signpost      grammar  lbl lexut   button          synonym     crossref
             ;;
             ;; For easy implementation, crossref is put at the end of
             ;; definition.
@@ -415,6 +421,9 @@ before calling this method."
                         do (when-let ((label (oref sense :registerlab)))
                              (insert (propertize label
                                                  'font-lock-face 'fanyi-longman-registerlab-face)
+                                     " "))
+                        do (when-let ((unit (oref sense :lexunit)))
+                             (insert "*" unit "*"
                                      " "))
                         do (seq-do (lambda (s)
                                      (pcase s
