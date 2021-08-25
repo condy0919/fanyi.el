@@ -61,6 +61,11 @@
   :type 'integer
   :group 'fanyi)
 
+(defcustom fanyi-longman-example-indent 2
+  "Default indent for examples."
+  :type 'integer
+  :group 'fanyi)
+
 (defface fanyi-longman-svg-asset-face
   '((((background light))
      :foreground "white"
@@ -82,13 +87,18 @@
   :group 'fanyi)
 
 (defface fanyi-longman-dot-face
-  '((t :foreground "#f00"))
+  '((t :foreground "red"))
   "Face used for level dot."
   :group 'fanyi)
 
 (defface fanyi-longman-grammar-face
   '((t :foreground "green" :weight bold))
   "Face used for grammar."
+  :group 'fanyi)
+
+(defface fanyi-longman-example-face
+  '((t :foreground "gray"))
+  "Face used for examples."
   :group 'fanyi)
 
 (defclass fanyi-longman-service (fanyi-base-service)
@@ -202,7 +212,6 @@ Typically it can be a list of strings or \"riched\" strings."))
 
 (cl-defmethod fanyi-parse-from ((this fanyi-longman-service) dom)
   "Complete the fields of THIS from DOM tree."
-  (setq xxx dom)
   (let ((dict (dom-by-class dom "^\\(dictionary\\)$")))
     ;; Word family, e.g. (noun) accumulation (adjective) accumulative (verb) accumulate (adverb) accumulatively
     (when-let ((wordfams (dom-children (dom-by-class dict "wordfams"))))
@@ -276,12 +285,18 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                               ;; Synonym, it could be nil.
                                                                               (when-let ((syn (dom-by-class sense "^\\(SYN\\)$")))
                                                                                 (oset dict-sense :syn (s-trim (dom-text syn))))
+                                                                              ;; Examples
+                                                                              (oset dict-sense :examples
+                                                                                    (cl-loop for example in (dom-by-class sense "EXAMPLE")
+                                                                                             collect (cons (dom-attr (dom-by-class example "speaker") 'data-src-mp3)
+                                                                                                           (s-trim (s-replace (char-to-string #xa0)
+                                                                                                                              ""
+                                                                                                                              (dom-texts example ""))))))
                                                                               dict-sense)))))))
     ;; Etymon
     (let ((etymon (dom-by-class (dom-by-class dict "etym") "Sense")))
       (oset this :etymon (dom-texts etymon "")))))
 
-;; (examples :initarg :examples
 ;; (footnote-expl :initarg :footnote-expl
 ;; (footnote-example :initarg :footnote-example
 
@@ -396,7 +411,21 @@ before calling this method."
                                             'action #'fanyi-dwim
                                             'button-data (cdr crossref)
                                             'follow-link t))
-                        do (insert "\n"))
+                        do (insert "\n")
+                        ;; Examples.
+                        do (cl-loop for example in (oref sense :examples)
+                                    for mp3 = (car example)
+                                    for expl = (cdr example)
+                                    do (insert (s-repeat fanyi-longman-example-indent " "))
+                                    do (insert-button "🔊"
+                                                      'action #'fanyi-play-sound
+                                                      'button-data mp3
+                                                      'face 'fanyi-longman-example-face
+                                                      'help-echo "Play Example"
+                                                      'follow-link t)
+                                    do (insert " "
+                                               (propertize expl 'font-lock-faces 'fanyi-longman-example-face)
+                                               "\n")))
             do (insert "\n"))
    ;; Etymon.
    (when (s-present? (oref this :etymon))
