@@ -428,9 +428,9 @@ before calling this method."
                                     for mp3 = (car example)
                                     for expl = (cdr example)
                                     do (insert (s-repeat fanyi-longman-example-indent " "))
-                                    do (insert-button "🔊"
+                                    do (insert-button (if mp3 "🔊" "🔇")
                                                       'action #'fanyi-play-sound
-                                                      'button-data mp3
+                                                      'button-data (or mp3 "")
                                                       'face 'fanyi-longman-example-face
                                                       'help-echo "Play Example"
                                                       'follow-link t)
