@@ -141,6 +141,12 @@
           (when (< fanyi--tasks-completed (length fanyi-providers))
             (format " %d/%d" fanyi--tasks-completed (length fanyi-providers)))))
 
+;; Emacs 28.1 can have multiple eldoc functions and it's called with a callback.
+;; While in Emacs 27, it's call without arguments.
+(defun fanyi-eldoc-function (&rest _)
+  "ElDoc for `fanyi-mode'."
+  (get-text-property (point) 'help-echo))
+
 (defvar fanyi-mode-font-lock-keywords
   `(;; Dictionary name
     ("^# .*" . 'fanyi-dict-face)
@@ -182,6 +188,13 @@
   ;; Make it foldable.
   (setq-local outline-regexp "^#+")
   (setq-local outline-minor-mode t)
+
+  ;; ElDoc integration.
+  ;;
+  ;; Emacs 28.1 can have multiple eldoc functions.
+  (if (boundp 'eldoc-documentation-functions)
+      (add-hook 'eldoc-documentation-functions #'fanyi-eldoc-function nil t)
+    (setq-local eldoc-documentation-function #'fanyi-eldoc-function))
 
   (setq font-lock-defaults '(fanyi-mode-font-lock-keywords))
   (setq imenu-generic-expression '(("Dict" "^# \\(.*\\)" 1)))

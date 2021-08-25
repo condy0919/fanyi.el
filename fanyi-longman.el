@@ -126,7 +126,7 @@
              :type string
              :documentation "American voice.")
    )
-  "The Longman dictionary content.")
+  "The Longman dictionary entry.")
 
 ;; Silence unknown slots warning.
 (eieio-declare-slots :word-family :dicts :etymon)
