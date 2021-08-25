@@ -525,9 +525,9 @@ before calling this method."
    ;; Etymon.
    (when (s-present? (oref this :etymon))
      (insert "## Etymon\n\n")
-     (if (fanyi-display-glyphs-p)
-         (insert-image (fanyi-longman-svg-tag-make "Origin" 'fanyi-longman-svg-asset-face))
-       (insert "Origin:"))
+     (insert (propertize "Origin"
+                         'display (when (fanyi-display-glyphs-p)
+                                    (fanyi-longman-svg-tag-make "Origin" 'fanyi-longman-svg-asset-face))))
      (insert " ")
      (insert "*" (oref this :word) "*")
      (insert " ")
