@@ -142,7 +142,7 @@
             (format " %d/%d" fanyi--tasks-completed (length fanyi-providers)))))
 
 (defvar fanyi-mode-font-lock-keywords
-  '(;; Dictionary name
+  `(;; Dictionary name
     ("^# .*" . 'fanyi-dict-face)
     ;; Sub headline
     ("^##" . 'fanyi-sub-headline-face)
@@ -154,15 +154,14 @@
     ("^-" . 'fanyi-list-face)
     ;; Part of speech
     ("(\\([a-zA-Z\.]+?\\))" . 'fanyi-pos-face)
-    ;; Use Minion New font to fontify pronunciation of American Heritage
-    ;; dictionary.
-    ("\u200b\\([^\u200b]+?\\)\u200b" . 'fanyi-ah-pronunciation-face)
     ;; Italic
     ("/\\([^/]+?\\)/" . 'italic)
     ;; Bold
     ("\\*\\([^\\*]+?\\)\\*" . 'bold)
     ;; Underline
-    ("_\\([^_]+?\\)_" . 'underline))
+    ("_\\([^_]+?\\)_" . 'underline)
+    ;; Other dicts can define their own font-lock keywords
+    ,@fanyi-mode-font-lock-keywords-extra)
   "Keywords to highlight in `fanyi-mode'.")
 
 (defvar fanyi-mode-map
@@ -224,7 +223,7 @@
     (let ((instances (seq-map #'clone fanyi-providers)))
       (seq-do (lambda (i)
                 ;; Overwrite the dummy word.
-                (oset i :word (url-hexify-string word))
+                (oset i :word (url-hexify-string (downcase word)))
                 ;; Do search.
                 (fanyi--spawn i))
               instances))
@@ -233,7 +232,7 @@
 ;; Internals
 
 (defun fanyi-tab ()
-  "Smart tab in `fanyi-mode'."
+  "Context-aware tab in `fanyi-mode'."
   (interactive nil fanyi-mode)
   (unless (derived-mode-p 'fanyi-mode)
     (error "Not in fanyi-mode"))
@@ -242,7 +241,7 @@
     (forward-button 1 t t t)))
 
 (defun fanyi-backtab ()
-  "Smart backtab in `fanyi-mode'."
+  "Context-aware backtab in `fanyi-mode'."
   (interactive nil fanyi-mode)
   (unless (derived-mode-p 'fanyi-mode)
     (error "Not in fanyi-mode"))

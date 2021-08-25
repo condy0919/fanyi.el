@@ -69,6 +69,9 @@ See `fanyi-sound-player'."
 (defvar fanyi-buffer-mtx (make-mutex)
   "The mutex for \"*fanyi*\" buffer.")
 
+(defvar fanyi-mode-font-lock-keywords-extra nil
+  "Dicts can define their own font-lock keywords.")
+
 (defclass fanyi-base-service ()
   ((word :initarg :word
          :type string

@@ -214,6 +214,13 @@ before calling this method."
         ))
     ))
 
+;; ;; Use Minion New font to fontify pronunciation of American Heritage
+;; ;; dictionary.
+;; ("\u200b\\([^\u200b]+?\\)\u200b" . 'fanyi-ah-pronunciation-face)
+;; (add-to-list
+;;  'fanyi-mode-font-lock-keywords-extra
+;;  '("\u200b\\([^\u200b]+?\\)\u200b" . 'fanyi-ah-pronunciation-face))
+
 (defconst fanyi-ah-provider
   (fanyi-ah-service :word "dummy"
                     :url "https://ahdictionary.com/word/search.html?q=%s"
