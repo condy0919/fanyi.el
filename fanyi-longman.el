@@ -101,6 +101,11 @@
   "Face used for grammar."
   :group 'fanyi)
 
+(defface fanyi-longman-geo-face
+  '((t :foreground "#364395" :slant italic))
+  "Face used for geography."
+  :group 'fanyi)
+
 (defface fanyi-longman-example-face
   '((t :foreground "gray"))
   "Face used for examples."
@@ -125,25 +130,28 @@
          :type string
          :documentation "Name of the dictionary.")
    (hyphenation :initarg :hyphenation
-                :type string
+                :initform nil
                 :documentation "Hyphenation form.")
    (pronunciation :initarg :pronunciation
-                  :type string
+                  :initform nil
                   :documentation "Pronunciation of the word.")
    (level :initarg :level
-          :type cons
+          :initform nil
           :documentation "Level of the word.")
    (freqs :initarg :freqs
-          :type list
+          :initform nil
           :documentation "Frequence of the word.")
    (academy :initarg :academy
-            :type cons
+            :initform nil
             :documentation "Academic usage.")
    (pos :initarg :pos
-        :type string
+        :initform nil
         :documentation "Part of speech.")
+   (inflection :initarg :inflection
+               :initform nil
+               :documentation "Inflection.")
    (grammar :initarg :grammar
-            :type string
+            :initform nil
             :documentation "Grammar.")
    (british :initarg :british
             :documentation "British voice.")
@@ -166,7 +174,10 @@
                 :documentation "Register Label.")
    (lexunit :initarg :lexunit
             :initform nil
-            :documentation "LEXUNIT.")
+            :documentation "Lexical unit.")
+   (geo :initarg :geo
+        :initform nil
+        :documentation "Geography.")
    (def :initarg :def
         :type list
         :documentation "The definition.
@@ -194,8 +205,8 @@ Typically it can be a list of strings or \"riched\" strings."))
 
 ;; Silence unknown slots warning.
 (eieio-declare-slots :word-family :dicts :etymon)
-(eieio-declare-slots :name :hyphenation :pronunciation :level :freqs :academy :pos :grammar :british :american :senses)
-(eieio-declare-slots :signpost :grammar :registerlab :lexunit :def :crossref :syn :examples :footnote-expl :footnote-example)
+(eieio-declare-slots :name :hyphenation :pronunciation :level :freqs :academy :pos :inflection :grammar :british :american :senses)
+(eieio-declare-slots :signpost :grammar :registerlab :lexunit :geo :def :crossref :syn :examples :footnote-expl :footnote-example)
 
 ;; Silence compile warning.
 (autoload 'fanyi-dwim "fanyi")
@@ -254,78 +265,98 @@ Typically it can be a list of strings or \"riched\" strings."))
             (cl-loop for entry in dict-entries
                      collect (let ((name (dom-text (dom-by-class entry "dictionary_intro")))
                                    (head (dom-by-class entry "Head"))
-                                   (senses (dom-by-class entry "^\\(Sense\\)$")))
-                               (fanyi-longman-dict :name name
-                                                   :hyphenation (dom-text (dom-by-class head "HYPHENATION"))
-                                                   :pronunciation (s-trim (dom-texts (dom-by-class head "PronCodes") ""))
-                                                   :level (let ((level (dom-by-class head "LEVEL")))
-                                                            (cons (s-trim (dom-text level)) (dom-attr level 'title)))
-                                                   :freqs (let ((freqs (dom-by-class head "FREQ")))
-                                                            (seq-map (lambda (freq)
-                                                                       (cons (s-trim (dom-text freq)) (dom-attr freq 'title)))
-                                                                     freqs))
-                                                   :academy (let ((ac (dom-by-class head "AC")))
-                                                              (cons (dom-text ac) (dom-attr ac 'title)))
-                                                   :pos (s-trim (dom-text (dom-by-class head "POS")))
-                                                   :grammar (s-trim (dom-texts (dom-by-class head "GRAM") ""))
-                                                   :british (dom-attr (dom-by-class head "brefile") 'data-src-mp3)
-                                                   :american (dom-attr (dom-by-class head "amefile") 'data-src-mp3)
-                                                   :senses (cl-loop for sense in senses
-                                                                    collect (let ((dict-sense (fanyi-longman-dict-sense)))
-                                                                              ;; Signpost, it could be nil.
-                                                                              (when-let ((signpost (dom-by-class sense "SIGNPOST")))
-                                                                                (oset dict-sense :signpost (dom-text signpost)))
-                                                                              ;; Grammar, it could be nil.
-                                                                              (when-let ((grammar (dom-by-class sense "GRAM")))
-                                                                                (oset dict-sense :grammar (s-trim (dom-texts grammar ""))))
-                                                                              ;; Register label, it could be nil.
-                                                                              (when-let ((label (dom-by-class sense "REGISTERLAB")))
-                                                                                (oset dict-sense :registerlab (s-trim (dom-text label))))
-                                                                              ;; LEXUNIT, it could be nil.
-                                                                              (when-let ((unit (dom-by-class sense "LEXUNIT")))
-                                                                                (oset dict-sense :lexunit (s-trim (dom-text unit))))
-                                                                              ;; Definition.
-                                                                              (oset dict-sense :def
-                                                                                    (seq-map (lambda (node)
-                                                                                               (pcase (type-of node)
-                                                                                                 ('string (s-trim node))
-                                                                                                 ('cons (cond ((dom-by-class node "defRef")
-                                                                                                               (list (dom-texts node "") 'button (dom-texts node "")))
-                                                                                                              ((dom-by-class node "REFHWD")
-                                                                                                               (list (dom-texts node "") 'face 'italic))
-                                                                                                              (t (user-error "Unimplemented. %s" (pp-to-string node)))))
-                                                                                                 (_ (user-error "Unimplemented. %s" (pp-to-string node)))))
-                                                                                             (dom-children (dom-by-class sense "^\\(DEF\\)$"))))
-                                                                              ;; Crossref, it could be nil.
-                                                                              (when-let* ((crossref (dom-by-class sense "Crossref"))
-                                                                                          (href (dom-attr (dom-child-by-tag crossref 'a) 'href)))
-                                                                                (cl-assert (s-prefix? "/dictionary/" href))
-                                                                                (oset dict-sense :crossref
-                                                                                      (cons (s-trim (dom-texts crossref ""))
-                                                                                            (car (s-split "#" (substring href 12))))))
-                                                                              ;; Synonym, it could be nil.
-                                                                              (when-let ((syn (dom-by-class sense "^\\(SYN\\)$")))
-                                                                                (oset dict-sense :syn (s-trim (dom-text syn))))
-                                                                              ;; Examples
-                                                                              (oset dict-sense :examples
-                                                                                    (cl-loop for example in (dom-by-class sense "EXAMPLE")
-                                                                                             collect (cons (dom-attr (dom-by-class example "speaker") 'data-src-mp3)
-                                                                                                           (s-trim (s-replace (char-to-string #xa0)
-                                                                                                                              ""
-                                                                                                                              (dom-texts example ""))))))
-                                                                              ;; Footnote.
-                                                                              (let ((footnote (dom-by-class sense "F2NBox")))
-                                                                                (oset dict-sense :footnote-expl
-                                                                                      (cl-loop for child in (dom-children (dom-by-class footnote "EXPL"))
-                                                                                               collect (pcase (type-of child)
-                                                                                                         ('string child)
-                                                                                                         ('cons (list (dom-text child) 'face 'bold)))))
-                                                                                (oset dict-sense :footnote-example
-                                                                                      (cl-loop for child in (dom-children (dom-by-class footnote "EXAMPLE"))
-                                                                                               collect (pcase (type-of child)
-                                                                                                         ('string child)
-                                                                                                         ('cons (list (dom-text child) 'face 'bold))))))
-                                                                              dict-sense)))))))
+                                   (senses (dom-by-class entry "^\\(Sense\\)$"))
+                                   (dict (fanyi-longman-dict)))
+                               (oset dict :name name)
+                               ;; Hyphenation.
+                               (when-let ((hyph (dom-by-class head "HYPHENATION")))
+                                 (oset dict :hyphenation (dom-text hyph)))
+                               ;; Pronunciation.
+                               (when-let ((codes (dom-by-class head "PronCodes")))
+                                 (oset dict :pronunciation (s-trim (dom-texts codes ""))))
+                               ;; Level.
+                               (when-let ((level (dom-by-class head "LEVEL")))
+                                 (oset dict :level (cons (s-trim (dom-text level)) (dom-attr level 'title))))
+                               ;; Frequence.
+                               (when-let ((freqs (dom-by-class head "FREQ")))
+                                 (oset dict :freqs (cl-loop for f in freqs
+                                                            collect (cons (s-trim (dom-text f)) (dom-attr f 'title)))))
+                               ;; Academic.
+                               (when-let ((ac (dom-by-class head "AC")))
+                                 (oset dict :academy (cons (dom-text ac) (dom-attr ac 'title))))
+                               ;; Part of speech.
+                               (when-let ((pos (dom-by-class head "POS")))
+                                 (oset dict :pos (s-trim (dom-text pos))))
+                               ;; Inflection.
+                               (when-let ((inflect (dom-by-class head "Inflections")))
+                                 (oset dict :inflection (s-trim (dom-texts inflect ""))))
+                               ;; Grammar.
+                               (when-let ((gram (dom-by-class head "GRAM")))
+                                 (oset dict :grammar (s-trim (dom-texts gram ""))))
+                               ;; Voice
+                               (oset dict :british (dom-attr (dom-by-class head "brefile") 'data-src-mp3))
+                               (oset dict :american (dom-attr (dom-by-class head "amefile") 'data-src-mp3))
+                               ;; Senses.
+                               (oset dict :senses (cl-loop for sense in senses
+                                                           collect (let ((dict-sense (fanyi-longman-dict-sense)))
+                                                                     ;; Signpost.
+                                                                     (when-let ((signpost (dom-by-class sense "SIGNPOST")))
+                                                                       (oset dict-sense :signpost (dom-text signpost)))
+                                                                     ;; Grammar.
+                                                                     (when-let ((grammar (dom-by-class sense "GRAM")))
+                                                                       (oset dict-sense :grammar (s-trim (dom-texts grammar ""))))
+                                                                     ;; Register label.
+                                                                     (when-let ((label (dom-by-class sense "REGISTERLAB")))
+                                                                       (oset dict-sense :registerlab (s-trim (dom-text label))))
+                                                                     ;; LEXUNIT.
+                                                                     (when-let ((unit (dom-by-class sense "LEXUNIT")))
+                                                                       (oset dict-sense :lexunit (s-trim (dom-text unit))))
+                                                                     ;; Geography.
+                                                                     (when-let ((geo (dom-by-class sense "GEO")))
+                                                                       (oset dict-sense :geo (s-trim (dom-text geo))))
+                                                                     ;; Definition.
+                                                                     (oset dict-sense :def
+                                                                           (seq-map (lambda (node)
+                                                                                      (pcase (type-of node)
+                                                                                        ('string (s-trim node))
+                                                                                        ('cons (cond ((dom-by-class node "defRef")
+                                                                                                      (list (dom-texts node "") 'button (dom-texts node "")))
+                                                                                                     ((dom-by-class node "REFHWD")
+                                                                                                      (list (dom-texts node "") 'face 'italic))
+                                                                                                     (t (user-error "Unimplemented. %s" (pp-to-string node)))))
+                                                                                        (_ (user-error "Unimplemented. %s" (pp-to-string node)))))
+                                                                                    (dom-children (dom-by-class sense "^\\(DEF\\)$"))))
+                                                                     ;; Crossref.
+                                                                     (when-let* ((crossref (dom-by-class sense "Crossref"))
+                                                                                 (href (dom-attr (dom-child-by-tag crossref 'a) 'href)))
+                                                                       (cl-assert (s-prefix? "/dictionary/" href))
+                                                                       (oset dict-sense :crossref
+                                                                             (cons (s-trim (dom-texts crossref ""))
+                                                                                   (car (s-split "#" (substring href 12))))))
+                                                                     ;; Synonym.
+                                                                     (when-let ((syn (dom-by-class sense "^\\(SYN\\)$")))
+                                                                       (oset dict-sense :syn (s-trim (dom-text syn))))
+                                                                     ;; Examples
+                                                                     (oset dict-sense :examples
+                                                                           (cl-loop for example in (dom-by-class sense "EXAMPLE")
+                                                                                    collect (cons (dom-attr (dom-by-class example "speaker") 'data-src-mp3)
+                                                                                                  (s-trim (s-replace (char-to-string #xa0)
+                                                                                                                     ""
+                                                                                                                     (dom-texts example ""))))))
+                                                                     ;; Footnote.
+                                                                     (let ((footnote (dom-by-class sense "F2NBox")))
+                                                                       (oset dict-sense :footnote-expl
+                                                                             (cl-loop for child in (dom-children (dom-by-class footnote "EXPL"))
+                                                                                      collect (pcase (type-of child)
+                                                                                                ('string child)
+                                                                                                ('cons (list (dom-text child) 'face 'bold)))))
+                                                                       (oset dict-sense :footnote-example
+                                                                             (cl-loop for child in (dom-children (dom-by-class footnote "EXAMPLE"))
+                                                                                      collect (pcase (type-of child)
+                                                                                                ('string child)
+                                                                                                ('cons (list (dom-text child) 'face 'bold))))))
+                                                                     dict-sense)))
+                               dict))))
     ;; Etymon
     (let ((etymon (dom-by-class (dom-by-class dict "etym") "Sense")))
       (oset this :etymon (dom-texts etymon "")))))
@@ -359,13 +390,13 @@ before calling this method."
             ;; job /dʒɒb $ dʒɑːb/ ●●● S1 W1 AWL (noun) 🔊 🔊
             ;; ^            ^       ^               ^
             ;; hyphenation  pron    level           pos
-            do (insert (oref dict :hyphenation))
-            do (insert " "
-                       (oref dict :pronunciation))
-            do (let ((level (oref dict :level)))
-                 (when (s-present? (car level))
-                   (insert " "
-                           (propertize (car (oref dict :level)) 'help-echo (cdr (oref dict :level))))))
+            do (when-let ((hyph (oref dict :hyphenation)))
+                 (insert hyph))
+            do (when-let ((pron (oref dict :pronunciation)))
+                 (insert " " pron))
+            do (when-let ((level (oref dict :level)))
+                 (insert " "
+                         (propertize (car level) 'help-echo (cdr level))))
             do (insert
                 (s-join " "
                         (seq-map (pcase-lambda (`(,freq . ,desc))
@@ -374,20 +405,20 @@ before calling this method."
                                                'display (when (fanyi-display-glyphs-p)
                                                           (fanyi-longman-svg-tag-make freq 'fanyi-longman-svg-asset-face))))
                                  (oref dict :freqs))))
-            do (let ((ac (oref dict :academy)))
-                 (when (s-present? (car ac))
-                   (insert " "
-                           (propertize (car (oref dict :academy))
-                                       'help-echo (cdr (oref dict :academy))
-                                       'display (when (fanyi-display-glyphs-p)
-                                                  (fanyi-longman-svg-tag-make (car (oref dict :academy)) 'fanyi-longman-svg-asset-face))))))
-            do (when (s-present? (oref dict :pos))
+            do (when-let ((ac (oref dict :academy)))
                  (insert " "
-                         "(" (oref dict :pos) ")"))
-            do (when (s-present? (oref dict :grammar))
-                 (insert " " (oref dict :grammar)))
-            unless (s-blank? (oref dict :british))
-            do (progn
+                         (propertize (car ac)
+                                     'help-echo (cdr ac)
+                                     'display (when (fanyi-display-glyphs-p)
+                                                (fanyi-longman-svg-tag-make (car ac) 'fanyi-longman-svg-asset-face)))))
+            do (when-let ((pos (oref dict :pos)))
+                 (insert " "
+                         "(" pos ")"))
+            do (when-let ((inflect (oref dict :inflection)))
+                 (insert " " inflect))
+            do (when-let ((gram (oref dict :grammar)))
+                 (insert " " gram))
+            do (when (oref dict :british)
                  (insert " ")
                  (insert-button "🔊"
                                 'action #'fanyi-play-sound
@@ -403,9 +434,9 @@ before calling this method."
                                 'help-echo "Play American pronunciation"
                                 'follow-link t))
             do (insert "\n\n")
-            ;; - work [countable] informal unit the regular paid work SYN *foo* link
-            ;;   ^             ^         ^    ^     ^                 ^           ^
-            ;;   signpost      grammar  lbl lexut   button          synonym     crossref
+            ;; - work [countable] informal unit   GEO   the regular paid work SYN *foo* link
+            ;;   ^             ^         ^    ^     ^       ^                 ^           ^
+            ;;   signpost      grammar  lbl lexut  geo      button          synonym     crossref
             ;;
             ;; For easy implementation, crossref is put at the end of
             ;; definition.
@@ -424,6 +455,10 @@ before calling this method."
                                      " "))
                         do (when-let ((unit (oref sense :lexunit)))
                              (insert "*" unit "*"
+                                     " "))
+                        do (when-let ((geo (oref sense :geo)))
+                             (insert (propertize geo
+                                                 'font-lock-face 'fanyi-longman-geo-face)
                                      " "))
                         do (seq-do (lambda (s)
                                      (pcase s
