@@ -273,7 +273,9 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                                                (pcase (type-of node)
                                                                                                  ('string (s-trim node))
                                                                                                  ('cons (cond ((dom-by-class node "defRef")
-                                                                                                               (list (dom-text node) 'button (dom-text node)))
+                                                                                                               (list (dom-texts node "") 'button (dom-texts node "")))
+                                                                                                              ((dom-by-class node "REFHWD")
+                                                                                                               (list (dom-texts node "") 'face 'italic))
                                                                                                               (t (user-error "Unimplemented. %s" (pp-to-string node)))))
                                                                                                  (_ (user-error "Unimplemented. %s" (pp-to-string node)))))
                                                                                              (dom-children (dom-by-class sense "^\\(DEF\\)$"))))
@@ -403,6 +405,8 @@ before calling this method."
                                      (pcase s
                                        ((pred stringp)
                                         (insert s " "))
+                                       (`(,text face italic)
+                                        (insert "/" text "/"))
                                        (`(,text button ,data)
                                         (insert-button text
                                                        'action #'fanyi-dwim
