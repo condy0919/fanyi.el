@@ -170,10 +170,12 @@ Typically it can be a list of strings or \"riched\" strings.")
              :type list
              :documentation "List of examples.")
    (footnote-expl :initarg :footnote-expl
+                  :initform nil
                   :type list
                   :documentation "Footnote explanation.
 Typically it can be a list of strings or \"riched\" strings.")
    (footnote-example :initarg :footnote-example
+                     :initform nil
                      :type list
                      :documentation "Footnote example.
 Typically it can be a list of strings or \"riched\" strings."))
@@ -292,13 +294,22 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                                                            (s-trim (s-replace (char-to-string #xa0)
                                                                                                                               ""
                                                                                                                               (dom-texts example ""))))))
+                                                                              ;; Footnote.
+                                                                              (let ((footnote (dom-by-class sense "F2NBox")))
+                                                                                (oset dict-sense :footnote-expl
+                                                                                      (cl-loop for child in (dom-children (dom-by-class footnote "EXPL"))
+                                                                                               collect (pcase (type-of child)
+                                                                                                         ('string child)
+                                                                                                         ('cons (list (dom-text child) 'face 'bold)))))
+                                                                                (oset dict-sense :footnote-example
+                                                                                      (cl-loop for child in (dom-children (dom-by-class footnote "EXAMPLE"))
+                                                                                               collect (pcase (type-of child)
+                                                                                                         ('string child)
+                                                                                                         ('cons (list (dom-text child) 'face 'bold))))))
                                                                               dict-sense)))))))
     ;; Etymon
     (let ((etymon (dom-by-class (dom-by-class dict "etym") "Sense")))
       (oset this :etymon (dom-texts etymon "")))))
-
-;; (footnote-expl :initarg :footnote-expl
-;; (footnote-example :initarg :footnote-example
 
 (cl-defmethod fanyi-render ((this fanyi-longman-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
@@ -424,8 +435,29 @@ before calling this method."
                                                       'help-echo "Play Example"
                                                       'follow-link t)
                                     do (insert " "
-                                               (propertize expl 'font-lock-faces 'fanyi-longman-example-face)
-                                               "\n")))
+                                               (propertize expl 'font-lock-face 'fanyi-longman-example-face)
+                                               "\n"))
+                        ;; Footnote.
+                        do (when-let ((expl (oref sense :footnote-expl)))
+                             (insert "\n")
+                             (insert (s-repeat fanyi-longman-example-indent " ")
+                                     "> ")
+                             (cl-loop for s in expl
+                                      do (pcase s
+                                           (`(,s face bold)
+                                            (insert "*" s "*"))
+                                           (_
+                                            (insert s))))
+                             (insert "\n"))
+                        do (when-let ((ex (oref sense :footnote-example)))
+                             (insert (s-repeat (* 2 fanyi-longman-example-indent) " "))
+                             (insert (propertize (s-join ""
+                                                         (cl-loop for s in ex
+                                                                  collect (pcase s
+                                                                            (`(,s face bold) (concat "*" s "*"))
+                                                                            (_ s))))
+                                                 'font-lock-face 'fanyi-longman-example-face))
+                             (insert "\n")))
             do (insert "\n"))
    ;; Etymon.
    (when (s-present? (oref this :etymon))
