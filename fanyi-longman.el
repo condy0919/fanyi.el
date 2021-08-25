@@ -86,6 +86,11 @@
   "Face used for signpost."
   :group 'fanyi)
 
+(defface fanyi-longman-registerlab-face
+  '((t :foreground "purple" :slant italic))
+  "Face used for register label."
+  :group 'fanyi)
+
 (defface fanyi-longman-dot-face
   '((t :foreground "red"))
   "Face used for level dot."
@@ -156,6 +161,9 @@
    (grammar :initarg :grammar
             :initform nil
             :documentation "Grammar.")
+   (registerlab :initarg :registerlab
+                :initform nil
+                :documentation "Register Label.")
    (def :initarg :def
         :type list
         :documentation "The definition.
@@ -184,7 +192,7 @@ Typically it can be a list of strings or \"riched\" strings."))
 ;; Silence unknown slots warning.
 (eieio-declare-slots :word-family :dicts :etymon)
 (eieio-declare-slots :name :hyphenation :pronunciation :level :freqs :academy :pos :grammar :british :american :senses)
-(eieio-declare-slots :signpost :grammar :def :crossref :syn :examples :footnote-expl :footnote-example)
+(eieio-declare-slots :signpost :grammar :registerlab :def :crossref :syn :examples :footnote-expl :footnote-example)
 
 ;; Silence compile warning.
 (autoload 'fanyi-dwim "fanyi")
@@ -267,6 +275,9 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                               ;; Grammar, it could be nil.
                                                                               (when-let ((grammar (dom-by-class sense "GRAM")))
                                                                                 (oset dict-sense :grammar (s-trim (dom-texts grammar ""))))
+                                                                              ;; Register label, it could be nil.
+                                                                              (when-let ((label (dom-by-class sense "REGISTERLAB")))
+                                                                                (oset dict-sense :registerlab (s-trim (dom-text label))))
                                                                               ;; Definition.
                                                                               (oset dict-sense :def
                                                                                     (seq-map (lambda (node)
@@ -386,9 +397,9 @@ before calling this method."
                                 'help-echo "Play American pronunciation"
                                 'follow-link t))
             do (insert "\n\n")
-            ;; - work [countable] the regular paid work SYN *foo* link
-            ;;   ^             ^              ^         ^            ^
-            ;;   signpost      grammar        button    synonym      crossref
+            ;; - work [countable] informal the regular paid work SYN *foo* link
+            ;;   ^             ^         ^     ^                 ^           ^
+            ;;   signpost      grammar  lbl    button          synonym     crossref
             ;;
             ;; For easy implementation, crossref is put at the end of
             ;; definition.
@@ -401,6 +412,10 @@ before calling this method."
                                      " "))
                         do (when-let ((grammar (oref sense :grammar)))
                              (insert grammar " "))
+                        do (when-let ((label (oref sense :registerlab)))
+                             (insert (propertize label
+                                                 'font-lock-face 'fanyi-longman-registerlab-face)
+                                     " "))
                         do (seq-do (lambda (s)
                                      (pcase s
                                        ((pred stringp)
