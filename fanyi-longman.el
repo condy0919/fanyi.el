@@ -113,6 +113,9 @@
    (level :initarg :level
           :type cons
           :documentation "Level of the word.")
+   (freqs :initarg :freqs
+          :type list
+          :documentation "Frequence of the word.")
    (academy :initarg :academy
             :type cons
             :documentation "Academic usage.")
@@ -120,17 +123,45 @@
         :type string
         :documentation "Part of speech.")
    (british :initarg :british
-            :type string
             :documentation "British voice.")
    (american :initarg :american
-             :type string
              :documentation "American voice.")
-   )
+   (senses :initarg :senses
+           :type list
+           :documentation "List of `fanyi-longman-dict-sense's."))
   "The Longman dictionary entry.")
+
+(defclass fanyi-longman-dict-sense ()
+  ((signpost :initarg :signpost
+             :initform nil
+             :documentation "Signpost.")
+   (grammar :initarg :grammar
+            :initform nil
+            :documentation "Grammar.")
+   (def :initarg :def
+        :type list
+        :documentation "The definition.
+Typically it can be a list of strings or \"riched\" strings.")
+   (syn :initarg :syn
+        :initform nil
+        :documentation "Synonym.")
+   (examples :initarg :examples
+             :type list
+             :documentation "List of examples.")
+   (footnote-expl :initarg :footnote-expl
+                  :type list
+                  :documentation "Footnote explanation.
+Typically it can be a list of strings or \"riched\" strings.")
+   (footnote-example :initarg :footnote-example
+                     :type list
+                     :documentation "Footnote example.
+Typically it can be a list of strings or \"riched\" strings."))
+  "The Longman dictionary entry sense.")
 
 ;; Silence unknown slots warning.
 (eieio-declare-slots :word-family :dicts :etymon)
-(eieio-declare-slots :name :hyphenation :pronunciation :level :academy :pos :british :american)
+(eieio-declare-slots :name :hyphenation :pronunciation :level :freqs :academy :pos :british :american :senses)
+(eieio-declare-slots :signpost :grammar :def :syn :examples :footnote-expl :footnote-example)
 
 ;; Silence compile warning.
 (autoload 'fanyi-dwim "fanyi")
@@ -163,13 +194,20 @@
   (setq xxx dom)
   (let ((dict (dom-by-class dom "^\\(dictionary\\)$")))
     ;; Word family, e.g. (noun) accumulation (adjective) accumulative (verb) accumulate (adverb) accumulatively
-    (when-let ((wordfams (seq-filter #'listp (dom-children (dom-by-class dict "wordfams")))))
-      (let ((head (pop wordfams)))
-        (cl-assert (dom-by-class head "asset_intro")))
+    (when-let ((wordfams (dom-children (dom-by-class dict "wordfams"))))
+      (let ((head1 (pop wordfams))
+            (head2 (pop wordfams)))
+        (cl-assert (s-blank-str? head1))
+        (cl-assert (dom-by-class head2 "asset_intro")))
       (oset this :word-family
             (cl-loop with pos = ""
                      with fam-set = nil
                      for node in wordfams
+                     when (and (stringp node) (not (s-blank-str? node))) do
+                     (cl-pushnew
+                      (s-trim node)
+                      (alist-get pos fam-set))
+                     when (listp node)
                      if (dom-by-class node "pos") do
                      (setq pos (s-trim (dom-text node)))
                      else do
@@ -182,21 +220,51 @@
       (oset this :dicts
             (cl-loop for entry in dict-entries
                      collect (let ((name (dom-text (dom-by-class entry "dictionary_intro")))
-                                   (head (dom-by-class entry "Head")))
+                                   (head (dom-by-class entry "Head"))
+                                   (senses (dom-by-class entry "^\\(Sense\\)$")))
                                (fanyi-longman-dict :name name
                                                    :hyphenation (dom-text (dom-by-class head "HYPHENATION"))
                                                    :pronunciation (s-trim (dom-texts (dom-by-class head "PronCodes") ""))
                                                    :level (let ((level (dom-by-class head "LEVEL")))
                                                             (cons (s-trim (dom-text level)) (dom-attr level 'title)))
+                                                   :freqs (let ((freqs (dom-by-class head "FREQ")))
+                                                            (seq-map (lambda (freq)
+                                                                       (cons (s-trim (dom-text freq)) (dom-attr freq 'title)))
+                                                                     freqs))
                                                    :academy (let ((ac (dom-by-class head "AC")))
                                                               (cons (dom-text ac) (dom-attr ac 'title)))
                                                    :pos (s-trim (dom-text (dom-by-class head "POS")))
-                                                   :british (or (dom-attr (dom-by-class head "brefile") 'data-src-mp3) "")
-                                                   :american (or (dom-attr (dom-by-class head "amefile") 'data-src-mp3) "")
-                                                   )))))
+                                                   :british (dom-attr (dom-by-class head "brefile") 'data-src-mp3)
+                                                   :american (dom-attr (dom-by-class head "amefile") 'data-src-mp3)
+                                                   :senses (cl-loop for sense in senses
+                                                                    collect (let ((dict-sense (fanyi-longman-dict-sense)))
+                                                                              ;; Signpost, it could be nil.
+                                                                              (when-let ((signpost (dom-by-class sense "SIGNPOST")))
+                                                                                (oset dict-sense :signpost (dom-text signpost)))
+                                                                              ;; Grammar, it could be nil.
+                                                                              (when-let ((grammar (dom-by-class sense "GRAM")))
+                                                                                (oset dict-sense :grammar (s-trim (dom-text grammar))))
+                                                                              ;; Definition.
+                                                                              (oset dict-sense :def
+                                                                                    (seq-map (lambda (node)
+                                                                                               (pcase (type-of node)
+                                                                                                 ('string (s-trim node))
+                                                                                                 ('cons (cond ((dom-by-class node "defRef")
+                                                                                                               (list (dom-text node) 'button (dom-text node)))
+                                                                                                              (t (user-error "Unimplemented. %s" (pp-to-string node)))))
+                                                                                                 (_ (user-error "Unimplemented. %s" (pp-to-string node)))))
+                                                                                             (dom-children (dom-by-class sense "^\\(DEF\\)$"))))
+                                                                              ;; Synonym, it could be nil.
+                                                                              (when-let ((syn (dom-by-class sense "^\\(SYN\\)$")))
+                                                                                (oset dict-sense :syn (s-trim (dom-text syn))))
+                                                                              dict-sense)))))))
     ;; Etymon
     (let ((etymon (dom-by-class (dom-by-class dict "etym") "Sense")))
       (oset this :etymon (dom-texts etymon "")))))
+
+;; (examples :initarg :examples
+;; (footnote-expl :initarg :footnote-expl
+;; (footnote-example :initarg :footnote-example
 
 (cl-defmethod fanyi-render ((this fanyi-longman-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
@@ -224,19 +292,29 @@ before calling this method."
    ;; Dicts.
    (cl-loop for dict in (oref this :dicts)
             do (insert "## " (oref dict :name) "\n\n")
+            ;; job /dʒɒb $ dʒɑːb/ ●●● S1 W1 AWL (noun) 🔊 🔊
             do (insert (oref dict :hyphenation)
                        " "
                        (oref dict :pronunciation)
                        " "
                        (propertize (car (oref dict :level)) 'help-echo (cdr (oref dict :level)))
+                       (s-join " "
+                               (seq-map (pcase-lambda (`(,freq . ,desc))
+                                          (propertize freq
+                                                      'help-echo desc
+                                                      'display (when (fanyi-display-glyphs-p)
+                                                                 (fanyi-longman-svg-tag-make freq 'fanyi-longman-svg-asset-face))))
+                                        (oref dict :freqs)))
                        " "
                        (propertize (car (oref dict :academy))
                                    'help-echo (cdr (oref dict :academy))
                                    'display (when (fanyi-display-glyphs-p)
                                               (fanyi-longman-svg-tag-make (car (oref dict :academy)) 'fanyi-longman-svg-asset-face)))
                        " "
-                       "(" (oref dict :pos) ")")
-            unless (string-empty-p (oref dict :british))
+                       (if (s-present? (oref dict :pos))
+                           (concat "(" (oref dict :pos) ")")
+                         ""))
+            unless (s-blank? (oref dict :british))
             do (progn
                  (insert " ")
                  (insert-button "🔊"
@@ -252,7 +330,39 @@ before calling this method."
                                 'face 'fanyi-male-speaker-face
                                 'help-echo "Play American pronunciation"
                                 'follow-link t))
-            do (insert "\n\n"))
+            do (insert "\n\n")
+            do (cl-loop for sense in (oref dict :senses)
+                        ;; - work [countable] the regular paid work SYN *foo*
+                        ;;   ^             ^              ^         ^
+                        ;;   signpost      grammar        button    synonym
+                        do (insert "- ")
+                        do (when-let ((signpost (oref sense :signpost)))
+                             (insert (propertize signpost
+                                                 'display (when (fanyi-display-glyphs-p)
+                                                            (fanyi-longman-svg-tag-make signpost 'fanyi-longman-svg-signpost-face)))
+                                     " "))
+                        do (when-let ((grammar (oref sense :grammar)))
+                             (insert grammar " "))
+                        do (seq-do (lambda (s)
+                                     (pcase s
+                                       ((pred stringp)
+                                        (insert s " "))
+                                       (`(,text button ,data)
+                                        (insert-button text
+                                                       'action #'fanyi-dwim
+                                                       'button-data data
+                                                       'follow-link t)
+                                        (insert " "))))
+                                   (oref sense :def))
+                        do (when-let ((synonym (oref sense :syn)))
+                             (insert (propertize "SYN"
+                                                 'display (when (fanyi-display-glyphs-p)
+                                                            (fanyi-longman-svg-tag-make "SYN" 'fanyi-longman-svg-asset-face)))
+                                     " "
+                                     "*" synonym "*"))
+                        do (insert "\n")
+                        )
+            )
    ;; Etymon.
    (insert "## Etymon\n\n")
    (if (fanyi-display-glyphs-p)

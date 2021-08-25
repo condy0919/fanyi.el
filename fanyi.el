@@ -142,10 +142,10 @@
             (format " %d/%d" fanyi--tasks-completed (length fanyi-providers)))))
 
 ;; Emacs 28.1 can have multiple eldoc functions and it's called with a callback.
-;; While in Emacs 27, it's call without arguments.
+;; While in Emacs 27, it's called without arguments.
 (defun fanyi-eldoc-function (&rest _)
   "ElDoc for `fanyi-mode'."
-  (get-text-property (point) 'help-echo))
+  (get-char-property (point) 'help-echo))
 
 (defvar fanyi-mode-font-lock-keywords
   `(;; Dictionary name
