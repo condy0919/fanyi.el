@@ -291,7 +291,7 @@ Typically it can be a list of strings or \"riched\" strings."))
                                (when-let ((inflect (dom-by-class head "Inflections")))
                                  (oset dict :inflection (s-trim (dom-texts inflect ""))))
                                ;; Grammar.
-                               (when-let ((gram (dom-by-class head "GRAM")))
+                               (when-let ((gram (dom-by-class head "^\\(GRAM\\)$")))
                                  (oset dict :grammar (s-trim (dom-texts gram ""))))
                                ;; Voice
                                (oset dict :british (dom-attr (dom-by-class head "brefile") 'data-src-mp3))
@@ -303,7 +303,7 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                      (when-let ((signpost (dom-by-class sense "SIGNPOST")))
                                                                        (oset dict-sense :signpost (dom-text signpost)))
                                                                      ;; Grammar.
-                                                                     (when-let ((grammar (dom-by-class sense "GRAM")))
+                                                                     (when-let ((grammar (dom-by-class sense "^\\(GRAM\\)$")))
                                                                        (oset dict-sense :grammar (s-trim (dom-texts grammar ""))))
                                                                      ;; Register label.
                                                                      (when-let ((label (dom-by-class sense "REGISTERLAB")))
@@ -449,16 +449,16 @@ before calling this method."
                                      " "))
                         do (when-let ((grammar (oref sense :grammar)))
                              (insert grammar " "))
+                        do (when-let ((geo (oref sense :geo)))
+                             (insert (propertize geo
+                                                 'font-lock-face 'fanyi-longman-geo-face)
+                                     " "))
                         do (when-let ((label (oref sense :registerlab)))
                              (insert (propertize label
                                                  'font-lock-face 'fanyi-longman-registerlab-face)
                                      " "))
                         do (when-let ((unit (oref sense :lexunit)))
                              (insert "*" unit "*"
-                                     " "))
-                        do (when-let ((geo (oref sense :geo)))
-                             (insert (propertize geo
-                                                 'font-lock-face 'fanyi-longman-geo-face)
                                      " "))
                         do (seq-do (lambda (s)
                                      (pcase s
