@@ -9,7 +9,8 @@
 
 - [`海词`](https://dict.cn/)
 - [`etymonline`](https://www.etymonline.com/)
-- [`American Heritage dictionary`](https://ahdictionary.com/), unusable in China due to high latency
+- [`American Heritage dictionary`](https://ahdictionary.com/), unusable in China due to high latency. **Not fully implemented**
+- [`Longman`](https://www.ldoceonline.com/)
 
 `fanyi.el` has integrations with:
 
@@ -54,12 +55,24 @@ If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim`, try
 (setq read-extended-command-predicate #'command-completion-default-include-p)
 ```
 
+Don't customize `fanyi-providers` via `setq`, use the custom system instead.
+
+``` emacs-lisp
+;; If you want English-English dictionary only.
+(use-package fanyi
+  :ensure t
+  :custom
+  (fanyi-providers '(fanyi-etymon-provider
+                     fanyi-longman-provider)))
+```
+
 # Screenshots
 
 ![海词](https://user-images.githubusercontent.com/4024656/128582690-2af2bb4a-46aa-4241-bdc0-6a5bb5e2db38.png)
 ![分布](https://user-images.githubusercontent.com/4024656/128582703-3e62cd17-a778-4982-9872-98e8697e333e.png)
 ![Etymon](https://user-images.githubusercontent.com/4024656/128583142-dfd26d67-45c5-482a-9268-d7482dbe65f3.png)
 ![ah](https://user-images.githubusercontent.com/4024656/129494115-02b1e344-4eb3-43ac-8ccc-08d75a3aeecd.png)
+![Longman](https://user-images.githubusercontent.com/4024656/130879233-7abdca0c-ddf1-4b21-91d7-ebadc2cd070f.png)
 
 ## Similar projects
 
