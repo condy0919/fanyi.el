@@ -75,19 +75,23 @@
   "Face used for part of speech."
   :group 'fanyi)
 
+(defun fanyi-set-providers (sym providers)
+  "Set SYM with evaluated PROVIDERS."
+  (set-default-toplevel-value
+   sym
+   (cl-loop for p in providers
+            do (let ((name (symbol-name p)))
+                 (cl-assert (s-suffix? "-provider" name))
+                 (require (intern (substring name 0 -9))))
+            collect (symbol-value p))))
+
 (defcustom fanyi-providers '(fanyi-haici-provider
                              fanyi-etymon-provider
                              fanyi-longman-provider)
   "The providers used by `fanyi-dwim'."
   :type '(repeat fanyi-base-service)
-  :initialize #'(lambda (var providers)
-                  (set-default-toplevel-value
-                   var
-                   (cl-loop for p in (eval providers)
-                            do (let ((name (symbol-name p)))
-                                 (cl-assert (s-suffix? "-provider" name))
-                                 (require (intern (substring name 0 -9))))
-                            collect (symbol-value p))))
+  :initialize #'custom-initialize-set
+  :set #'fanyi-set-providers
   :group 'fanyi)
 
 ;; Silence compile warnings.
