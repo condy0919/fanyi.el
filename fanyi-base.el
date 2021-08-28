@@ -35,6 +35,7 @@
 
 (defcustom fanyi-sound-player
   (or (executable-find "mpv")
+      (executable-find "mplayer")
       (executable-find "mpg123"))
   "Program to play sound."
   :type 'string
@@ -59,6 +60,13 @@
   "Can we use glyphs instead of plain text?"
   (and fanyi-use-glyphs (display-images-p)))
 
+(defun fanyi--sound-player-options (player)
+  "Get the required options for PLAYER in fanyi usage situation."
+  (pcase player
+    ((pred (string-match-p "mplayer"))
+     '("-cache" "1024"))
+    (_ nil)))
+
 (defun fanyi-play-sound (url)
   "Download URL then play it via external program.
 See `fanyi-sound-player'."
@@ -70,6 +78,12 @@ See `fanyi-sound-player'."
   ;; then play via `fanyi-sound-player'.
   ;;
   ;; "-" stands for standard input.
+  ;;
+  ;; mplayer needs an additional option, otherwise will get an error:
+  ;;
+  ;; ```text
+  ;; Cannot seek backward in linear streams!
+  ;; ```
   (url-retrieve url (lambda (status)
                       (cl-block nil
                         ;; Something went wrong, but we dont' care.
@@ -79,7 +93,7 @@ See `fanyi-sound-player'."
                         (goto-char (1+ url-http-end-of-headers))
                         (let ((proc (make-process :name "fanyi-player-process"
                                                   :buffer nil
-                                                  :command `(,fanyi-sound-player "-")
+                                                  :command `(,fanyi-sound-player "-" ,@(fanyi--sound-player-options fanyi-sound-player))
                                                   :noquery t
                                                   :connection-type 'pipe)))
                           (process-send-region proc (point) (point-max))
