@@ -27,11 +27,14 @@
 
 ;;; Code:
 
+(require 'url)
 (require 'eieio)
+
+;; Silence compile warning.
+(defvar url-http-end-of-headers)
 
 (defcustom fanyi-sound-player
   (or (executable-find "mpv")
-      (executable-find "mplayer")
       (executable-find "mpg123"))
   "Program to play sound."
   :type 'string
@@ -57,11 +60,34 @@
   (and fanyi-use-glyphs (display-images-p)))
 
 (defun fanyi-play-sound (url)
-  "Play URL via external program.
+  "Download URL then play it via external program.
 See `fanyi-sound-player'."
-  (if (not fanyi-sound-player)
-      (user-error "Set `fanyi-sound-player' first")
-    (start-process fanyi-sound-player nil fanyi-sound-player url)))
+  (unless fanyi-sound-player
+    (user-error "Set `fanyi-sound-player' first"))
+  (when (string-empty-p url)
+    (user-error "Can't play it"))
+  ;; Some programs, e.g. mpg123, can't play https files. So we download them
+  ;; then play via `fanyi-sound-player'.
+  ;;
+  ;; "-" stands for standard input.
+  (url-retrieve url (lambda (status)
+                      (cl-block nil
+                        ;; Something went wrong, but we dont' care.
+                        (when (or (not status) (plist-member status :error))
+                          (cl-return))
+                        ;; Move point to the real http content. Plus 1 for '\n'.
+                        (goto-char (1+ url-http-end-of-headers))
+                        (let ((proc (make-process :name "fanyi-player-process"
+                                                  :buffer nil
+                                                  :command `(,fanyi-sound-player "-")
+                                                  :noquery t
+                                                  :connection-type 'pipe)))
+                          (process-send-region proc (point) (point-max))
+                          (when (process-live-p proc)
+                            (process-send-eof proc)))))
+                nil
+                t
+                t))
 
 (defconst fanyi-buffer-name "*fanyi*"
   "The default name of translation buffer.")
