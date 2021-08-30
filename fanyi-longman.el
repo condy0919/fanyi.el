@@ -543,7 +543,8 @@ before calling this method."
 (defconst fanyi-longman-provider
   (fanyi-longman-service :word "dummy"
                          :url "https://www.ldoceonline.com/dictionary/%s"
-                         :sound-url "unused")
+                         :sound-url "unused"
+                         :api-type 'xml)
   "Longman dictionary service instance.")
 
 (provide 'fanyi-longman)

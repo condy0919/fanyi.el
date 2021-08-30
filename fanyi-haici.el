@@ -266,7 +266,8 @@ before calling this method."
 (defconst fanyi-haici-provider
   (fanyi-haici-service :word "dummy"
                        :url "https://dict.cn/%s"
-                       :sound-url "https://audio.dict.cn/%s")
+                       :sound-url "https://audio.dict.cn/%s"
+                       :api-type 'xml)
   "Haici dictionary service instance.")
 
 (provide 'fanyi-haici)

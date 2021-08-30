@@ -114,15 +114,18 @@
                             ;; Redirection is inhibited.
                             (when (plist-member status :redirect)
                               (user-error "Redirection is inhibited.\n\n%s" (pp-to-string (plist-get status :redirect))))
-                            ;; Move point to the real http content.
-                            (goto-char url-http-end-of-headers)
-                            ;; Parse the html into a dom tree.
-                            (let ((dom (libxml-parse-html-region (point) (point-max) url)))
+                            ;; Move point to the real http content. Plus 1 for '\n'.
+                            (goto-char (1+ url-http-end-of-headers))
+                            ;; Normalize data.
+                            (let ((result (pcase (oref instance :api-type)
+                                            ('xml (libxml-parse-html-region (point) (point-max) url))
+                                            ('json (json-read)))))
                               (catch 'not-found
                                 ;; Extract information.
-                                (fanyi-parse-from instance dom)
+                                (fanyi-parse-from instance result)
                                 ;; Since `fanyi-render' manipulates `fanyi-buffer-name',
-                                ;; a mutex is required in multi-threaded situation.
+                                ;; a mutex is required in multi-threaded
+                                ;; situation.
                                 (with-mutex fanyi-buffer-mtx
                                   (fanyi-render instance))
                                 (cl-incf fanyi--tasks-completed))))

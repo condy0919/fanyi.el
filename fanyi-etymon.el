@@ -113,7 +113,8 @@ while the quote style is from mailing list."
 (defconst fanyi-etymon-provider
   (fanyi-etymon-service :word "dummy"
                         :url "https://www.etymonline.com/word/%s"
-                        :sound-url "unused")
+                        :sound-url "unused"
+                        :api-type 'xml)
   "Etymonline dictionary service instance.")
 
 (provide 'fanyi-etymon)

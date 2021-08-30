@@ -124,12 +124,16 @@ See `fanyi-sound-player'."
    (sound-url :initarg :sound-url
               :type string
               :protection :protected
-              :documentation "Dictionary sound url."))
+              :documentation "Dictionary sound url.")
+   (api-type :initarg :api-type
+             :type symbol
+             :protection :protected
+             :documentation "API type. Currently it chould be 'xml or 'json."))
   "The base class of dictionary service."
   :abstract t)
 
 ;; Silence unknown slots warning.
-(eieio-declare-slots :word :url :sound-url)
+(eieio-declare-slots :word :url :sound-url :api-type)
 
 (cl-defmethod fanyi-parse-from ((this fanyi-base-service) _dom)
   "Implement your own `fanyi-parse-from' for THIS class."
