@@ -94,6 +94,9 @@
   :set #'fanyi-set-providers
   :group 'fanyi)
 
+(defvar fanyi-history nil
+  "History list for `fanyi-dwim'.")
+
 ;; Silence compile warnings.
 (defvar url-http-end-of-headers)
 
@@ -212,7 +215,7 @@
                       (prompt (if (stringp default)
                                   (format "Search Word (default \"%s\"): " default)
                                 "Search Word: ")))
-                 (list (read-string prompt nil nil default))))
+                 (list (read-string prompt nil 'fanyi-history default))))
   ;; libxml2 is required.
   (unless (fboundp 'libxml-parse-html-region)
     (error "This function requires Emacs to be compiled with libxml2"))
