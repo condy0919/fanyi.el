@@ -72,7 +72,7 @@ Don't customize `fanyi-providers` via `setq`, use the custom system instead.
 ![分布](https://user-images.githubusercontent.com/4024656/128582703-3e62cd17-a778-4982-9872-98e8697e333e.png)
 ![Etymon](https://user-images.githubusercontent.com/4024656/128583142-dfd26d67-45c5-482a-9268-d7482dbe65f3.png)
 ![ah](https://user-images.githubusercontent.com/4024656/129494115-02b1e344-4eb3-43ac-8ccc-08d75a3aeecd.png)
-![Longman](https://user-images.githubusercontent.com/4024656/130879233-7abdca0c-ddf1-4b21-91d7-ebadc2cd070f.png)
+![Longman](https://user-images.githubusercontent.com/4024656/131615163-7b52a0eb-77a4-481f-b093-8f9c7fa91216.png)
 
 ## Similar projects
 
