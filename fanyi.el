@@ -120,9 +120,13 @@
                             ;; Move point to the real http content. Plus 1 for '\n'.
                             (goto-char (1+ url-http-end-of-headers))
                             ;; Normalize data.
+                            ;;
+                            ;; `json-read' failed to parse in undecoded buffer.
+                            ;;
+                            ;; https://debbugs.gnu.org/cgi/bugreport.cgi?bug=50391
                             (let ((result (pcase (oref instance :api-type)
                                             ('xml (libxml-parse-html-region (point) (point-max) url))
-                                            ('json (json-read)))))
+                                            ('json (json-parse-buffer)))))
                               (catch 'not-found
                                 ;; Extract information.
                                 (fanyi-parse-from instance result)
@@ -219,6 +223,9 @@
   ;; libxml2 is required.
   (unless (fboundp 'libxml-parse-html-region)
     (error "This function requires Emacs to be compiled with libxml2"))
+  ;; libjson is required.
+  (unless (fboundp 'json-parse-buffer)
+    (error "This function requires Emacs to be compiled with libjson"))
   ;; Save current query word.
   (setq fanyi--current-word word)
   ;; Cancel the still pending threads.
