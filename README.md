@@ -11,6 +11,7 @@
 - [`etymonline`](https://www.etymonline.com/)
 - [`American Heritage dictionary`](https://ahdictionary.com/), unusable in China due to high latency. **Not fully implemented**
 - [`Longman`](https://www.ldoceonline.com/)
+- [`有道同义词`](https://dict.youdao.com/suggest?q=accumulate&doctype=json), **Unofficial** API
 
 `fanyi.el` has integrations with:
 
@@ -64,6 +65,20 @@ Don't customize `fanyi-providers` via `setq`, use the custom system instead.
   :custom
   (fanyi-providers '(fanyi-etymon-provider
                      fanyi-longman-provider)))
+
+
+;; Default, comment out the provider you don't need.
+(use-package fanyi
+  :ensure t
+  :custom
+  (fanyi-providers '(;; 海词
+                     fanyi-haici-provider
+                     ;; Etymonline
+                     fanyi-etymon-provider
+                     ;; Longman
+                     fanyi-longman-provider
+                     ;; 有道同义词词典
+                     fanyi-youdao-thesaurus-provider)))
 ```
 
 # Screenshots
