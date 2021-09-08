@@ -30,8 +30,6 @@
 (require 'fanyi-base)
 
 (require 's)
-(require 'json)
-(require 'seq)
 (require 'cl-lib)
 
 (defcustom fanyi-youdao-thesaurus-max-count 10
@@ -113,7 +111,19 @@ before calling this method."
             for ent = (oref entry :entry)
             for explain = (oref entry :explain)
             do (insert "- " ent "\n")
-            do (insert (s-repeat fanyi-youdao-thesaurus-indent " ") explain)
+            do (insert (s-repeat fanyi-youdao-thesaurus-indent " "))
+            ;; Prettify POS, order matters.
+            do (insert (s-replace-all '(("pron." . "(pron.)")
+                                        ("prep." . "(prep.)")
+                                        ("conj." . "(conj.)")
+                                        ("abbr." . "(abbr.)")
+                                        ("adj."  . "(adj.)")
+                                        ("adv."  . "(adv.)")
+                                        ("vt."   . "(vt.)")
+                                        ("vi."   . "(vi.)")
+                                        ("n."    . "(n.)")
+                                        ("v."    . "(v.)"))
+                                      explain))
             do (insert "\n"))
    (insert "\n")))
 

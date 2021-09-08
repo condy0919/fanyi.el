@@ -167,7 +167,7 @@
     ;; List
     ("^-" . 'fanyi-list-face)
     ;; Part of speech
-    ("(\\([a-zA-Z\.]+?\\))" . 'fanyi-pos-face)
+    ("(\\([a-z\.]+?\\))" . 'fanyi-pos-face)
     ;; Italic
     ("/\\([^/]+?\\)/" . 'italic)
     ;; Bold
