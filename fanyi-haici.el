@@ -63,6 +63,7 @@ It could be either British pronunciation or American pronunciation.")
                 :type list
                 :documentation "List of (pos . paraphrase).")
    (distribution :initarg :distribution
+                 :initform nil
                  :type list
                  :documentation "List of (percent . sense).")
    (related :initarg :related
