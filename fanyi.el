@@ -256,6 +256,16 @@
               instances))
     (pop-to-buffer buf)))
 
+;;;###autoload
+(defun fanyi-dwim2 ()
+  "Like `fanyi-dwim', but no prompt if the region is active or `thing-at-point' return non-nil."
+  (interactive)
+  (if-let ((word (if (use-region-p)
+                     (buffer-substring-no-properties (region-beginning) (region-end))
+                   (thing-at-point 'word t))))
+      (fanyi-dwim word)
+    (call-interactively #'fanyi-dwim)))
+
 ;; Internals
 
 (defun fanyi-tab ()
