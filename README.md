@@ -47,9 +47,9 @@ mv Minion.ttf ~/Library/Fonts/
 
 ## Usage
 
-`fanyi-dwim`, that's all!
+Call `fanyi-dwim`, or `fanyi-dwim2` if you can confirm the word at point is wanted.
 
-If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim`, try
+If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim` and `fanyi-dwim2`, try
 
 ``` emacs-lisp
 ;; Emacs 28 only
