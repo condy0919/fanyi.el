@@ -258,7 +258,7 @@
 
 ;;;###autoload
 (defun fanyi-dwim2 ()
-  "Like `fanyi-dwim', but no prompt if the region is active or `thing-at-point' return non-nil."
+  "A more dwim version of `fanyi-dwim', no prompt if the region is active or `thing-at-point' return non-nil."
   (interactive)
   (if-let ((word (if (use-region-p)
                      (buffer-substring-no-properties (region-beginning) (region-end))
