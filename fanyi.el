@@ -159,9 +159,11 @@
 
 (defvar fanyi-mode-font-lock-keywords
   `(;; Dictionary name
-    ("^# .*" . 'fanyi-dict-face)
+    ("^# .*" 0 (list 'face 'fanyi-dict-face
+                     'keymap fanyi-mode-cycle-map))
     ;; Sub headline
-    ("^##" . 'fanyi-sub-headline-face)
+    ("^## .*" 0 (list 'face 'fanyi-sub-headline-face
+                      'keymap fanyi-mode-cycle-map))
     ;; Quotes
     ("^> .*" . 'fanyi-quote-face)
     ;; List
@@ -180,12 +182,19 @@
 
 (defvar fanyi-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [tab] #'fanyi-tab)
-    (define-key map [backtab] #'fanyi-backtab)
+    (define-key map [tab] #'forward-button)
+    (define-key map [backtab] #'backward-button)
     (define-key map "q" #'quit-window)
     (define-key map "s" #'fanyi-dwim)
     map)
   "Keymap for `fanyi-mode'.")
+
+(defvar fanyi-mode-cycle-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [tab] #'outline-cycle)
+    (define-key map [backtab] #'outline-cycle-buffer)
+    map)
+  "Keymap used by headlines of `fanyi-mode'.")
 
 (define-derived-mode fanyi-mode special-mode "Fanyi"
   "Major mode for viewing multi translators result.
@@ -193,6 +202,9 @@
   :interactive nil
   :group 'fanyi
 
+  ;; Set these variables to nil, it's handled by ourselves.
+  (setq-local outline-minor-mode-cycle nil)
+  (setq-local outline-minor-mode-highlight nil)
   ;; Make it foldable.
   (setq-local outline-regexp "^#+")
   (setq-local outline-minor-mode t)
@@ -265,26 +277,6 @@
                    (thing-at-point 'word t))))
       (fanyi-dwim word)
     (call-interactively #'fanyi-dwim)))
-
-;; Internals
-
-(defun fanyi-tab ()
-  "Context-aware tab in `fanyi-mode'."
-  (interactive nil fanyi-mode)
-  (unless (derived-mode-p 'fanyi-mode)
-    (error "Not in fanyi-mode"))
-  (if (outline-on-heading-p)
-      (outline-cycle)
-    (forward-button 1 t t t)))
-
-(defun fanyi-backtab ()
-  "Context-aware backtab in `fanyi-mode'."
-  (interactive nil fanyi-mode)
-  (unless (derived-mode-p 'fanyi-mode)
-    (error "Not in fanyi-mode"))
-  (if (outline-on-heading-p)
-      (outline-cycle-buffer)
-    (backward-button 1 t t t)))
 
 (provide 'fanyi)
 ;;; fanyi.el ends here
