@@ -203,7 +203,8 @@ before calling this method."
                                 'action #'fanyi-play-sound
                                 'button-data (format (oref this :sound-url) female)
                                 'face 'fanyi-female-speaker-face
-                                'follow-link t)
+                                'follow-link t
+                                'help-echo "女声版发音")
               do (insert " ")
               do (insert-button "🔊"
                                 'display (when (fanyi-display-glyphs-p)
@@ -215,7 +216,8 @@ before calling this method."
                                 'action #'fanyi-play-sound
                                 'button-data (format (oref this :sound-url) male)
                                 'face 'fanyi-male-speaker-face
-                                'follow-link t))
+                                'follow-link t
+                                'help-echo "男声版发音"))
      (insert "\n\n"))
    ;; Paraphrases.
    ;; - n. 荣誉；荣幸；尊敬；信用；正直；贞洁
