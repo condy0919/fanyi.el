@@ -45,6 +45,11 @@
   :group 'tools
   :link '(url-link "https://github.com/condy0919/fanyi.el"))
 
+(defcustom fanyi-verbose t
+  "Whether to make `fanyi-dwim' verbose."
+  :type 'boolean
+  :group 'fanyi)
+
 (defface fanyi-word-face
   '((t :height 1.75 :weight bold :foreground "dark cyan"))
   "Face used for user requested word."
@@ -85,6 +90,13 @@
                  (require (intern (substring name 0 -9))))
             collect (symbol-value p))))
 
+(defun fanyi-user-error (fmt &rest args)
+  "Signal a user errror by passing FMT and ARGS to `user-error'.
+If `fanyi-verbose' is nil, message won't be displayed."
+  (if fanyi-verbose
+      (user-error fmt args)
+    (user-error "")))
+
 (defcustom fanyi-providers '(fanyi-haici-provider
                              fanyi-etymon-provider
                              fanyi-longman-provider
@@ -114,10 +126,10 @@
         (url-retrieve url (lambda (status)
                             ;; Something went wrong.
                             (when (or (not status) (plist-member status :error))
-                              (user-error "Something went wrong.\n\n%s" (pp-to-string (plist-get status :error))))
-                            ;; Redirection is inhibited.
+                              (fanyi-user-error "Something went wrong.\n\n%s" (pp-to-string (plist-get status :error))))
+                            ;; Redirection is inhibited. In most cases, the word is misspelled by users.
                             (when (plist-member status :redirect)
-                              (user-error "Redirection is inhibited.\n\n%s" (pp-to-string (plist-get status :redirect))))
+                              (fanyi-user-error "Did you misspell the word?\n\n%s" (pp-to-string (plist-get status :redirect))))
                             ;; Move point to the real http content. Plus 1 for '\n'.
                             (goto-char (1+ url-http-end-of-headers))
                             ;; Normalize data.
