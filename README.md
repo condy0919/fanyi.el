@@ -8,10 +8,10 @@
 `fanyi.el` is a simple yet powerful multi-dictionaries interface for Emacs, includes:
 
 - [`海词`](https://dict.cn/)
-- [`etymonline`](https://www.etymonline.com/)
-- [`American Heritage dictionary`](https://ahdictionary.com/), unusable in China due to high latency. **Not fully implemented**
-- [`Longman`](https://www.ldoceonline.com/)
 - [`有道同义词`](https://dict.youdao.com/suggest?q=accumulate&doctype=json), **Unofficial** API
+- [`etymonline`](https://www.etymonline.com/)
+- [`Longman`](https://www.ldoceonline.com/)
+- [`American Heritage dictionary`](https://ahdictionary.com/), unusable in China due to high latency. **Not fully implemented**
 
 `fanyi.el` has integrations with:
 
@@ -67,18 +67,18 @@ Don't customize `fanyi-providers` via `setq`, use the custom system instead.
                      fanyi-longman-provider)))
 
 
-;; Default, comment out the provider you don't need.
+;; Default, comment out the providers you don't need.
 (use-package fanyi
   :ensure t
   :custom
   (fanyi-providers '(;; 海词
                      fanyi-haici-provider
+                     ;; 有道同义词词典
+                     fanyi-youdao-thesaurus-provider
                      ;; Etymonline
                      fanyi-etymon-provider
                      ;; Longman
-                     fanyi-longman-provider
-                     ;; 有道同义词词典
-                     fanyi-youdao-thesaurus-provider)))
+                     fanyi-longman-provider)))
 ```
 
 # Screenshots
