@@ -42,6 +42,11 @@
   "Face used for star of word."
   :group 'fanyi)
 
+(defcustom fanyi-haici-chart-inhibit-same-window nil
+  "Non-nil means the distribution chart will be poped in another window."
+  :type 'boolean
+  :group 'fanyi)
+
 (defclass fanyi-haici-service (fanyi-base-service)
   ((syllable :initarg :syllable
              :initform "-"
@@ -231,11 +236,35 @@ before calling this method."
    (when-let ((dist (oref this :distribution)))
      (insert-button "Click to view the distribution chart"
                     'action (lambda (dist)
-                              (chart-bar-quickie
-                               'vertical
-                               fanyi-haici-distribution-chart-title
-                               (seq-map #'cadr dist) "Senses"
-                               (seq-map #'car dist) "Percent"))
+                              ;; `switch-to-buffer' is used in `chart-bar-quickie' which means a new chart buffer will
+                              ;; always be poped in the same window.
+                              ;;
+                              ;; Typing `q' (`quit-window') in chart buffer will
+                              ;;
+                              ;; 1. bury the *fanyi-haici-distribution-chart* buffer.
+                              ;; 2. reset the `restore-quit' window parameter of current window to nil.
+                              ;;
+                              ;; When the second `q' is typed in *fanyi* buffer, `quit-window' will
+                              ;;
+                              ;; 1. bury the *fanyi* buffer.
+                              ;; 2. `switch-to-prev-buffer'
+                              ;;
+                              ;; It can't restore the window configuration because `restore-quit' is nil.
+                              ;;
+                              ;; Consult (C-x C-e)
+                              ;;
+                              ;; (info "(elisp)Quitting Windows")
+                              ;;
+                              ;; for more information.
+                              (let ((switch-to-buffer-obey-display-actions fanyi-haici-chart-inhibit-same-window)
+                                    (display-buffer-alist `((,(concat "\\*" fanyi-haici-distribution-chart-title "\\*")
+                                                             (display-buffer-pop-up-window)
+                                                             (inhibit-same-window . t)))))
+                                (chart-bar-quickie
+                                 'vertical
+                                 fanyi-haici-distribution-chart-title
+                                 (seq-map #'cadr dist) "Senses"
+                                 (seq-map #'car dist) "Percent")))
                     'button-data dist
                     'follow-link t)
      (insert "\n\n"))
