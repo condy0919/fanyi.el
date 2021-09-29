@@ -282,7 +282,8 @@ If `fanyi-verbose' is nil, message won't be displayed."
 
 ;;;###autoload
 (defun fanyi-dwim2 ()
-  "A more dwim version of `fanyi-dwim', no prompt if the region is active or `thing-at-point' return non-nil."
+  "A more dwim version of `fanyi-dwim'. No prompt if the region is
+active or `thing-at-point' return non-nil."
   (interactive)
   (if-let ((word (if (use-region-p)
                      (buffer-substring-no-properties (region-beginning) (region-end))
