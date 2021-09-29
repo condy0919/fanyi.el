@@ -45,7 +45,7 @@
   :group 'tools
   :link '(url-link "https://github.com/condy0919/fanyi.el"))
 
-(defcustom fanyi-verbose t
+(defcustom fanyi-verbose nil
   "Whether to make `fanyi-dwim' verbose."
   :type 'boolean
   :group 'fanyi)
