@@ -41,6 +41,15 @@
   :type 'string
   :group 'fanyi)
 
+(defcustom fanyi-sound-player-support-https nil
+  "Does `fanyi-sound-player' support https?
+
+If non-nil, url will be passed to `fanyi-sound-player' directly.
+Otherwise, `url-retrieve' first, then the data will be sent to
+`fanyi-sound-player'."
+  :type 'boolean
+  :group 'fanyi)
+
 (defcustom fanyi-use-glyphs t
   "Non-nil means use glyphs when available."
   :type 'boolean
@@ -68,40 +77,40 @@
     (_ nil)))
 
 (defun fanyi-play-sound (url)
-  "Download URL then play it via external program.
+  "Play URL via external program.
 See `fanyi-sound-player'."
   (unless fanyi-sound-player
     (user-error "Set `fanyi-sound-player' first"))
   (when (string-empty-p url)
     (user-error "Can't play it"))
-  ;; Some programs, e.g. mpg123, can't play https files. So we download them
-  ;; then play via `fanyi-sound-player'.
-  ;;
-  ;; "-" stands for standard input.
-  ;;
-  ;; mplayer needs an additional option, otherwise will get an error:
-  ;;
-  ;; ```text
-  ;; Cannot seek backward in linear streams!
-  ;; ```
-  (url-retrieve url (lambda (status)
-                      (cl-block nil
-                        ;; Something went wrong, but we dont' care.
-                        (when (or (not status) (plist-member status :error))
-                          (cl-return))
-                        ;; Move point to the real http content. Plus 1 for '\n'.
-                        (goto-char (1+ url-http-end-of-headers))
-                        (let ((proc (make-process :name "fanyi-player-process"
-                                                  :buffer nil
-                                                  :command `(,fanyi-sound-player "-" ,@(fanyi--sound-player-options fanyi-sound-player))
-                                                  :noquery t
-                                                  :connection-type 'pipe)))
-                          (process-send-region proc (point) (point-max))
-                          (when (process-live-p proc)
-                            (process-send-eof proc)))))
-                nil
-                t
-                t))
+  (if fanyi-sound-player-support-https
+      (start-process fanyi-sound-player nil fanyi-sound-player url)
+    ;; Some programs, e.g. mpg123, can't play https files. So we download then
+    ;; play them via `fanyi-sound-player'.
+    ;;
+    ;; "-" stands for standard input, which is an UNIX convention.
+    ;;
+    ;; mplayer needs an additional option, or exits with an error:
+    ;;
+    ;;     Cannot seek backward in linear streams!
+    (url-retrieve url (lambda (status)
+                        (cl-block nil
+                          ;; Something went wrong, but we don't care.
+                          (when (or (not status) (plist-member status :error))
+                            (cl-return))
+                          ;; Move point to the real http content. Plus 1 for '\n'.
+                          (goto-char (1+ url-http-end-of-headers))
+                          (let ((proc (make-process :name "fanyi-player-process"
+                                                    :buffer nil
+                                                    :command `(,fanyi-sound-player "-" ,@(fanyi--sound-player-options fanyi-sound-player))
+                                                    :noquery t
+                                                    :connection-type 'pipe)))
+                            (process-send-region proc (point) (point-max))
+                            (when (process-live-p proc)
+                              (process-send-eof proc)))))
+                  nil
+                  t
+                  t)))
 
 (defconst fanyi-buffer-name "*fanyi*"
   "The default name of translation buffer.")
