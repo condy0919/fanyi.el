@@ -43,7 +43,7 @@
   :group 'fanyi)
 
 (defcustom fanyi-haici-chart-inhibit-same-window nil
-  "Non-nil means the distribution chart will be poped in another window."
+  "Non-nil means the distribution chart will be popped in another window."
   :type 'boolean
   :group 'fanyi)
 
@@ -119,16 +119,16 @@ A 'not-found exception will be thrown if there is no result."
   ;; No brief paraphrase is found, return early.
   (unless (dom-by-class dom "dict-basic-ul")
     (throw 'not-found nil))
-  ;; syllable, could be nil.
+  ;; Syllable, could be nil.
   (when-let* ((str (dom-attr (dom-by-class dom "keyword") 'tip))
               (matches (s-match "\\([a-zA-Z·]+\\)" str)))
     (oset this :syllable (nth 1 matches)))
-  ;; star and description, could be nil.
+  ;; Star and description, could be nil.
   (when-let* ((str (dom-attr (dom-by-class dom "level-title") 'level))
               (matches (s-match "\\([12345]\\)" str)))
     (oset this :star (string-to-number (nth 1 matches)))
     (oset this :star-desc str))
-  ;; phonetics, a list of (pronunciation, female sound url, male sound url)
+  ;; Phonetics, a list of (pronunciation, female sound url, male sound url)
   ;;
   ;; British: female, male
   ;; American: female, male
@@ -139,30 +139,30 @@ A 'not-found exception will be thrown if there is no result."
                    ;; American -> 3
                    when (or (= idx 1) (= idx 3))
                    collect (list
-                            ;; pronunciation
+                            ;; Pronunciation
                             (dom-text
                              (dom-search p
                                          (lambda (x)
                                            (string= (dom-attr x 'lang) "EN-US"))))
-                            ;; female sound url.
+                            ;; Female sound url
                             (dom-attr (dom-by-class p "^\\(sound fsound\\)$") 'naudio)
-                            ;; male sound url
+                            ;; Male sound url
                             (dom-attr (dom-by-class p "^\\(sound\\)$") 'naudio)))))
-  ;; brief paraphrases, list of (pos, paraphrase)
+  ;; Brief paraphrases, list of (pos, paraphrase)
   (let ((paraphrases (butlast (dom-by-tag (dom-by-class dom "dict-basic-ul") 'li))))
     (oset this :paraphrases
           (cl-loop for p in paraphrases
                    for pos = (dom-text (nth 3 p))
                    for para = (dom-text (nth 5 p))
                    collect (list pos para))))
-  ;; distribution of senses, could be nil
+  ;; Distribution of senses, could be nil
   (when-let* ((chart-basic (dom-attr (dom-by-id dom "dict-chart-basic") 'data))
               (json (json-read-from-string (url-unhex-string chart-basic))))
     (oset this :distribution
-          ;; transform (\1 (percent . 55) (sense . "abc"))
+          ;; Transform (\1 (percent . 55) (sense . "abc")) into (55 "abc")
           (cl-loop for j in json
                    collect (seq-map #'cdr (seq-drop j 1)))))
-  ;; the related words, could be nil.
+  ;; The related words, could be nil.
   (let ((shapes (dom-children (dom-by-class dom "shape"))))
     (oset this :related
           (seq-partition (cl-loop for i in shapes

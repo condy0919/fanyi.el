@@ -347,14 +347,14 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                      (let ((footnote (dom-by-class sense "F2NBox")))
                                                                        (oset dict-sense :footnote-expl
                                                                              (cl-loop for child in (dom-children (dom-by-class footnote "EXPL"))
-                                                                                      collect (pcase (type-of child)
-                                                                                                ('string child)
-                                                                                                ('cons (list (dom-text child) 'face 'bold)))))
+                                                                                      collect (cl-etypecase child
+                                                                                                (string child)
+                                                                                                (list (list (dom-text child) 'face 'bold)))))
                                                                        (oset dict-sense :footnote-example
                                                                              (cl-loop for child in (dom-children (dom-by-class footnote "EXAMPLE"))
-                                                                                      collect (pcase (type-of child)
-                                                                                                ('string child)
-                                                                                                ('cons (list (dom-text child) 'face 'bold))))))
+                                                                                      collect (cl-etypecase child
+                                                                                                (string child)
+                                                                                                (list (list (dom-text child) 'face 'bold))))))
                                                                      dict-sense)))
                                dict))))
     ;; Etymon
@@ -412,8 +412,7 @@ before calling this method."
                                      'display (when (fanyi-display-glyphs-p)
                                                 (fanyi-longman-svg-tag-make (car ac) 'fanyi-longman-svg-asset-face)))))
             do (when-let ((pos (oref dict :pos)))
-                 (insert " "
-                         "(" pos ")"))
+                 (insert " (" pos ")"))
             do (when-let ((inflect (oref dict :inflection)))
                  (insert " " inflect))
             do (when-let ((gram (oref dict :grammar)))
@@ -490,28 +489,30 @@ before calling this method."
                         do (cl-loop for example in (oref sense :examples)
                                     for mp3 = (car example)
                                     for expl = (cdr example)
-                                    do (insert (s-repeat fanyi-longman-example-indent " "))
                                     do (insert-button (if mp3 "🔊" "🔇")
                                                       'action #'fanyi-play-sound
                                                       'button-data (or mp3 "")
                                                       'face 'fanyi-longman-example-face
+                                                      'line-prefix (s-repeat fanyi-longman-example-indent " ")
                                                       'help-echo "Play Example"
                                                       'follow-link t)
                                     do (insert " "
-                                               (propertize expl 'font-lock-face 'fanyi-longman-example-face)
+                                               (propertize expl
+                                                           'font-lock-face 'fanyi-longman-example-face
+                                                           'wrap-prefix (s-repeat fanyi-longman-example-indent " "))
                                                "\n"))
                         ;; Footnote.
                         do (when-let ((expl (oref sense :footnote-expl)))
-                             (insert "\n")
-                             (insert (s-repeat fanyi-longman-example-indent " ")
-                                     "> ")
-                             (cl-loop for s in expl
-                                      do (pcase s
-                                           (`(,s face bold)
-                                            (insert "*" s "*"))
-                                           (_
-                                            (insert s))))
-                             (insert "\n"))
+                             (insert (propertize "> "
+                                                 'line-prefix (s-repeat fanyi-longman-example-indent " "))
+                                     (propertize (cl-loop for e in expl
+                                                          concat (pcase e
+                                                                   (`(,s face bold)
+                                                                    (concat "*" s "*"))
+                                                                   (_
+                                                                    e)))
+                                                 'wrap-prefix (s-repeat fanyi-longman-example-indent " "))
+                                     "\n"))
                         do (when-let ((ex (oref sense :footnote-example)))
                              (insert (s-repeat (* 2 fanyi-longman-example-indent) " "))
                              (insert (propertize (s-join ""
