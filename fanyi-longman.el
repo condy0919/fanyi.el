@@ -209,7 +209,7 @@ Typically it can be a list of strings or \"riched\" strings."))
 (eieio-declare-slots :signpost :grammar :registerlab :lexunit :geo :def :crossref :syn :examples :footnote-expl :footnote-example)
 
 ;; Silence compile warning.
-(autoload 'fanyi-dwim "fanyi")
+(declare-function fanyi-dwim "fanyi")
 
 ;; e.g.
 ;;
@@ -277,7 +277,7 @@ Typically it can be a list of strings or \"riched\" strings."))
                                ;; Level.
                                (when-let ((level (dom-by-class head "LEVEL")))
                                  (oset dict :level (cons (s-trim (dom-text level)) (dom-attr level 'title))))
-                               ;; Frequence.
+                               ;; Frequency.
                                (when-let ((freqs (dom-by-class head "FREQ")))
                                  (oset dict :freqs (cl-loop for f in freqs
                                                             collect (cons (s-trim (dom-text f)) (dom-attr f 'title)))))

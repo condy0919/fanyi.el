@@ -111,7 +111,7 @@ static char* speaker_xpm[] = {
   "The speaker xpm image.")
 
 ;; Silence compile warning.
-(autoload 'fanyi-dwim "fanyi")
+(declare-function fanyi-dwim "fanyi")
 
 (cl-defmethod fanyi-parse-from ((this fanyi-haici-service) dom)
   "Complete the fields of THIS from DOM tree.

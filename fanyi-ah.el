@@ -62,7 +62,7 @@ Where examples could be nil, paraphrase can be a string or a list of strings or 
 (eieio-declare-slots :syllable :sound :pronunciation :paraphrases :idioms :synonyms)
 
 ;; Silence compile warning.
-(autoload 'fanyi-dwim "fanyi")
+(declare-function fanyi-dwim "fanyi")
 
 (iter-defun fanyi--parse-ah-pseg (dom)
   "Helper function to parse the paraphrase segment DOM of American

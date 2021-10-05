@@ -46,7 +46,7 @@ Where def could be a list of string/(string 'face face)/(string 'button data).")
 (eieio-declare-slots :definitions)
 
 ;; Silence compile warning.
-(autoload 'fanyi-dwim "fanyi")
+(declare-function fanyi-dwim "fanyi")
 
 (cl-defmethod fanyi-parse-from ((this fanyi-etymon-service) dom)
   "Complete the fields of THIS from DOM tree.
