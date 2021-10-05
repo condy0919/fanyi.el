@@ -45,13 +45,23 @@
   "Does `fanyi-sound-player' support https?
 
 If non-nil, url will be passed to `fanyi-sound-player' directly.
-Otherwise, `url-retrieve' first, then the data will be sent to
-`fanyi-sound-player'."
+Otherwise, `url-retrieve' first, the data will then be sent to
+`fanyi-sound-player' through a pipe."
   :type 'boolean
   :group 'fanyi)
 
 (defcustom fanyi-use-glyphs t
   "Non-nil means use glyphs when available."
+  :type 'boolean
+  :group 'fanyi)
+
+(defcustom fanyi-verbose nil
+  "Whether to make `fanyi-dwim' verbose."
+  :type 'boolean
+  :group 'fanyi)
+
+(defcustom fanyi-log nil
+  "Whether to enable log."
   :type 'boolean
   :group 'fanyi)
 
@@ -70,7 +80,7 @@ Otherwise, `url-retrieve' first, then the data will be sent to
   (and fanyi-use-glyphs (display-images-p)))
 
 (defun fanyi--sound-player-options (player)
-  "Get the required options for PLAYER in fanyi usage situation."
+  "Get the necessary options for PLAYER."
   (pcase player
     ((pred (string-match-p "mplayer"))
      '("-cache" "1024"))
@@ -114,6 +124,12 @@ See `fanyi-sound-player'."
 
 (defconst fanyi-buffer-name "*fanyi*"
   "The default name of translation buffer.")
+
+(defconst fanyi-log-buffer-name "*fanyi-log*"
+  "The default name of fanyi log buffer.")
+
+(defvar fanyi-log-buffer-mtx (make-mutex)
+  "The mutex for \"*fanyi-log*\" buffer.")
 
 (defvar fanyi-buffer-mtx (make-mutex)
   "The mutex for \"*fanyi*\" buffer.")
@@ -160,6 +176,26 @@ See `fanyi-sound-player'."
        (goto-char (point-max))
        (let ((inhibit-read-only t))
          ,@body))))
+
+(defun fanyi-log (fmt &rest args)
+  "When the option `fanyi-log' is non-nil, collect the message by
+passing FMT and ARGS to `format-message'."
+  (when fanyi-log
+    (let ((timestamp (format-time-string "[%F %T]"))
+          (text (format-message fmt args)))
+      (with-mutex fanyi-log-buffer-mtx
+        (with-current-buffer (get-buffer-create fanyi-log-buffer-name)
+          (insert timestamp " " text "\n"))))))
+
+(defun fanyi-user-error (fmt &rest args)
+  "Signal a user error by passing FMT and ARGS to `user-error'.
+If `fanyi-verbose' is nil (defualt), message won't be displayed.
+If `fanyi-log' is non-nil, the message will also be collected in
+\"*fanyi-log*\" buffer."
+  (fanyi-log fmt args)
+  (if fanyi-verbose
+      (user-error fmt args)
+    (user-error "")))
 
 (provide 'fanyi-base)
 ;;; fanyi-base.el ends here

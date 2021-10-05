@@ -45,11 +45,6 @@
   :group 'tools
   :link '(url-link "https://github.com/condy0919/fanyi.el"))
 
-(defcustom fanyi-verbose nil
-  "Whether to make `fanyi-dwim' verbose."
-  :type 'boolean
-  :group 'fanyi)
-
 (defface fanyi-word-face
   '((t :height 1.75 :weight bold :foreground "dark cyan"))
   "Face used for user requested word."
@@ -89,13 +84,6 @@
                  (cl-assert (s-suffix? "-provider" name))
                  (require (intern (substring name 0 -9))))
             collect (symbol-value p))))
-
-(defun fanyi-user-error (fmt &rest args)
-  "Signal a user errror by passing FMT and ARGS to `user-error'.
-If `fanyi-verbose' is nil, message won't be displayed."
-  (if fanyi-verbose
-      (user-error fmt args)
-    (user-error "")))
 
 (defcustom fanyi-providers '(fanyi-haici-provider
                              fanyi-etymon-provider
