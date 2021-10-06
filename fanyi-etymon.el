@@ -51,7 +51,10 @@ Where def could be a list of string/(string 'face face)/(string 'button data).")
 (cl-defmethod fanyi-parse-from ((this fanyi-etymon-service) dom)
   "Complete the fields of THIS from DOM tree.
 If the definitions of word are not found, http 404 error is
-expected."
+expected.
+
+The /italic/ and *bold* styles are borrowed from `org-mode',
+while the quote style is from mailing list."
   (let ((defs (dom-by-class dom "word--C9UPa")))
     (oset this :definitions
           (cl-loop for def in defs
@@ -71,9 +74,9 @@ expected."
                                                      (cond ((stringp arg) arg)
                                                            ((dom-by-class arg "foreign notranslate")
                                                             (cond ((dom-by-tag arg 'strong)
-                                                                   (list (dom-texts arg) 'face 'bold))
+                                                                   (concat "*" (dom-texts arg) "*"))
                                                                   (t
-                                                                   (list (dom-text arg) 'face 'italic))))
+                                                                   (concat "/" (dom-text arg) "/"))))
                                                            ((dom-by-class arg "crossreference notranslate")
                                                             (list (dom-text arg) 'button (dom-text arg)))))
                                                    (cddr arg))))))
@@ -82,10 +85,7 @@ expected."
 (cl-defmethod fanyi-render ((this fanyi-etymon-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
-before calling this method.
-
-The /italic/ and *bold* styles are borrowed from `org-mode',
-while the quote style is from mailing list."
+before calling this method."
   (fanyi-with-fanyi-buffer
    ;; The headline about Etymonline service.
    (insert "# Etymonline\n\n")
@@ -94,10 +94,6 @@ while the quote style is from mailing list."
             do (insert "## " word "\n\n")
             do (seq-do (lambda (arg)
                          (pcase arg
-                           (`(,s face italic)
-                            (insert "/" s "/"))
-                           (`(,s face bold)
-                            (insert "*" s "*"))
                            (`(,s button ,word)
                             (insert-button s
                                            'action #'fanyi-dwim

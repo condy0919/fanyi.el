@@ -237,7 +237,7 @@ before calling this method."
      (insert-button "Click to view the distribution chart"
                     'action (lambda (dist)
                               ;; `switch-to-buffer' is used in `chart-bar-quickie' which means a new chart buffer will
-                              ;; always be poped in the same window.
+                              ;; always be popped in the same window.
                               ;;
                               ;; Typing `q' (`quit-window') in chart buffer will
                               ;;
@@ -249,9 +249,12 @@ before calling this method."
                               ;; 1. bury the *fanyi* buffer.
                               ;; 2. `switch-to-prev-buffer'
                               ;;
-                              ;; It can't restore the window configuration because `restore-quit' is nil.
+                              ;; It can't restore the window configuration since `restore-quit' was reset to nil.
                               ;;
-                              ;; Consult (C-x C-e)
+                              ;; Once `fanyi-haici-chart-inhibit-same-window' is non-nil, the chart buffer won't be popped
+                              ;; in the same window which prevent `quit-window' window parameter from being reset.
+                              ;;
+                              ;; See (C-x C-e) the below manual
                               ;;
                               ;; (info "(elisp)Quitting Windows")
                               ;;
