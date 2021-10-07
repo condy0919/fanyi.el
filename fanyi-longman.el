@@ -501,18 +501,20 @@ before calling this method."
                                                "\n"))
                         ;; Footnote.
                         do (when-let* ((expl (oref sense :footnote-expl))
-                                       (_non-empty (s-present? expl)))
+                                       ((s-present? expl)))
                              (insert (propertize "> "
                                                  'line-prefix (s-repeat fanyi-longman-example-indent " "))
                                      (propertize expl
                                                  'wrap-prefix (s-repeat fanyi-longman-example-indent " "))
                                      "\n"))
                         do (when-let* ((ex (oref sense :footnote-example))
-                                       (_non-empty (s-present? ex)))
-                             (insert (s-repeat (* 2 fanyi-longman-example-indent) " "))
-                             (insert (propertize ex
-                                                 'font-lock-face 'fanyi-longman-example-face))
-                             (insert "\n")))
+                                       ((s-present? ex)))
+                             (insert (propertize ">> "
+                                                 'line-prefix (s-repeat (* 2 fanyi-longman-example-indent) " "))
+                                     (propertize ex
+                                                 'font-lock-face 'fanyi-longman-example-face
+                                                 'wrap-prefix (s-repeat (* 2 fanyi-longman-example-indent) " "))
+                                     "\n")))
             do (insert "\n"))
    ;; Etymon.
    (when (s-present? (oref this :etymon))
