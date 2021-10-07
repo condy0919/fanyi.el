@@ -192,13 +192,11 @@ Typically it can be a list of strings or \"riched\" strings.")
              :type list
              :documentation "List of examples.")
    (footnote-expl :initarg :footnote-expl
-                  :initform nil
-                  :type list
+                  :type string
                   :documentation "Footnote explanation.
 Typically it can be a list of strings or \"riched\" strings.")
    (footnote-example :initarg :footnote-example
-                     :initform nil
-                     :type list
+                     :type string
                      :documentation "Footnote example.
 Typically it can be a list of strings or \"riched\" strings."))
   "The Longman dictionary entry sense.")
@@ -340,21 +338,21 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                      (oset dict-sense :examples
                                                                            (cl-loop for example in (dom-by-class sense "EXAMPLE")
                                                                                     collect (cons (dom-attr (dom-by-class example "speaker") 'data-src-mp3)
-                                                                                                  (s-trim (s-replace (char-to-string #xa0)
-                                                                                                                     ""
-                                                                                                                     (dom-texts example ""))))))
+                                                                                                  (s-trim (s-replace-all '(("\u00a0" . "")
+                                                                                                                           ("\u0009" . ""))
+                                                                                                                         (dom-texts example ""))))))
                                                                      ;; Footnote.
                                                                      (let ((footnote (dom-by-class sense "F2NBox")))
                                                                        (oset dict-sense :footnote-expl
                                                                              (cl-loop for child in (dom-children (dom-by-class footnote "EXPL"))
-                                                                                      collect (cl-etypecase child
-                                                                                                (string child)
-                                                                                                (list (list (dom-text child) 'face 'bold)))))
+                                                                                      concat (cl-etypecase child
+                                                                                               (string child)
+                                                                                               (list (concat "*" (dom-text child) "*")))))
                                                                        (oset dict-sense :footnote-example
                                                                              (cl-loop for child in (dom-children (dom-by-class footnote "EXAMPLE"))
-                                                                                      collect (cl-etypecase child
-                                                                                                (string child)
-                                                                                                (list (list (dom-text child) 'face 'bold))))))
+                                                                                      concat (cl-etypecase child
+                                                                                               (string child)
+                                                                                               (list (concat "*" (dom-text child) "*"))))))
                                                                      dict-sense)))
                                dict))))
     ;; Etymon
@@ -502,24 +500,17 @@ before calling this method."
                                                            'wrap-prefix (s-repeat fanyi-longman-example-indent " "))
                                                "\n"))
                         ;; Footnote.
-                        do (when-let ((expl (oref sense :footnote-expl)))
+                        do (when-let* ((expl (oref sense :footnote-expl))
+                                       (_non-empty (s-present? expl)))
                              (insert (propertize "> "
                                                  'line-prefix (s-repeat fanyi-longman-example-indent " "))
-                                     (propertize (cl-loop for e in expl
-                                                          concat (pcase e
-                                                                   (`(,s face bold)
-                                                                    (concat "*" s "*"))
-                                                                   (_
-                                                                    e)))
+                                     (propertize expl
                                                  'wrap-prefix (s-repeat fanyi-longman-example-indent " "))
                                      "\n"))
-                        do (when-let ((ex (oref sense :footnote-example)))
+                        do (when-let* ((ex (oref sense :footnote-example))
+                                       (_non-empty (s-present? ex)))
                              (insert (s-repeat (* 2 fanyi-longman-example-indent) " "))
-                             (insert (propertize (s-join ""
-                                                         (cl-loop for s in ex
-                                                                  collect (pcase s
-                                                                            (`(,s face bold) (concat "*" s "*"))
-                                                                            (_ s))))
+                             (insert (propertize ex
                                                  'font-lock-face 'fanyi-longman-example-face))
                              (insert "\n")))
             do (insert "\n"))
