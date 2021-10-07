@@ -5,7 +5,7 @@
 
 # fanyi.el
 
-`fanyi.el` is a simple yet powerful multi-dictionaries interface for Emacs, includes:
+`fanyi.el` is a simple yet powerful multi-dictionaries interface for Emacs, currently it includes:
 
 - [`海词`](https://dict.cn/)
 - [`有道同义词`](https://dict.youdao.com/suggest?q=accumulate&doctype=json), **Unofficial** API
@@ -26,7 +26,7 @@ Install `fanyi.el` from [MELPA](https://melpa.org) with:
 M-x package-install RET fanyi RET
 ```
 
-If you're a `American Heritage Dictionary` user, make sure `Minion New` font is
+If you're an `American Heritage Dictionary` user, make sure `Minion New` font is
 installed. Otherwise the pronunciation may be displayed in tofu, or an
 `all-the-icons` icon if you have `all-the-icons` installed.
 
