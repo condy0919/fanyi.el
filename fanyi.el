@@ -75,6 +75,21 @@
   "Face used for part of speech."
   :group 'fanyi)
 
+(defface fanyi-tasks-querying-face
+  '((t :foreground "yellow"))
+  "Face used for tasks doing query."
+  :group 'fanyi)
+
+(defface fanyi-tasks-failed-face
+  '((t :foreground "red"))
+  "Face used for tasks failed."
+  :group 'fanyi)
+
+(defface fanyi-tasks-completed-face
+  '((t :foreground "green"))
+  "Face used for tasks completed."
+  :group 'fanyi)
+
 (defun fanyi-set-providers (sym providers)
   "Set SYM with evaluated PROVIDERS."
   (set-default-toplevel-value
@@ -102,6 +117,7 @@
 (defvar url-http-end-of-headers)
 
 (defvar fanyi--tasks nil)
+(defvar fanyi--tasks-failed 0)
 (defvar fanyi--tasks-completed 0)
 
 (defun fanyi--spawn (instance)
@@ -114,9 +130,11 @@
         (url-retrieve url (lambda (status)
                             ;; Something went wrong.
                             (when (or (not status) (plist-member status :error))
+                              (cl-incf fanyi--tasks-failed)
                               (fanyi-user-error "Something went wrong.\n\n%s" (pp-to-string (plist-get status :error))))
                             ;; Redirection is inhibited. In most cases, the word is misspelled by users.
                             (when (plist-member status :redirect)
+                              (cl-incf fanyi--tasks-failed)
                               (fanyi-user-error "Did you misspell the word?\n\n%s" (pp-to-string (plist-get status :redirect))))
                             ;; Move point to the real http content. Plus 1 for '\n'.
                             (goto-char (1+ url-http-end-of-headers))
@@ -128,15 +146,17 @@
                             (let ((result (pcase (oref instance :api-type)
                                             ('xml (libxml-parse-html-region (point) (point-max) url))
                                             ('json (json-parse-buffer)))))
-                              (catch 'not-found
-                                ;; Extract information.
-                                (fanyi-parse-from instance result)
-                                ;; Since `fanyi-render' manipulates `fanyi-buffer-name',
-                                ;; a mutex is required in multi-threaded
-                                ;; situation.
-                                (with-mutex fanyi-buffer-mtx
-                                  (fanyi-render instance))
-                                (cl-incf fanyi--tasks-completed))))
+                              (unless
+                                  (catch 'not-found
+                                    ;; Extract information. A `not-found' exception may be thrown.
+                                    (fanyi-parse-from instance result)
+                                    ;; Since `fanyi-render' manipulates `fanyi-buffer-name',
+                                    ;; a mutex is required in multi-threaded
+                                    ;; situation.
+                                    (with-mutex fanyi-buffer-mtx
+                                      (fanyi-render instance))
+                                    (cl-incf fanyi--tasks-completed))
+                                (cl-incf fanyi--tasks-failed))))
                       nil
                       t
                       t)))
@@ -148,8 +168,12 @@
   "Used as `header-line-format'."
   (concat "Translating "
           (propertize fanyi--current-word 'face 'fanyi-word-face)
-          (when (< fanyi--tasks-completed (length fanyi-providers))
-            (format " %d/%d" fanyi--tasks-completed (length fanyi-providers)))))
+          " "
+          (propertize (number-to-string (- (length fanyi--tasks) fanyi--tasks-completed fanyi--tasks-failed)) 'face 'fanyi-tasks-querying-face)
+          " "
+          (propertize (number-to-string fanyi--tasks-completed) 'face 'fanyi-tasks-completed-face)
+          " "
+          (propertize (number-to-string fanyi--tasks-failed) 'face 'fanyi-tasks-failed-face)))
 
 ;; Emacs 28.1 can have multiple eldoc functions and it's called with a callback.
 ;; While in Emacs 27, it's called without arguments.
@@ -247,8 +271,9 @@
               (thread-signal th nil nil)))
           fanyi--tasks)
   (setq fanyi--tasks nil)
-  ;; Reset the counter of completed tasks.
+  ;; Reset the counter of completed/failed tasks.
   (setq fanyi--tasks-completed 0)
+  (setq fanyi--tasks-failed 0)
 
   (let ((buf (get-buffer-create fanyi-buffer-name)))
     (with-current-buffer buf
