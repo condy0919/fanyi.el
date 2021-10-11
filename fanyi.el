@@ -75,9 +75,9 @@
   "Face used for part of speech."
   :group 'fanyi)
 
-(defface fanyi-tasks-querying-face
+(defface fanyi-tasks-pending-face
   '((t :foreground "yellow"))
-  "Face used for tasks doing query."
+  "Face used for tasks still pending."
   :group 'fanyi)
 
 (defface fanyi-tasks-failed-face
@@ -169,7 +169,7 @@
   (concat "Translating "
           (propertize fanyi--current-word 'face 'fanyi-word-face)
           " "
-          (propertize (number-to-string (- (length fanyi--tasks) fanyi--tasks-completed fanyi--tasks-failed)) 'face 'fanyi-tasks-querying-face)
+          (propertize (number-to-string (- (length fanyi--tasks) fanyi--tasks-completed fanyi--tasks-failed)) 'face 'fanyi-tasks-pending-face)
           " "
           (propertize (number-to-string fanyi--tasks-completed) 'face 'fanyi-tasks-completed-face)
           " "
