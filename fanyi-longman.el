@@ -533,6 +533,7 @@ before calling this method."
 (add-to-list 'fanyi-mode-font-lock-keywords-extra '("●" . 'fanyi-longman-dot-face))
 (add-to-list 'fanyi-mode-font-lock-keywords-extra '("○" . 'fanyi-longman-dot-face))
 (add-to-list 'fanyi-mode-font-lock-keywords-extra '("\\[\\([a-zA-Z, ]+?\\)\\]" . 'fanyi-longman-grammar-face))
+(add-to-list 'fanyi-mode-font-lock-keywords-extra '("\u201c\\([a-zA-Z ]+?\\)\u201d" . 'font-lock-string-face))
 
 (defconst fanyi-longman-provider
   (fanyi-longman-service :word "dummy"
