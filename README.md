@@ -47,7 +47,9 @@ mv Minion.ttf ~/Library/Fonts/
 
 ## Usage
 
-Call `fanyi-dwim`, or `fanyi-dwim2` if you can confirm the word at point is wanted.
+Call `fanyi-dwim`, or `fanyi-dwim2` if you can confirm the word at point is
+wanted. A new command `fanyi-from-history` is introduced to browse the search
+history.
 
 If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim` and `fanyi-dwim2`, try
 

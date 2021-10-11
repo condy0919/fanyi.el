@@ -25,7 +25,8 @@
 ;;
 ;; A multi dictionaries interface for Emacs.
 ;;
-;; There is only one public command to users: `fanyi-dwim'.
+;; Invoke `fanyi-dwim', `fanyi-dwim2' or `fanyi-from-history' to see the
+;; results.
 
 ;;; Code:
 
@@ -210,6 +211,7 @@
     (define-key map [backtab] #'backward-button)
     (define-key map "q" #'quit-window)
     (define-key map "s" #'fanyi-dwim)
+    (define-key map "h" #'fanyi-from-history)
     map)
   "Keymap for `fanyi-mode'.")
 
@@ -303,6 +305,12 @@ active or `thing-at-point' return non-nil."
                    (thing-at-point 'word t))))
       (fanyi-dwim word)
     (call-interactively #'fanyi-dwim)))
+
+;;;###autoload
+(defun fanyi-from-history ()
+  "Invoke `fanyi-dwim' from history."
+  (interactive)
+  (fanyi-dwim (completing-read "Fanyi history: " fanyi-history nil t)))
 
 (provide 'fanyi)
 ;;; fanyi.el ends here
