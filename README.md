@@ -66,7 +66,6 @@ Don't customize `fanyi-providers` via `setq`, use the custom system instead.
   (fanyi-providers '(fanyi-etymon-provider
                      fanyi-longman-provider)))
 
-
 ;; Default, comment out the providers you don't need.
 (use-package fanyi
   :ensure t
@@ -78,6 +77,13 @@ Don't customize `fanyi-providers` via `setq`, use the custom system instead.
                      ;; Etymonline
                      fanyi-etymon-provider
                      ;; Longman
+                     fanyi-longman-provider)))
+
+;; For non-`use-package' users
+(custom-set-variables
+ '(fanyi-providers '(fanyi-haici-provider
+                     fanyi-youdao-thesaurus-provider
+                     fanyi-etymon-provider
                      fanyi-longman-provider)))
 ```
 
