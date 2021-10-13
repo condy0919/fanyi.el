@@ -163,12 +163,12 @@
                       t)))
      fanyi--tasks)))
 
-(defvar fanyi--current-word nil)
+(defvar fanyi-current-word nil)
 
 (defun fanyi-format-header-line ()
   "Used as `header-line-format'."
   (concat "Translating "
-          (propertize fanyi--current-word 'face 'fanyi-word-face)
+          (propertize fanyi-current-word 'face 'fanyi-word-face)
           " "
           (propertize (number-to-string (- (length fanyi--tasks) fanyi--tasks-completed fanyi--tasks-failed)) 'face 'fanyi-tasks-pending-face)
           " "
@@ -235,6 +235,9 @@
   (setq-local outline-regexp "^#+")
   (setq-local outline-minor-mode t)
 
+  ;; `bookmark' integration.
+  (setq-local bookmark-make-record-function #'fanyi-bookmark-make-record)
+
   ;; Better display
   (setq-local line-spacing 0.1)
 
@@ -266,7 +269,7 @@
   (unless (fboundp 'json-parse-buffer)
     (error "This function requires Emacs to be compiled with libjson"))
   ;; Save current query word.
-  (setq fanyi--current-word word)
+  (setq fanyi-current-word word)
   ;; Cancel the still pending threads.
   (seq-do (lambda (th)
             (when (thread-live-p th)
@@ -311,6 +314,24 @@ active or `thing-at-point' return non-nil."
   "Invoke `fanyi-dwim' from history."
   (interactive)
   (fanyi-dwim (completing-read "Fanyi history: " fanyi-history nil t)))
+
+;;; Bookmark support.
+(declare-function bookmark-prop-get "bookmark" (bookmark prop))
+
+(defun fanyi-bookmark-name ()
+  (format "fanyi \"%s\"" fanyi-current-word))
+
+(defun fanyi-bookmark-make-record ()
+  "Create a bookmark for the current query word."
+  `(,(fanyi-bookmark-name)
+    (query-word . ,fanyi-current-word)
+    (handler . fanyi-bookmark-jump)))
+
+;;;###autoload
+(defun fanyi-bookmark-jump (bookmark)
+  "Default bookmark handler for fanyi."
+  (let ((word (bookmark-prop-get bookmark 'query-word)))
+    (fanyi-dwim word)))
 
 (provide 'fanyi)
 ;;; fanyi.el ends here

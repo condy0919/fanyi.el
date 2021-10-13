@@ -15,8 +15,9 @@
 
 `fanyi.el` has integrations with:
 
-- `imenu`, <kbd>M-x imenu</kbd> to jump to dictionary section directly
-- `outline-mode`, <kbd>TAB</kbd> to collapse on section
+- `imenu`, <kbd>M-x imenu</kbd> to jump to dictionary section directly.
+- `bookmark`, <kbd>C-x r m</kbd> to make a bookmark for current query word which turns `bookmark` into a vocabulary notebook.
+- `outline-mode`, <kbd>TAB</kbd> to collapse on section.
 
 ## Installation
 
