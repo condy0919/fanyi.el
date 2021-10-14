@@ -33,7 +33,8 @@
 
 (org-link-set-parameters "fanyi"
                          :follow #'fanyi-org-open-link
-                         :store #'fanyi-org-store-link)
+                         :store #'fanyi-org-store-link
+                         :complete #'fanyi-org-complete-link)
 
 (defun fanyi-org-open-link (word _)
   "Query WORD with `fanyi-dwim' in the current buffer."
@@ -46,6 +47,10 @@
      :type "fanyi"
      :link (concat "fanyi:" fanyi-current-word)
      :description fanyi-current-word)))
+
+(defun fanyi-org-complete-link (&optional _)
+  "Completion function for fanyi link."
+  (concat "fanyi:" (completing-read "Fanyi history for link: " fanyi-history nil nil nil 'fanyi-history)))
 
 (provide 'ol-fanyi)
 ;;; ol-fanyi.el ends here
