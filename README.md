@@ -18,6 +18,9 @@
 - `imenu`, <kbd>M-x imenu</kbd> to jump to dictionary section directly.
 - `bookmark`, <kbd>C-x r m</kbd> to make a bookmark for current query word which turns `bookmark` into a vocabulary notebook.
 - `outline-mode`, <kbd>TAB</kbd> to collapse on section.
+- `ol` (`org-link`), `org-store-link` on a fanyi buffer, the link can be inserted later via `org-insert-link`. It's accomplished by introducing a `fanyi` link type.
+  e.g., <kbd>C-c C-o</kbd> on `[[fanyi:happy][description of happy]]` will invoke a fanyi search.
+  Since `ol` depends on `org` package, this integration needs an explicit `(require 'ol-fanyi)`.
 
 ## Installation
 
@@ -52,7 +55,8 @@ Call `fanyi-dwim`, or `fanyi-dwim2` if you can confirm the word at point is
 wanted. A new command `fanyi-from-history` is introduced to browse the search
 history.
 
-If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim` and `fanyi-dwim2`, try
+If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim`, `fanyi-dwim2` and
+`fanyi-from-history`, try
 
 ``` emacs-lisp
 ;; Emacs 28 only
