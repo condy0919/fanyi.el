@@ -211,6 +211,7 @@
     (define-key map [backtab] #'backward-button)
     (define-key map "q" #'quit-window)
     (define-key map "s" #'fanyi-dwim)
+    (define-key map "w" #'fanyi-copy-query-word)
     (define-key map "h" #'fanyi-from-history)
     map)
   "Keymap for `fanyi-mode'.")
@@ -314,6 +315,12 @@ active or `thing-at-point' return non-nil."
   "Invoke `fanyi-dwim' from history."
   (interactive)
   (fanyi-dwim (completing-read "Fanyi history: " fanyi-history nil t)))
+
+(defun fanyi-copy-query-word ()
+  "Copy current query word."
+  (interactive nil fanyi-mode)
+  (kill-new fanyi-current-word)
+  (message "Copied %s" fanyi-current-word))
 
 ;;; Bookmark support.
 (declare-function bookmark-prop-get "bookmark" (bookmark prop))
