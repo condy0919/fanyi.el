@@ -11,6 +11,7 @@
 - [`有道同义词`](https://dict.youdao.com/suggest?q=accumulate&doctype=json), **Unofficial** API
 - [`etymonline`](https://www.etymonline.com/)
 - [`Longman`](https://www.ldoceonline.com/)
+- [`LibreTranslate`](https://libretranslate.com/), Free and Open Source Machine Translation API.
 - [`American Heritage dictionary`](https://ahdictionary.com/), unusable in China due to high latency. **Not fully implemented**
 
 `fanyi.el` has integrations with:
@@ -84,14 +85,17 @@ Don't customize `fanyi-providers` via `setq`, use the custom system instead.
                      ;; Etymonline
                      fanyi-etymon-provider
                      ;; Longman
-                     fanyi-longman-provider)))
+                     fanyi-longman-provider
+                     ;; LibreTranslate
+                     fanyi-libre-provider)))
 
 ;; For non-`use-package' users
 (custom-set-variables
  '(fanyi-providers '(fanyi-haici-provider
                      fanyi-youdao-thesaurus-provider
                      fanyi-etymon-provider
-                     fanyi-longman-provider)))
+                     fanyi-longman-provider
+                     fanyi-libre-provider)))
 ```
 
 If you're a Windows user,

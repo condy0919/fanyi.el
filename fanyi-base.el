@@ -150,15 +150,34 @@ See `fanyi-sound-player'."
               :type string
               :protection :protected
               :documentation "Dictionary sound url.")
+   (method :initarg :method
+           :initform "GET"
+           :type string
+           :protection :protected
+           :documentation "HTTP method. Default to GET.")
+   (headers :initarg :headers
+            :initform nil
+            :type list
+            :protection :protected
+            :documentation "Extra HTTP headers.")
+   (body :initarg :body
+         :initform nil
+         :protection :protected
+         :documentation "HTTP body.")
    (api-type :initarg :api-type
              :type symbol
              :protection :protected
-             :documentation "API type. Currently it chould be 'xml or 'json."))
+             :documentation "API type. Currently it chould be either 'xml or 'json."))
   "The base class of dictionary service."
   :abstract t)
 
 ;; Silence unknown slots warning.
-(eieio-declare-slots :word :url :sound-url :api-type)
+(eieio-declare-slots :word :url :sound-url :method :headers :body :api-type)
+
+(cl-defmethod fanyi-set-query-word ((this fanyi-base-service) query)
+  "Set QUERY word to THIS.
+QUERY could be a sentence for some services."
+  (oset this :word (url-hexify-string query)))
 
 (cl-defmethod fanyi-parse-from ((this fanyi-base-service) _dom)
   "Implement your own `fanyi-parse-from' for THIS class."

@@ -104,7 +104,8 @@
 (defcustom fanyi-providers '(fanyi-haici-provider
                              fanyi-etymon-provider
                              fanyi-longman-provider
-                             fanyi-youdao-thesaurus-provider)
+                             fanyi-youdao-thesaurus-provider
+                             fanyi-libre-provider)
   "The providers used by `fanyi-dwim'."
   :type '(repeat fanyi-base-service)
   :initialize #'custom-initialize-set
@@ -128,39 +129,42 @@
     (cl-pushnew
      (make-thread
       (lambda ()
-        (url-retrieve url (lambda (status)
-                            ;; Something went wrong.
-                            (when (or (not status) (plist-member status :error))
-                              (cl-incf fanyi--tasks-failed)
-                              (fanyi-user-error "Something went wrong.\n\n%s" (pp-to-string (plist-get status :error))))
-                            ;; Redirection is inhibited. In most cases, the word is misspelled by users.
-                            (when (plist-member status :redirect)
-                              (cl-incf fanyi--tasks-failed)
-                              (fanyi-user-error "Did you misspell the word?\n\n%s" (pp-to-string (plist-get status :redirect))))
-                            ;; Move point to the real http content. Plus 1 for '\n'.
-                            (goto-char (1+ url-http-end-of-headers))
-                            ;; Normalize data.
-                            ;;
-                            ;; `json-read' failed to parse in undecoded buffer.
-                            ;;
-                            ;; https://debbugs.gnu.org/cgi/bugreport.cgi?bug=50391
-                            (let ((result (pcase (oref instance :api-type)
-                                            ('xml (libxml-parse-html-region (point) (point-max) url))
-                                            ('json (json-parse-buffer)))))
-                              (unless
-                                  (catch 'not-found
-                                    ;; Extract information. A `not-found' exception may be thrown.
-                                    (fanyi-parse-from instance result)
-                                    ;; Since `fanyi-render' manipulates `fanyi-buffer-name',
-                                    ;; a mutex is required in multi-threaded
-                                    ;; situation.
-                                    (with-mutex fanyi-buffer-mtx
-                                      (fanyi-render instance))
-                                    (cl-incf fanyi--tasks-completed))
-                                (cl-incf fanyi--tasks-failed))))
-                      nil
-                      t
-                      t)))
+        (let ((url-request-method (oref instance :method))
+              (url-request-extra-headers (oref instance :headers))
+              (url-request-data (oref instance :body)))
+          (url-retrieve url (lambda (status)
+                              ;; Something went wrong.
+                              (when (or (not status) (plist-member status :error))
+                                (cl-incf fanyi--tasks-failed)
+                                (fanyi-user-error "Something went wrong.\n\n%s" (pp-to-string (plist-get status :error))))
+                              ;; Redirection is inhibited. In most cases, the word is misspelled by users.
+                              (when (plist-member status :redirect)
+                                (cl-incf fanyi--tasks-failed)
+                                (fanyi-user-error "Did you misspell the word?\n\n%s" (pp-to-string (plist-get status :redirect))))
+                              ;; Move point to the real http content. Plus 1 for '\n'.
+                              (goto-char (1+ url-http-end-of-headers))
+                              ;; Normalize data.
+                              ;;
+                              ;; `json-read' failed to parse in undecoded buffer.
+                              ;;
+                              ;; https://debbugs.gnu.org/cgi/bugreport.cgi?bug=50391
+                              (let ((result (pcase (oref instance :api-type)
+                                              ('xml (libxml-parse-html-region (point) (point-max) url))
+                                              ('json (json-parse-buffer)))))
+                                (unless
+                                    (catch 'not-found
+                                      ;; Extract information. A `not-found' exception may be thrown.
+                                      (fanyi-parse-from instance result)
+                                      ;; Since `fanyi-render' manipulates `fanyi-buffer-name',
+                                      ;; a mutex is required in multi-threaded
+                                      ;; situation.
+                                      (with-mutex fanyi-buffer-mtx
+                                        (fanyi-render instance))
+                                      (cl-incf fanyi--tasks-completed))
+                                  (cl-incf fanyi--tasks-failed))))
+                        nil
+                        t
+                        t))))
      fanyi--tasks)))
 
 (defvar fanyi-current-word nil)
@@ -292,8 +296,8 @@
     ;; Create a new instance per search.
     (let ((instances (seq-map #'clone fanyi-providers)))
       (seq-do (lambda (i)
-                ;; Overwrite the dummy word.
-                (oset i :word (url-hexify-string (downcase word)))
+                ;; Set the query word.
+                (fanyi-set-query-word i (downcase word))
                 ;; Do search.
                 (fanyi--spawn i))
               instances))
