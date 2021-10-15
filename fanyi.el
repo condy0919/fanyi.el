@@ -112,6 +112,11 @@
   :set #'fanyi-set-providers
   :group 'fanyi)
 
+(defcustom fanyi-headline-max-length 30
+  "The maximum displayed length of `fanyi-current-word'."
+  :type 'integer
+  :group 'fanyi)
+
 (defvar fanyi-history nil
   "History list for `fanyi-dwim'.")
 
@@ -171,14 +176,17 @@
 
 (defun fanyi-format-header-line ()
   "Used as `header-line-format'."
-  (concat "Translating "
-          (propertize fanyi-current-word 'face 'fanyi-word-face)
-          " "
-          (propertize (number-to-string (- (length fanyi--tasks) fanyi--tasks-completed fanyi--tasks-failed)) 'face 'fanyi-tasks-pending-face)
-          " "
-          (propertize (number-to-string fanyi--tasks-completed) 'face 'fanyi-tasks-completed-face)
-          " "
-          (propertize (number-to-string fanyi--tasks-failed) 'face 'fanyi-tasks-failed-face)))
+  (let ((truncated (if (> (length fanyi-current-word) fanyi-headline-max-length)
+                       (concat (substring fanyi-current-word 0 fanyi-headline-max-length) "...")
+                     fanyi-current-word)))
+    (concat "Translating "
+            (propertize truncated 'face 'fanyi-word-face)
+            " "
+            (propertize (number-to-string (- (length fanyi--tasks) fanyi--tasks-completed fanyi--tasks-failed)) 'face 'fanyi-tasks-pending-face)
+            " "
+            (propertize (number-to-string fanyi--tasks-completed) 'face 'fanyi-tasks-completed-face)
+            " "
+            (propertize (number-to-string fanyi--tasks-failed) 'face 'fanyi-tasks-failed-face))))
 
 ;; Emacs 28.1 can have multiple eldoc functions and it's called with a callback.
 ;; While in Emacs 27, it's called without arguments.
