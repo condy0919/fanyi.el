@@ -31,6 +31,7 @@
 
 (require 'fanyi-base)
 
+(require 's)
 (require 'seq)
 (require 'json)
 (require 'cl-lib)
@@ -97,11 +98,18 @@ languages."
 
 (cl-defmethod fanyi-set-query-word ((this fanyi-libre-service) query)
   "Set QUERY to THIS."
-  (oset this :word query)
-  (oset this :body (json-encode `(("q"      . ,query)
-                                  ("source" . ,fanyi-libre-source-lang)
-                                  ("target" . ,fanyi-libre-target-lang)
-                                  ("format" . "text")))))
+  ;; `url-retrieve' doesn't support multibytes payload. So convert some
+  ;; frequently used multibytes into the equivalent ASCII.
+  (let ((bytes (s-replace-all '(("‘" . "\'")
+                                ("’" . "\'")
+                                ("“" . "\"")
+                                ("”" . "\""))
+                              query)))
+    (oset this :word query)
+    (oset this :body (json-encode `(("q"      . ,bytes)
+                                    ("source" . ,fanyi-libre-source-lang)
+                                    ("target" . ,fanyi-libre-target-lang)
+                                    ("format" . "text"))))))
 
 (cl-defmethod fanyi-parse-from ((this fanyi-libre-service) js)
   "Complete the fields of THIS from JS json."
@@ -116,8 +124,10 @@ before calling this method."
    (insert "# LibreTranslate\n\n")
    ;; [From] -> [Target]
    (insert (format "[%s] -> [%s]" fanyi-libre-source-lang fanyi-libre-target-lang) "\n\n")
-   ;; The source text.
-   (insert "> " (oref this :word) "\n\n")
+   ;; The source text. '\n' character may be present.
+   (cl-loop for line in (s-split "\n" (oref this :word) :omit-nulls)
+            do (insert "> " line "\n")
+            finally do (insert "\n"))
    ;; The translated text.
    (insert (oref this :text) "\n\n")))
 
