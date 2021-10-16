@@ -8,6 +8,7 @@
 `fanyi.el` is a simple yet powerful multi-dictionaries interface for Emacs, currently it includes:
 
 - [`海词`](https://dict.cn/)
+- [`有道翻译`](https://fanyi.youdao.com/translate?doctype=json&type=), **Unofficial** ~~outdated~~ API
 - [`有道同义词`](https://dict.youdao.com/suggest?q=accumulate&doctype=json), **Unofficial** API
 - [`etymonline`](https://www.etymonline.com/)
 - [`Longman`](https://www.ldoceonline.com/)
@@ -80,6 +81,8 @@ Don't customize `fanyi-providers` via `setq`, use the custom system instead.
   :custom
   (fanyi-providers '(;; 海词
                      fanyi-haici-provider
+                     ;; 有道翻译
+                     fanyi-youdao-translate-provider
                      ;; 有道同义词词典
                      fanyi-youdao-thesaurus-provider
                      ;; Etymonline
@@ -92,6 +95,7 @@ Don't customize `fanyi-providers` via `setq`, use the custom system instead.
 ;; For non-`use-package' users
 (custom-set-variables
  '(fanyi-providers '(fanyi-haici-provider
+                     fanyi-youdao-translate-provider
                      fanyi-youdao-thesaurus-provider
                      fanyi-etymon-provider
                      fanyi-longman-provider
@@ -116,6 +120,8 @@ may be helpful since `- is interpreted as stdin` is an UNIX convention. If
 ![Etymon](https://user-images.githubusercontent.com/4024656/128583142-dfd26d67-45c5-482a-9268-d7482dbe65f3.png)
 ![American Heritage](https://user-images.githubusercontent.com/4024656/129494115-02b1e344-4eb3-43ac-8ccc-08d75a3aeecd.png)
 ![Longman](https://user-images.githubusercontent.com/4024656/131615163-7b52a0eb-77a4-481f-b093-8f9c7fa91216.png)
+![有道翻译英文](https://user-images.githubusercontent.com/4024656/137604778-f0b632b7-d585-4d96-b169-5e8386cf1056.png)
+![有道翻译中文](https://user-images.githubusercontent.com/4024656/137604796-7fca0be0-2904-4139-947f-699bfdf136f7.png)
 ![有道同义词英文](https://user-images.githubusercontent.com/4024656/132447780-1bbd9a6e-805e-4a4c-9e0a-03f499864c6f.png)
 ![有道同义词中文](https://user-images.githubusercontent.com/4024656/132447809-af3785bd-fe6d-4e52-a107-71c89fb8a26b.png)
 
