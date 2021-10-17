@@ -81,8 +81,6 @@ Don't customize `fanyi-providers` via `setq`, use the custom system instead.
   :custom
   (fanyi-providers '(;; 海词
                      fanyi-haici-provider
-                     ;; 有道翻译
-                     fanyi-youdao-translate-provider
                      ;; 有道同义词词典
                      fanyi-youdao-thesaurus-provider
                      ;; Etymonline
@@ -95,7 +93,6 @@ Don't customize `fanyi-providers` via `setq`, use the custom system instead.
 ;; For non-`use-package' users
 (custom-set-variables
  '(fanyi-providers '(fanyi-haici-provider
-                     fanyi-youdao-translate-provider
                      fanyi-youdao-thesaurus-provider
                      fanyi-etymon-provider
                      fanyi-longman-provider

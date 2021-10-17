@@ -104,7 +104,6 @@
 (defcustom fanyi-providers '(fanyi-haici-provider
                              fanyi-etymon-provider
                              fanyi-longman-provider
-                             fanyi-youdao-translate-provider
                              fanyi-youdao-thesaurus-provider
                              fanyi-libre-provider)
   "The providers used by `fanyi-dwim'."
