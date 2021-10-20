@@ -55,11 +55,11 @@ expected.
 
 The /italic/ and *bold* styles are borrowed from `org-mode',
 while the quote style is from mailing list."
-  (let ((defs (dom-by-class dom "word--C9UPa")))
+  (let ((defs (dom-by-class dom "^\\(word--C9UPa\\)$")))
     (oset this :definitions
           (cl-loop for def in defs
                    for title = (dom-text (dom-by-class def "word__name--TTbAA"))
-                   for details = (dom-children (dom-by-class def "word__defination--2q7ZH"))
+                   for details = (dom-children (dom-by-class def "^\\(word__defination--2q7ZH\\)$"))
                    collect (list title
                                  (seq-mapcat
                                   (lambda (arg)
