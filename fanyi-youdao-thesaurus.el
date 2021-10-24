@@ -1,4 +1,4 @@
-;;; fanyi.el --- Youdao thesaurus service -*- lexical-binding: t -*-
+;;; fanyi-youdao-thesaurus.el --- Youdao thesaurus service -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021 Zhiwei Chen
 ;; SPDX-License-Identifier: GPL-3.0-or-later

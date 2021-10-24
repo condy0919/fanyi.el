@@ -1,4 +1,4 @@
-;;; fanyi.el --- Etymonline dictionary service -*- lexical-binding: t -*-
+;;; fanyi-etymon.el --- Etymonline dictionary service -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021 Zhiwei Chen
 ;; SPDX-License-Identifier: GPL-3.0-or-later

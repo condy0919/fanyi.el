@@ -1,4 +1,4 @@
-;;; fanyi.el --- Haici dictionary service -*- lexical-binding: t -*-
+;;; fanyi-haici.el --- Haici dictionary service -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021 Zhiwei Chen
 ;; SPDX-License-Identifier: GPL-3.0-or-later

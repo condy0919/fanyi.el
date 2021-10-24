@@ -1,4 +1,4 @@
-;;; fanyi.el --- LibreTranslate service -*- lexical-binding: t -*-
+;;; fanyi-libre.el --- LibreTranslate service -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021 Zhiwei Chen
 ;; SPDX-License-Identifier: GPL-3.0-or-later

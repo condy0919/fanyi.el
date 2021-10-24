@@ -1,4 +1,4 @@
-;;; fanyi.el --- The base class of all dictionaries -*- lexical-binding: t -*-
+;;; fanyi-base.el --- The base class of all dictionaries -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021 Zhiwei Chen
 ;; SPDX-License-Identifier: GPL-3.0-or-later
