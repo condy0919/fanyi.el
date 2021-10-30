@@ -48,6 +48,8 @@ Where def could be a list of string/(string 'face face)/(string 'button data).")
 ;; Silence compile warning.
 (declare-function fanyi-dwim "fanyi")
 
+(defvar fanyi-etymon--consecutive-newlines nil)
+
 (cl-defmethod fanyi-parse-from ((this fanyi-etymon-service) dom)
   "Complete the fields of THIS from DOM tree.
 If the definitions of word are not found, http 404 error is
@@ -64,22 +66,34 @@ while the quote style is from mailing list."
                                  (seq-mapcat
                                   (lambda (arg)
                                     (pcase arg
-                                      ('(p nil) "\n\n")
-                                      (_ (cl-assert (> (length arg) 2))
-                                         (seq-concatenate
-                                          'list
-                                          (when (equal (car arg) 'blockquote)
-                                            '("> "))
-                                          (seq-map (lambda (arg)
-                                                     (cond ((stringp arg) arg)
-                                                           ((dom-by-class arg "foreign notranslate")
-                                                            (cond ((dom-by-tag arg 'strong)
-                                                                   (concat "*" (dom-texts arg) "*"))
-                                                                  (t
-                                                                   (concat "/" (dom-text arg) "/"))))
-                                                           ((dom-by-class arg "crossreference notranslate")
-                                                            (list (dom-text arg) 'button (dom-text arg)))))
-                                                   (cddr arg))))))
+                                      ('(p nil)
+                                       (prog1
+                                           ;; Eliminate extra '\n\n' if it happens two or more times.
+                                           (if fanyi-etymon--consecutive-newlines
+                                               ""
+                                             "\n\n")
+                                         (setq fanyi-etymon--consecutive-newlines t)))
+                                      (_
+                                       (cl-assert (> (length arg) 2))
+                                       (setq fanyi-etymon--consecutive-newlines nil)
+                                       (seq-concatenate
+                                        'list
+                                        (when (equal (car arg) 'blockquote)
+                                          '("> "))
+                                        (seq-map (lambda (arg)
+                                                   (cond ((stringp arg) arg)
+                                                         ((dom-by-class arg "foreign notranslate")
+                                                          (cond ((dom-by-tag arg 'strong)
+                                                                 (concat "*" (dom-texts arg) "*"))
+                                                                (t
+                                                                 (concat "/" (dom-text arg) "/"))))
+                                                         ((dom-by-class arg "crossreference notranslate")
+                                                          (list (dom-text arg) 'button (dom-text arg)))
+                                                         (t
+                                                          (s-replace-all '(("\u00a0" . "")
+                                                                           ("\u0009" . ""))
+                                                                         (dom-text arg)))))
+                                                 (cddr arg))))))
                                   details))))))
 
 (cl-defmethod fanyi-render ((this fanyi-etymon-service))
