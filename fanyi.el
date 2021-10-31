@@ -352,5 +352,23 @@ active or `thing-at-point' return non-nil."
   (let ((word (bookmark-prop-get bookmark 'query-word)))
     (fanyi-dwim word)))
 
+(defun fanyi-store-link ()
+  "Store a link to the current buffer."
+  (when (derived-mode-p 'fanyi-mode)
+    (let ((word fanyi-current-word))
+      (org-store-link-props
+       :type "fanyi"
+       :link (url-recreate-url
+              (url-parse-make-urlobj "fanyi" nil nil nil nil word))
+       :description word))))
+
+(defun fanyi-follow-link (word _)
+  "Follow an Org link to WORD."
+  (fanyi-dwim word))
+
+(org-link-set-parameters "fanyi"
+                         :follow #'fanyi-follow-link
+                         :store #'fanyi-store-link)
+
 (provide 'fanyi)
 ;;; fanyi.el ends here
