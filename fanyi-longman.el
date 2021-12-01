@@ -36,26 +36,6 @@
 (require 'cl-lib)
 (require 'button)
 
-(defcustom fanyi-longman-svg-horizonal-padding 4
-  "Default horizonal padding in pixels for text."
-  :type 'integer
-  :group 'fanyi)
-
-(defcustom fanyi-longman-svg-vertical-padding 2
-  "Default vertical padding in pixels for text."
-  :type 'integer
-  :group 'fanyi)
-
-(defcustom fanyi-longman-svg-horizonal-offset 0
-  "Default horizonal offset in pixels for text."
-  :type 'integer
-  :group 'fanyi)
-
-(defcustom fanyi-longman-svg-vertical-offset -5
-  "Default vertical offset in pixels for text."
-  :type 'integer
-  :group 'fanyi)
-
 (defcustom fanyi-longman-svg-border-radius 7
   "Default border radius in pixels."
   :type 'integer
@@ -216,20 +196,30 @@ Typically it can be a list of strings or \"riched\" strings."))
 ;; | Word family |
 ;; '-------------'
 ;; ```
+;;
+;; From https://np.reddit.com/r/emacs/comments/r6ljmh/drop_shadowed_text_using_svg/
 (defun fanyi-longman-svg-tag-make (text face)
   "Create a SVG image displaying TEXT with FACE in a rounded box."
-  (let* ((tag-width (* (length text) (window-font-width)))
-         (tag-height (window-font-height))
-         (svg-width (+ tag-width (* 2 fanyi-longman-svg-horizonal-padding)))
-         (svg-height (+ tag-height (* 2 fanyi-longman-svg-vertical-padding)))
-         (svg (svg-create svg-width svg-height)))
+  (let* ((font       (query-font (face-attribute 'default :font)))
+         (font-size  (elt font 2))
+         (family     (face-attribute 'default :family))
+         (descent    (elt font 4))
+         (ascent     (elt font 5))
+         (char-width (elt font 7))
+         (svg-height (+ ascent descent))
+         (svg-width  (* char-width (+ (length text) 2)))
+         (svg        (svg-create svg-width svg-height)))
     (svg-rectangle svg 0 0 svg-width svg-height
                    :rx fanyi-longman-svg-border-radius
                    :fill (face-attribute face :background))
     (svg-text svg text
               :fill (face-attribute face :foreground)
-              :x (+ fanyi-longman-svg-horizonal-padding fanyi-longman-svg-horizonal-offset)
-              :y (+ tag-height fanyi-longman-svg-vertical-padding fanyi-longman-svg-vertical-offset))
+              :stroke-width 0
+              :font-family family
+              :font-weight "300"
+              :font-size font-size
+              :x char-width
+              :y descent)
     (svg-image svg :scale 1 :ascent 'center)))
 
 (cl-defmethod fanyi-parse-from ((this fanyi-longman-service) dom)
