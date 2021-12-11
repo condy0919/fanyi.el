@@ -311,6 +311,8 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                                                       (list (dom-texts node "") 'button (dom-texts node "")))
                                                                                                      ((dom-by-class node "REFHWD")
                                                                                                       (list (dom-texts node "") 'face 'italic))
+                                                                                                     ((dom-by-class node "BOOKFILM")
+                                                                                                      (dom-texts node ""))
                                                                                                      (t (user-error "Unimplemented. %s" (pp-to-string node)))))
                                                                                         (_ (user-error "Unimplemented. %s" (pp-to-string node)))))
                                                                                     (dom-children (dom-by-class sense "^\\(DEF\\)$"))))
@@ -517,6 +519,8 @@ before calling this method."
      (insert " ")
      (insert (oref this :etymon)))
    ;; The end.
+   (while (equal (char-before) ?\n)
+     (delete-char -1))
    (insert "\n\n")))
 
 ;; The Longman dict specific font-lock keywords
