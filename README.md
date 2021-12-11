@@ -109,6 +109,23 @@ may be helpful since `- is interpreted as stdin` is an UNIX convention. If
 `fanyi-sound-player-support-https` is non-nil, the url will be passed to
 `fanyi-sound-player` directly.
 
+## FAQ
+
+1. Audio button icon displayed in tofu.
+   The icon is emoji, install the proper font to display it. If you use archlinux, `yay -S ttf-symbola` without additional settings. For MacOS users, add the following elisp to your Emacs config.
+   ```elisp
+   ;; "Apple Color Emoji" is bundled with MacOS.
+   ;;
+   ;; Emacs 29, 28
+   (set-fontset-font t 'emoji (font-spec :family "Apple Color Emoji") nil 'prepend)
+
+   ;; Emacs 27
+   (set-fontset-font t 'symbol (font-spec :family "Apple Color Emoji") nil 'prepend)
+   ```
+
+2. Longman throws an `user-error`
+   It's expected. File an issue please.
+
 ## Screenshots
 
 ![status indicator](https://user-images.githubusercontent.com/4024656/136776219-0ffd6d27-ce36-48ca-979c-87f163cd79fc.png)
