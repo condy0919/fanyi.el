@@ -313,8 +313,9 @@
 
 ;;;###autoload
 (defun fanyi-dwim2 ()
-  "A more dwim version of `fanyi-dwim'. No prompt if the region is
-active or `thing-at-point' return non-nil."
+  "A more dwim version of `fanyi-dwim'.
+No prompt if the region is active or `thing-at-point' returns
+non-nil."
   (interactive)
   (if-let ((word (if (use-region-p)
                      (buffer-substring-no-properties (region-beginning) (region-end))
@@ -338,6 +339,7 @@ active or `thing-at-point' return non-nil."
 (declare-function bookmark-prop-get "bookmark" (bookmark prop))
 
 (defun fanyi-bookmark-name ()
+  "Return the name of fanyi bookmark."
   (format "fanyi \"%s\"" fanyi-current-word))
 
 (defun fanyi-bookmark-make-record ()
@@ -348,7 +350,7 @@ active or `thing-at-point' return non-nil."
 
 ;;;###autoload
 (defun fanyi-bookmark-jump (bookmark)
-  "Default bookmark handler for fanyi."
+  "Default BOOKMARK handler for fanyi."
   (let ((word (bookmark-prop-get bookmark 'query-word)))
     (fanyi-dwim word)))
 
