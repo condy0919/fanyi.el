@@ -338,21 +338,18 @@ non-nil."
 ;;; Bookmark support.
 (declare-function bookmark-prop-get "bookmark" (bookmark prop))
 
-(defun fanyi-bookmark-name ()
-  "Return the name of fanyi bookmark."
-  (format "fanyi \"%s\"" fanyi-current-word))
-
 (defun fanyi-bookmark-make-record ()
   "Create a bookmark for the current query word."
-  `(,(fanyi-bookmark-name)
-    (query-word . ,fanyi-current-word)
+  `(,fanyi-current-word
     (handler . fanyi-bookmark-jump)))
 
 ;;;###autoload
 (defun fanyi-bookmark-jump (bookmark)
   "Default BOOKMARK handler for fanyi."
-  (let ((word (bookmark-prop-get bookmark 'query-word)))
+  (let ((word (car bookmark)))
     (fanyi-dwim word)))
+
+(put 'fanyi-bookmark-jump 'bookmark-handler-type "Fanyi")
 
 (provide 'fanyi)
 ;;; fanyi.el ends here
