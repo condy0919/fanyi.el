@@ -24,7 +24,7 @@ jobs:
 
     - uses: cask/setup-cask@master
       with:
-        version: 0.8.4
+        version: 0.8.7
 
     - run: cask install
     - run: make compile
