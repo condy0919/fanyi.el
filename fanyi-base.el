@@ -189,6 +189,7 @@ QUERY could be a sentence for some services."
 
 (defmacro fanyi-with-fanyi-buffer (&rest body)
   "Evaluate BODY with `*fanyi*' buffer temporarily current."
+  (declare (indent 0))
   `(with-current-buffer (get-buffer-create ,fanyi-buffer-name)
      (save-excursion
        ;; Go to the end of buffer.

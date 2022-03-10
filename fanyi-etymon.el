@@ -101,24 +101,24 @@ while the quote style is from mailing list."
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
 before calling this method."
   (fanyi-with-fanyi-buffer
-   ;; The headline about Etymonline service.
-   (insert "# Etymonline\n\n")
-   (cl-loop for i in (oref this :definitions)
-            for (word def) = i
-            do (insert "## " word "\n\n")
-            do (seq-do (lambda (arg)
-                         (pcase arg
-                           (`(,s button ,word)
-                            (insert-button s
-                                           'action #'fanyi-dwim
-                                           'button-data word
-                                           'follow-link t))
-                           (s
-                            (insert s))))
-                       def)
-            do (while (equal (char-before) ?\n)
-                 (delete-char -1))
-            do (insert "\n\n"))))
+    ;; The headline about Etymonline service.
+    (insert "# Etymonline\n\n")
+    (cl-loop for i in (oref this :definitions)
+             for (word def) = i
+             do (insert "## " word "\n\n")
+             do (seq-do (lambda (arg)
+                          (pcase arg
+                            (`(,s button ,word)
+                             (insert-button s
+                                            'action #'fanyi-dwim
+                                            'button-data word
+                                            'follow-link t))
+                            (s
+                             (insert s))))
+                        def)
+             do (while (equal (char-before) ?\n)
+                  (delete-char -1))
+             do (insert "\n\n"))))
 
 (defconst fanyi-etymon-provider
   (fanyi-etymon-service :word "dummy"

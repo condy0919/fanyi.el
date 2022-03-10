@@ -180,120 +180,120 @@ A 'not-found exception will be thrown if there is no result."
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
 before calling this method."
   (fanyi-with-fanyi-buffer
-   ;; The headline about Haici service.
-   (insert "# 海词\n\n")
-   ;; Syllables and star/level description.
-   (insert (oref this :syllable)
-           " "
-           (s-repeat (oref this :star) "★")
-           " "
-           (oref this :star-desc)
-           "\n\n")
-   ;; Phonetics.
-   ;; British: pronunciation, female sound url, male sound url
-   ;; American: pronunciation, female sound url, male sound url
-   (let ((phonetics (oref this :phonetics)))
-     (cl-assert (equal (length phonetics) 2))
-     (cl-loop for i from 0 to 1
-              for (pronunciation female male) = (nth i phonetics)
-              do (insert (if (equal i 0) "英" "  美"))
-              do (insert " " pronunciation " ")
-              do (insert-button "🔊"
-                                'display (when (fanyi-display-glyphs-p)
-                                           (find-image `((:type xpm
-                                                                :data ,fanyi-haici-speaker-xpm
-                                                                :ascent center
-                                                                :color-symbols
-                                                                (("color" . ,(face-attribute 'fanyi-female-speaker-face :foreground)))))))
-                                'action #'fanyi-play-sound
-                                'button-data (format (oref this :sound-url) female)
-                                'face 'fanyi-female-speaker-face
-                                'follow-link t
-                                'help-echo "女声版发音")
-              do (insert " ")
-              do (insert-button "🔊"
-                                'display (when (fanyi-display-glyphs-p)
-                                           (find-image `((:type xpm
-                                                                :data ,fanyi-haici-speaker-xpm
-                                                                :ascent center
-                                                                :color-symbols
-                                                                (("color" . ,(face-attribute 'fanyi-male-speaker-face :foreground)))))))
-                                'action #'fanyi-play-sound
-                                'button-data (format (oref this :sound-url) male)
-                                'face 'fanyi-male-speaker-face
-                                'follow-link t
-                                'help-echo "男声版发音"))
-     (insert "\n\n"))
-   ;; Paraphrases.
-   ;; - n. 荣誉；荣幸；尊敬；信用；正直；贞洁
-   ;; - vt. 尊敬；使荣幸；对...表示敬意；兑现
-   ;; ...
-   (cl-loop for pa in (oref this :paraphrases)
-            for (pos p) = pa
-            do (insert "- " pos " " p "\n"))
-   (insert "\n")
-   ;; Make a button for distribution chart.
-   (when-let ((dist (oref this :distribution)))
-     (insert-button "Click to view the distribution chart"
-                    'action (lambda (dist)
-                              ;; `switch-to-buffer' is used in `chart-bar-quickie' which means a new chart buffer will
-                              ;; always be popped in the same window.
-                              ;;
-                              ;; Typing `q' (`quit-window') in chart buffer will
-                              ;;
-                              ;; 1. bury the *fanyi-haici-distribution-chart* buffer.
-                              ;; 2. reset the `restore-quit' window parameter of current window to nil.
-                              ;;
-                              ;; When the second `q' is typed in *fanyi* buffer, `quit-window' will
-                              ;;
-                              ;; 1. bury the *fanyi* buffer.
-                              ;; 2. `switch-to-prev-buffer'
-                              ;;
-                              ;; It can't restore the window configuration since `restore-quit' was reset to nil.
-                              ;;
-                              ;; Once `fanyi-haici-chart-inhibit-same-window' is non-nil, the chart buffer won't be popped
-                              ;; in the same window which prevent `quit-window' window parameter from being reset.
-                              ;;
-                              ;; See (C-x C-e) the below manual
-                              ;;
-                              ;; (info "(elisp)Quitting Windows")
-                              ;;
-                              ;; for more information.
-                              (let ((switch-to-buffer-obey-display-actions fanyi-haici-chart-inhibit-same-window)
-                                    (display-buffer-alist `((,(concat "\\*" fanyi-haici-distribution-chart-title "\\*")
-                                                             (display-buffer-pop-up-window)
-                                                             (inhibit-same-window . t)))))
-                                (chart-bar-quickie
-                                 'vertical
-                                 fanyi-haici-distribution-chart-title
-                                 (seq-map #'cadr dist) "Senses"
-                                 (seq-map #'car dist) "Percent")))
-                    'button-data dist
-                    'follow-link t)
-     (insert "\n\n"))
-   ;; Make buttons for related words.
-   (when-let ((rs (oref this :related)))
-     (cl-loop for r in rs
-              for (k v) = r
-              do (insert k " ")
-              do (insert-button v
-                                'action #'fanyi-dwim
-                                'button-data v
-                                'follow-link t)
-              do (insert " "))
-     (insert "\n\n"))
-   ;; The etymons.
-   (when-let ((etymons (oref this :etymons)))
-     (insert "## 起源\n\n")
-     (cl-loop for i in etymons
-              do (insert "- " i "\n"))
-     (insert "\n"))
-   ;; Visit the url for more information.
-   (insert-button "Browse the full page via eww"
-                  'action #'eww
-                  'button-data (format (oref this :url) (oref this :word))
-                  'follow-link t)
-   (insert "\n\n")))
+    ;; The headline about Haici service.
+    (insert "# 海词\n\n")
+    ;; Syllables and star/level description.
+    (insert (oref this :syllable)
+            " "
+            (s-repeat (oref this :star) "★")
+            " "
+            (oref this :star-desc)
+            "\n\n")
+    ;; Phonetics.
+    ;; British: pronunciation, female sound url, male sound url
+    ;; American: pronunciation, female sound url, male sound url
+    (let ((phonetics (oref this :phonetics)))
+      (cl-assert (equal (length phonetics) 2))
+      (cl-loop for i from 0 to 1
+               for (pronunciation female male) = (nth i phonetics)
+               do (insert (if (equal i 0) "英" "  美"))
+               do (insert " " pronunciation " ")
+               do (insert-button "🔊"
+                                 'display (when (fanyi-display-glyphs-p)
+                                            (find-image `((:type xpm
+                                                                 :data ,fanyi-haici-speaker-xpm
+                                                                 :ascent center
+                                                                 :color-symbols
+                                                                 (("color" . ,(face-attribute 'fanyi-female-speaker-face :foreground)))))))
+                                 'action #'fanyi-play-sound
+                                 'button-data (format (oref this :sound-url) female)
+                                 'face 'fanyi-female-speaker-face
+                                 'follow-link t
+                                 'help-echo "女声版发音")
+               do (insert " ")
+               do (insert-button "🔊"
+                                 'display (when (fanyi-display-glyphs-p)
+                                            (find-image `((:type xpm
+                                                                 :data ,fanyi-haici-speaker-xpm
+                                                                 :ascent center
+                                                                 :color-symbols
+                                                                 (("color" . ,(face-attribute 'fanyi-male-speaker-face :foreground)))))))
+                                 'action #'fanyi-play-sound
+                                 'button-data (format (oref this :sound-url) male)
+                                 'face 'fanyi-male-speaker-face
+                                 'follow-link t
+                                 'help-echo "男声版发音"))
+      (insert "\n\n"))
+    ;; Paraphrases.
+    ;; - n. 荣誉；荣幸；尊敬；信用；正直；贞洁
+    ;; - vt. 尊敬；使荣幸；对...表示敬意；兑现
+    ;; ...
+    (cl-loop for pa in (oref this :paraphrases)
+             for (pos p) = pa
+             do (insert "- " pos " " p "\n"))
+    (insert "\n")
+    ;; Make a button for distribution chart.
+    (when-let ((dist (oref this :distribution)))
+      (insert-button "Click to view the distribution chart"
+                     'action (lambda (dist)
+                               ;; `switch-to-buffer' is used in `chart-bar-quickie' which means a new chart buffer will
+                               ;; always be popped in the same window.
+                               ;;
+                               ;; Typing `q' (`quit-window') in chart buffer will
+                               ;;
+                               ;; 1. bury the *fanyi-haici-distribution-chart* buffer.
+                               ;; 2. reset the `restore-quit' window parameter of current window to nil.
+                               ;;
+                               ;; When the second `q' is typed in *fanyi* buffer, `quit-window' will
+                               ;;
+                               ;; 1. bury the *fanyi* buffer.
+                               ;; 2. `switch-to-prev-buffer'
+                               ;;
+                               ;; It can't restore the window configuration since `restore-quit' was reset to nil.
+                               ;;
+                               ;; Once `fanyi-haici-chart-inhibit-same-window' is non-nil, the chart buffer won't be popped
+                               ;; in the same window which prevent `quit-window' window parameter from being reset.
+                               ;;
+                               ;; See (C-x C-e) the below manual
+                               ;;
+                               ;; (info "(elisp)Quitting Windows")
+                               ;;
+                               ;; for more information.
+                               (let ((switch-to-buffer-obey-display-actions fanyi-haici-chart-inhibit-same-window)
+                                     (display-buffer-alist `((,(concat "\\*" fanyi-haici-distribution-chart-title "\\*")
+                                                              (display-buffer-pop-up-window)
+                                                              (inhibit-same-window . t)))))
+                                 (chart-bar-quickie
+                                  'vertical
+                                  fanyi-haici-distribution-chart-title
+                                  (seq-map #'cadr dist) "Senses"
+                                  (seq-map #'car dist) "Percent")))
+                     'button-data dist
+                     'follow-link t)
+      (insert "\n\n"))
+    ;; Make buttons for related words.
+    (when-let ((rs (oref this :related)))
+      (cl-loop for r in rs
+               for (k v) = r
+               do (insert k " ")
+               do (insert-button v
+                                 'action #'fanyi-dwim
+                                 'button-data v
+                                 'follow-link t)
+               do (insert " "))
+      (insert "\n\n"))
+    ;; The etymons.
+    (when-let ((etymons (oref this :etymons)))
+      (insert "## 起源\n\n")
+      (cl-loop for i in etymons
+               do (insert "- " i "\n"))
+      (insert "\n"))
+    ;; Visit the url for more information.
+    (insert-button "Browse the full page via eww"
+                   'action #'eww
+                   'button-data (format (oref this :url) (oref this :word))
+                   'follow-link t)
+    (insert "\n\n")))
 
 ;; The Haici dict specific font-lock keywords
 (add-to-list 'fanyi-mode-font-lock-keywords-extra '("★" . 'fanyi-haici-star-face))

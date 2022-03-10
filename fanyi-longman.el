@@ -358,172 +358,172 @@ Typically it can be a list of strings or \"riched\" strings."))
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
 before calling this method."
   (fanyi-with-fanyi-buffer
-   ;; The headline about Longman dictionary service.
-   (insert "# Longman\n\n")
-   ;; Word family section.
-   (when-let (word-family (oref this :word-family))
-     (insert (propertize "Word family"
-                         'display (when (fanyi-display-glyphs-p)
-                                    (fanyi-longman-svg-tag-make "Word family" 'fanyi-longman-svg-asset-face))))
-     (cl-loop for wf in word-family
-              for pos = (car wf)
-              for words = (cdr wf)
-              do (insert " " pos)
-              do (cl-loop for w in words
-                          do (insert " ")
-                          do (insert-button w
-                                            'action #'fanyi-dwim
-                                            'button-data w
-                                            'follow-link t)))
-     (insert "\n\n"))
-   ;; Dicts.
-   (cl-loop for dict in (oref this :dicts)
-            do (insert "## " (oref dict :name) "\n\n")
-            ;; job /dʒɒb $ dʒɑːb/ ●●● S1 W1 AWL (noun) 🔊 🔊
-            ;; ^            ^       ^               ^
-            ;; hyphenation  pron    level           pos
-            do (when-let ((hyph (oref dict :hyphenation)))
-                 (insert hyph))
-            do (when-let ((pron (oref dict :pronunciation)))
-                 (insert " " pron))
-            do (when-let ((level (oref dict :level)))
-                 (insert " "
-                         (propertize (car level) 'help-echo (cdr level))))
-            do (insert
-                (s-join " "
-                        (seq-map (pcase-lambda (`(,freq . ,desc))
-                                   (propertize freq
-                                               'help-echo desc
-                                               'display (when (fanyi-display-glyphs-p)
-                                                          (fanyi-longman-svg-tag-make freq 'fanyi-longman-svg-asset-face))))
-                                 (oref dict :freqs))))
-            do (when-let ((ac (oref dict :academy)))
-                 (insert " "
-                         (propertize (car ac)
-                                     'help-echo (cdr ac)
-                                     'display (when (fanyi-display-glyphs-p)
-                                                (fanyi-longman-svg-tag-make (car ac) 'fanyi-longman-svg-asset-face)))))
-            do (when-let ((pos (oref dict :pos)))
-                 (insert " (" pos ")"))
-            do (when-let ((inflect (oref dict :inflection)))
-                 (insert " " inflect))
-            do (when-let ((gram (oref dict :grammar)))
-                 (insert " " gram))
-            do (when (oref dict :british)
-                 (insert " ")
-                 (insert-button "🔊"
-                                'action #'fanyi-play-sound
-                                'button-data (oref dict :british)
-                                'face 'fanyi-female-speaker-face
-                                'help-echo "Play British pronunciation"
-                                'follow-link t)
-                 (insert " ")
-                 (insert-button "🔊"
-                                'action #'fanyi-play-sound
-                                'button-data (oref dict :american)
-                                'face 'fanyi-male-speaker-face
-                                'help-echo "Play American pronunciation"
-                                'follow-link t))
-            do (insert "\n\n")
-            ;; - work [countable] informal unit   GEO   the regular paid work SYN *foo* link
-            ;;   ^             ^         ^    ^     ^       ^                 ^           ^
-            ;;   signpost      grammar  lbl lexut  geo      button          synonym     crossref
-            ;;
-            ;; For easy implementation, crossref is put at the end of
-            ;; definition.
-            do (cl-loop for sense in (oref dict :senses)
-                        do (insert "- ")
-                        do (when-let ((signpost (oref sense :signpost)))
-                             (insert (propertize signpost
-                                                 'display (when (fanyi-display-glyphs-p)
-                                                            (fanyi-longman-svg-tag-make signpost 'fanyi-longman-svg-signpost-face)))
-                                     " "))
-                        do (when-let ((grammar (oref sense :grammar)))
-                             (insert grammar " "))
-                        do (when-let ((geo (oref sense :geo)))
-                             (insert (propertize geo
-                                                 'font-lock-face 'fanyi-longman-geo-face)
-                                     " "))
-                        do (when-let ((label (oref sense :registerlab)))
-                             (insert (propertize label
-                                                 'font-lock-face 'fanyi-longman-registerlab-face)
-                                     " "))
-                        do (when-let ((unit (oref sense :lexunit)))
-                             (insert "*" unit "*"
-                                     " "))
-                        do (seq-do (lambda (s)
-                                     (pcase s
-                                       ((pred stringp)
-                                        (insert s " "))
-                                       (`(,text face italic)
-                                        (insert "/" text "/"))
-                                       (`(,text button ,data)
-                                        (insert-button text
-                                                       'action #'fanyi-dwim
-                                                       'button-data data
+    ;; The headline about Longman dictionary service.
+    (insert "# Longman\n\n")
+    ;; Word family section.
+    (when-let (word-family (oref this :word-family))
+      (insert (propertize "Word family"
+                          'display (when (fanyi-display-glyphs-p)
+                                     (fanyi-longman-svg-tag-make "Word family" 'fanyi-longman-svg-asset-face))))
+      (cl-loop for wf in word-family
+               for pos = (car wf)
+               for words = (cdr wf)
+               do (insert " " pos)
+               do (cl-loop for w in words
+                           do (insert " ")
+                           do (insert-button w
+                                             'action #'fanyi-dwim
+                                             'button-data w
+                                             'follow-link t)))
+      (insert "\n\n"))
+    ;; Dicts.
+    (cl-loop for dict in (oref this :dicts)
+             do (insert "## " (oref dict :name) "\n\n")
+             ;; job /dʒɒb $ dʒɑːb/ ●●● S1 W1 AWL (noun) 🔊 🔊
+             ;; ^            ^       ^               ^
+             ;; hyphenation  pron    level           pos
+             do (when-let ((hyph (oref dict :hyphenation)))
+                  (insert hyph))
+             do (when-let ((pron (oref dict :pronunciation)))
+                  (insert " " pron))
+             do (when-let ((level (oref dict :level)))
+                  (insert " "
+                          (propertize (car level) 'help-echo (cdr level))))
+             do (insert
+                 (s-join " "
+                         (seq-map (pcase-lambda (`(,freq . ,desc))
+                                    (propertize freq
+                                                'help-echo desc
+                                                'display (when (fanyi-display-glyphs-p)
+                                                           (fanyi-longman-svg-tag-make freq 'fanyi-longman-svg-asset-face))))
+                                  (oref dict :freqs))))
+             do (when-let ((ac (oref dict :academy)))
+                  (insert " "
+                          (propertize (car ac)
+                                      'help-echo (cdr ac)
+                                      'display (when (fanyi-display-glyphs-p)
+                                                 (fanyi-longman-svg-tag-make (car ac) 'fanyi-longman-svg-asset-face)))))
+             do (when-let ((pos (oref dict :pos)))
+                  (insert " (" pos ")"))
+             do (when-let ((inflect (oref dict :inflection)))
+                  (insert " " inflect))
+             do (when-let ((gram (oref dict :grammar)))
+                  (insert " " gram))
+             do (when (oref dict :british)
+                  (insert " ")
+                  (insert-button "🔊"
+                                 'action #'fanyi-play-sound
+                                 'button-data (oref dict :british)
+                                 'face 'fanyi-female-speaker-face
+                                 'help-echo "Play British pronunciation"
+                                 'follow-link t)
+                  (insert " ")
+                  (insert-button "🔊"
+                                 'action #'fanyi-play-sound
+                                 'button-data (oref dict :american)
+                                 'face 'fanyi-male-speaker-face
+                                 'help-echo "Play American pronunciation"
+                                 'follow-link t))
+             do (insert "\n\n")
+             ;; - work [countable] informal unit   GEO   the regular paid work SYN *foo* link
+             ;;   ^             ^         ^    ^     ^       ^                 ^           ^
+             ;;   signpost      grammar  lbl lexut  geo      button          synonym     crossref
+             ;;
+             ;; For easy implementation, crossref is put at the end of
+             ;; definition.
+             do (cl-loop for sense in (oref dict :senses)
+                         do (insert "- ")
+                         do (when-let ((signpost (oref sense :signpost)))
+                              (insert (propertize signpost
+                                                  'display (when (fanyi-display-glyphs-p)
+                                                             (fanyi-longman-svg-tag-make signpost 'fanyi-longman-svg-signpost-face)))
+                                      " "))
+                         do (when-let ((grammar (oref sense :grammar)))
+                              (insert grammar " "))
+                         do (when-let ((geo (oref sense :geo)))
+                              (insert (propertize geo
+                                                  'font-lock-face 'fanyi-longman-geo-face)
+                                      " "))
+                         do (when-let ((label (oref sense :registerlab)))
+                              (insert (propertize label
+                                                  'font-lock-face 'fanyi-longman-registerlab-face)
+                                      " "))
+                         do (when-let ((unit (oref sense :lexunit)))
+                              (insert "*" unit "*"
+                                      " "))
+                         do (seq-do (lambda (s)
+                                      (pcase s
+                                        ((pred stringp)
+                                         (insert s " "))
+                                        (`(,text face italic)
+                                         (insert "/" text "/"))
+                                        (`(,text button ,data)
+                                         (insert-button text
+                                                        'action #'fanyi-dwim
+                                                        'button-data data
+                                                        'follow-link t)
+                                         (insert " "))))
+                                    (oref sense :def))
+                         do (when-let ((synonym (oref sense :syn)))
+                              (insert (propertize "SYN"
+                                                  'display (when (fanyi-display-glyphs-p)
+                                                             (fanyi-longman-svg-tag-make "SYN" 'fanyi-longman-svg-asset-face)))
+                                      " "
+                                      "*" synonym "*"
+                                      " "))
+                         do (when-let ((crossref (oref sense :crossref)))
+                              (insert-button (car crossref)
+                                             'action #'fanyi-dwim
+                                             'button-data (cdr crossref)
+                                             'follow-link t))
+                         do (insert "\n")
+                         ;; Examples.
+                         do (cl-loop for example in (oref sense :examples)
+                                     for mp3 = (car example)
+                                     for expl = (cdr example)
+                                     do (insert-button (if mp3 "🔊" "🔇")
+                                                       'action #'fanyi-play-sound
+                                                       'button-data (or mp3 "")
+                                                       'face 'fanyi-longman-example-face
+                                                       'line-prefix (s-repeat fanyi-longman-example-indent " ")
+                                                       'help-echo "Play Example"
                                                        'follow-link t)
-                                        (insert " "))))
-                                   (oref sense :def))
-                        do (when-let ((synonym (oref sense :syn)))
-                             (insert (propertize "SYN"
-                                                 'display (when (fanyi-display-glyphs-p)
-                                                            (fanyi-longman-svg-tag-make "SYN" 'fanyi-longman-svg-asset-face)))
-                                     " "
-                                     "*" synonym "*"
-                                     " "))
-                        do (when-let ((crossref (oref sense :crossref)))
-                             (insert-button (car crossref)
-                                            'action #'fanyi-dwim
-                                            'button-data (cdr crossref)
-                                            'follow-link t))
-                        do (insert "\n")
-                        ;; Examples.
-                        do (cl-loop for example in (oref sense :examples)
-                                    for mp3 = (car example)
-                                    for expl = (cdr example)
-                                    do (insert-button (if mp3 "🔊" "🔇")
-                                                      'action #'fanyi-play-sound
-                                                      'button-data (or mp3 "")
-                                                      'face 'fanyi-longman-example-face
-                                                      'line-prefix (s-repeat fanyi-longman-example-indent " ")
-                                                      'help-echo "Play Example"
-                                                      'follow-link t)
-                                    do (insert " "
-                                               (propertize expl
-                                                           'font-lock-face 'fanyi-longman-example-face
-                                                           'wrap-prefix (s-repeat fanyi-longman-example-indent " "))
-                                               "\n"))
-                        ;; Footnote.
-                        do (when-let* ((expl (oref sense :footnote-expl))
-                                       ((s-present? expl)))
-                             (insert (propertize "> "
-                                                 'line-prefix (s-repeat fanyi-longman-example-indent " "))
-                                     (propertize expl
-                                                 'wrap-prefix (s-repeat fanyi-longman-example-indent " "))
-                                     "\n"))
-                        do (when-let* ((ex (oref sense :footnote-example))
-                                       ((s-present? ex)))
-                             (insert (propertize ">> "
-                                                 'line-prefix (s-repeat (* 2 fanyi-longman-example-indent) " "))
-                                     (propertize ex
-                                                 'font-lock-face 'fanyi-longman-example-face
-                                                 'wrap-prefix (s-repeat (* 2 fanyi-longman-example-indent) " "))
-                                     "\n")))
-            do (insert "\n"))
-   ;; Etymon.
-   (when (s-present? (oref this :etymon))
-     (insert "## Etymon\n\n")
-     (insert (propertize "Origin"
-                         'display (when (fanyi-display-glyphs-p)
-                                    (fanyi-longman-svg-tag-make "Origin" 'fanyi-longman-svg-asset-face))))
-     (insert " ")
-     (insert "*" (oref this :word) "*")
-     (insert " ")
-     (insert (oref this :etymon)))
-   ;; The end.
-   (while (equal (char-before) ?\n)
-     (delete-char -1))
-   (insert "\n\n")))
+                                     do (insert " "
+                                                (propertize expl
+                                                            'font-lock-face 'fanyi-longman-example-face
+                                                            'wrap-prefix (s-repeat fanyi-longman-example-indent " "))
+                                                "\n"))
+                         ;; Footnote.
+                         do (when-let* ((expl (oref sense :footnote-expl))
+                                        ((s-present? expl)))
+                              (insert (propertize "> "
+                                                  'line-prefix (s-repeat fanyi-longman-example-indent " "))
+                                      (propertize expl
+                                                  'wrap-prefix (s-repeat fanyi-longman-example-indent " "))
+                                      "\n"))
+                         do (when-let* ((ex (oref sense :footnote-example))
+                                        ((s-present? ex)))
+                              (insert (propertize ">> "
+                                                  'line-prefix (s-repeat (* 2 fanyi-longman-example-indent) " "))
+                                      (propertize ex
+                                                  'font-lock-face 'fanyi-longman-example-face
+                                                  'wrap-prefix (s-repeat (* 2 fanyi-longman-example-indent) " "))
+                                      "\n")))
+             do (insert "\n"))
+    ;; Etymon.
+    (when (s-present? (oref this :etymon))
+      (insert "## Etymon\n\n")
+      (insert (propertize "Origin"
+                          'display (when (fanyi-display-glyphs-p)
+                                     (fanyi-longman-svg-tag-make "Origin" 'fanyi-longman-svg-asset-face))))
+      (insert " ")
+      (insert "*" (oref this :word) "*")
+      (insert " ")
+      (insert (oref this :etymon)))
+    ;; The end.
+    (while (equal (char-before) ?\n)
+      (delete-char -1))
+    (insert "\n\n")))
 
 ;; The Longman dict specific font-lock keywords
 (add-to-list 'fanyi-mode-font-lock-keywords-extra '("●" . 'fanyi-longman-dot-face))

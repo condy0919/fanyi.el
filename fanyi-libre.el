@@ -120,16 +120,16 @@ languages."
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
 before calling this method."
   (fanyi-with-fanyi-buffer
-   ;; The headline about LibreTranslate service.
-   (insert "# LibreTranslate\n\n")
-   ;; [From] -> [Target]
-   (insert (format "[%s] -> [%s]" fanyi-libre-source-lang fanyi-libre-target-lang) "\n\n")
-   ;; The source text. '\n' character may be present.
-   (cl-loop for line in (s-split "\n" (oref this :word) :omit-nulls)
-            do (insert "> " line "\n")
-            finally do (insert "\n"))
-   ;; The translated text.
-   (insert (oref this :text) "\n\n")))
+    ;; The headline about LibreTranslate service.
+    (insert "# LibreTranslate\n\n")
+    ;; [From] -> [Target]
+    (insert (format "[%s] -> [%s]" fanyi-libre-source-lang fanyi-libre-target-lang) "\n\n")
+    ;; The source text. '\n' character may be present.
+    (cl-loop for line in (s-split "\n" (oref this :word) :omit-nulls)
+             do (insert "> " line "\n")
+             finally do (insert "\n"))
+    ;; The translated text.
+    (insert (oref this :text) "\n\n")))
 
 (defconst fanyi-libre-provider
   (fanyi-libre-service :word "used to save the source text"
