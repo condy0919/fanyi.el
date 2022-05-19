@@ -118,7 +118,7 @@
   :group 'fanyi)
 
 (defvar fanyi-history nil
-  "History list for `fanyi-dwim'.")
+  "History list for `fanyi-dwim' and `fanyi-dwim2'.")
 
 ;; Silence compile warnings.
 (defvar url-http-end-of-headers)
@@ -320,7 +320,12 @@ non-nil."
   (if-let ((word (if (use-region-p)
                      (buffer-substring-no-properties (region-beginning) (region-end))
                    (thing-at-point 'word t))))
-      (fanyi-dwim word)
+      (progn
+        ;; Calling `fanyi-dwim' with an argument will never prompt users, no
+        ;; `read-string' function calls, then no new item in `fanyi-history'. We
+        ;; manually push the word to `fanyi-history'.
+        (fanyi-dwim word)
+        (cl-pushnew word fanyi-history))
     (call-interactively #'fanyi-dwim)))
 
 ;;;###autoload
