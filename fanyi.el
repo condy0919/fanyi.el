@@ -128,7 +128,7 @@
 (defvar fanyi--tasks-completed 0)
 
 (defun fanyi--spawn (instance)
-  "Spawn a thread for searching. The result is powered by INSTANCE."
+  "Spawn a thread to lookup words via INSTANCE."
   (let ((url (format (oref instance :url)
                      (oref instance :word))))
     (cl-pushnew

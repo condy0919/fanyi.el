@@ -1,6 +1,6 @@
 ;;; fanyi-base.el --- The base class of all dictionaries -*- lexical-binding: t -*-
 
-;; Copyright (C) 2021 Zhiwei Chen
+;; Copyright (C) 2021, 2022 Zhiwei Chen
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Author: Zhiwei Chen <condy0919@gmail.com>
 ;; Keywords: convenience, tools
@@ -92,7 +92,7 @@ See `fanyi-sound-player'."
   (unless fanyi-sound-player
     (user-error "Set `fanyi-sound-player' first"))
   (when (string-empty-p url)
-    (user-error "Can't play it"))
+    (user-error "No voice found"))
   (if fanyi-sound-player-support-https
       (start-process fanyi-sound-player nil fanyi-sound-player url)
     ;; Some programs, e.g. mpg123, can't play https files. So we download then
@@ -167,7 +167,7 @@ See `fanyi-sound-player'."
    (api-type :initarg :api-type
              :type symbol
              :protection :protected
-             :documentation "API type. Currently it chould be either 'xml or 'json."))
+             :documentation "API type. Currently it could be either 'xml or 'json."))
   "The base class of dictionary service."
   :abstract t)
 
@@ -209,7 +209,7 @@ passing FMT and ARGS to `format-message'."
 
 (defun fanyi-user-error (fmt &rest args)
   "Signal a user error by passing FMT and ARGS to `user-error'.
-If `fanyi-verbose' is nil (defualt), message won't be displayed.
+If `fanyi-verbose' is nil (default), message won't be displayed.
 If `fanyi-log' is non-nil, the message will also be collected in
 \"*fanyi-log*\" buffer."
   (fanyi-log fmt args)

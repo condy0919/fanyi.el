@@ -120,7 +120,7 @@
           :documentation "Level of the word.")
    (freqs :initarg :freqs
           :initform nil
-          :documentation "Frequence of the word.")
+          :documentation "Frequency of the word.")
    (academy :initarg :academy
             :initform nil
             :documentation "Academic usage.")
