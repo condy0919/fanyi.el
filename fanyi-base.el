@@ -216,7 +216,7 @@ If `fanyi-log' is non-nil, the message will also be collected in
   (fanyi-log fmt args)
   (if fanyi-verbose
       (user-error fmt args)
-    (user-error "")))
+    (signal 'user-error nil)))
 
 (provide 'fanyi-base)
 ;;; fanyi-base.el ends here
