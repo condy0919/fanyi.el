@@ -117,6 +117,11 @@
   :type 'integer
   :group 'fanyi)
 
+(defcustom fanyi-auto-select t
+  "Non-nil means select fanyi window."
+  :type 'boolean
+  :group 'fanyi)
+
 (defvar fanyi-history nil
   "History list for `fanyi-dwim' and `fanyi-dwim2'.")
 
@@ -309,7 +314,9 @@
                 ;; Do search.
                 (fanyi--spawn i))
               instances))
-    (pop-to-buffer buf)))
+    (if fanyi-auto-select
+        (pop-to-buffer buf)
+      (display-buffer buf))))
 
 ;;;###autoload
 (defun fanyi-dwim2 ()
