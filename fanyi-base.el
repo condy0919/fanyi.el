@@ -198,8 +198,9 @@ QUERY could be a sentence for some services."
          ,@body))))
 
 (defun fanyi-log (fmt &rest args)
-  "When the option `fanyi-log' is non-nil, collect the message by
-passing FMT and ARGS to `format-message'."
+  "Collect the messages into *fanyi-log* with non-nil `fanyi-log'.
+
+The FMT and ARGS will be passed to `format-message'."
   (when fanyi-log
     (let ((timestamp (format-time-string "[%F %T]"))
           (text (format-message fmt args)))
