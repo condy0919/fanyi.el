@@ -63,7 +63,7 @@
 
 (cl-defmethod fanyi-parse-from ((this fanyi-youdao-thesaurus-service) js)
   "Complete the fields of THIS from JS json.
-A 'not-found exception will be thrown if there is no result."
+A \='not-found exception will be thrown if there is no result."
   ;; Nothing is found or the json is malformed.
   ;;
   ;; An example:

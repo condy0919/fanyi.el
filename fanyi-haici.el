@@ -115,7 +115,7 @@ static char* speaker_xpm[] = {
 
 (cl-defmethod fanyi-parse-from ((this fanyi-haici-service) dom)
   "Complete the fields of THIS from DOM tree.
-A 'not-found exception will be thrown if there is no result."
+A \='not-found exception will be thrown if there is no result."
   ;; No brief paraphrase is found, return early.
   (unless (dom-by-class dom "dict-basic-ul")
     (throw 'not-found nil))
