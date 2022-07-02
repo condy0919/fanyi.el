@@ -32,9 +32,9 @@ M-x package-install RET fanyi RET
 
 ## Usage
 
-Call `fanyi-dwim`, or `fanyi-dwim2` if you can confirm the word at point is
-wanted. A new command `fanyi-from-history` is introduced to browse the search
-history.
+<kbd>M-x</kbd> `fanyi-dwim`, or `fanyi-dwim2` if you can confirm the word at
+point is wanted. A new command `fanyi-from-history` is introduced to browse the
+search history.
 
 If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim`, `fanyi-dwim2` and
 `fanyi-from-history`, try
@@ -44,7 +44,7 @@ If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim`, `fanyi-dwim2` and
 (setq read-extended-command-predicate #'command-completion-default-include-p)
 ```
 
-Don't customize `fanyi-providers` via `setq`, use the custom system instead.
+**CAUTIOUS**: Don't customize `fanyi-providers` via `setq`, use the custom system instead.
 
 ``` emacs-lisp
 ;; If you want English-English dictionary only.
@@ -78,15 +78,21 @@ Don't customize `fanyi-providers` via `setq`, use the custom system instead.
                      fanyi-libre-provider)))
 ```
 
-If you're a Windows user,
+By default, `M-x fanyi-dwim` will move the point to the new created `*fanyi* `buffer.
+
+``` elisp
+(setq fanyi-auto-select nil)
+```
+
+to keep the point.
+
+For windows users,
 
 ``` emacs-lisp
 (setq fanyi-sound-player-support-https t)
 ```
 
-may be helpful since `- is interpreted as stdin` is an UNIX convention. If
-`fanyi-sound-player-support-https` is non-nil, the url will be passed to
-`fanyi-sound-player` directly.
+if your sound player can be launched with `your-sound-player url`. Otherwise it will be called like `your-sound-player - <(the voice file)`, where `-` is interpreted as `stdin` which is an UNIX convention.
 
 ## FAQ
 
@@ -111,7 +117,6 @@ may be helpful since `- is interpreted as stdin` is an UNIX convention. If
 ![海词](https://user-images.githubusercontent.com/4024656/128582690-2af2bb4a-46aa-4241-bdc0-6a5bb5e2db38.png)
 ![分布](https://user-images.githubusercontent.com/4024656/128582703-3e62cd17-a778-4982-9872-98e8697e333e.png)
 ![Etymon](https://user-images.githubusercontent.com/4024656/128583142-dfd26d67-45c5-482a-9268-d7482dbe65f3.png)
-![American Heritage](https://user-images.githubusercontent.com/4024656/129494115-02b1e344-4eb3-43ac-8ccc-08d75a3aeecd.png)
 ![Longman](https://user-images.githubusercontent.com/4024656/131615163-7b52a0eb-77a4-481f-b093-8f9c7fa91216.png)
 ![有道同义词英文](https://user-images.githubusercontent.com/4024656/132447780-1bbd9a6e-805e-4a4c-9e0a-03f499864c6f.png)
 ![有道同义词中文](https://user-images.githubusercontent.com/4024656/132447809-af3785bd-fe6d-4e52-a107-71c89fb8a26b.png)

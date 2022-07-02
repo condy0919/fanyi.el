@@ -46,7 +46,7 @@
 
 If non-nil, url will be passed to `fanyi-sound-player' directly.
 Otherwise, `url-retrieve' first, the data will then be sent to
-`fanyi-sound-player' through a pipe."
+`fanyi-sound-player' process through a pipe."
   :type 'boolean
   :group 'fanyi)
 
