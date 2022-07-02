@@ -12,14 +12,13 @@
 - [`etymonline`](https://www.etymonline.com/)
 - [`Longman`](https://www.ldoceonline.com/)
 - [`LibreTranslate`](https://libretranslate.com/), Free and Open Source Machine Translation API.
-- [`American Heritage dictionary`](https://ahdictionary.com/), unusable in China due to high latency. **Not fully implemented**
 
 `fanyi.el` has integrations with:
 
 - `imenu`, <kbd>M-x imenu</kbd> to jump to dictionary section directly.
 - `bookmark`, <kbd>C-x r m</kbd> to make a bookmark for current query word which turns `bookmark` into a vocabulary notebook.
 - `outline-mode`, <kbd>TAB</kbd> to collapse on section.
-- `ol` (`org-link`), `org-store-link` on a fanyi buffer, the link can be inserted later via `org-insert-link`. It's accomplished by introducing a `fanyi` link type.
+- `ol` (aka `org-link`), `org-store-link` on a fanyi buffer, the link can be inserted later via `org-insert-link`. It's accomplished by introducing a `fanyi` link type.
   e.g., <kbd>C-c C-o</kbd> on `[[fanyi:happy][description of happy]]` will invoke a fanyi search.
   Since `ol` depends on `org` package, this integration needs an explicit `(require 'ol-fanyi)`.
 
@@ -29,25 +28,6 @@ Install `fanyi.el` from [MELPA](https://melpa.org) with:
 
 ```
 M-x package-install RET fanyi RET
-```
-
-If you're an `American Heritage Dictionary` user, make sure `Minion New` font is
-installed. Otherwise the pronunciation may be displayed in tofu, or an
-`all-the-icons` icon if you have `all-the-icons` installed.
-
-``` shell
-# family: Minion New Bold
-# https://ahdictionary.com/application/resources/fonts/MinionNew-Bold.ttf
-#
-# family: Minion New Italic
-# https://ahdictionary.com/application/resources/fonts/MinionNew-Italic.ttf
-curl https://ahdictionary.com/application/resources/fonts/MININ___.TTF -o Minion.ttf
-
-# linux
-mv Minion.ttf ~/.local/share/fonts/
-
-# macOS
-mv Minion.ttf ~/Library/Fonts/
 ```
 
 ## Usage
