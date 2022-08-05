@@ -26,6 +26,11 @@ jobs:
       with:
         version: 0.8.7
 
-    - run: cask install
-    - run: make compile
-    - run: make lint
+    # Install Eask
+    - uses: emacs-eask/setup-eask@master
+      with:
+        version: 'snapshot'
+
+    - run: eask install
+    - run: eask compile
+    - run: eask lint package
