@@ -38,6 +38,9 @@
 (require 'cl-lib)
 (require 'outline)
 
+(declare-function outline-cycle "outline")
+(declare-function outline-cycle-buffer "outline")
+
 (require 'fanyi-base)
 
 (defgroup fanyi nil
