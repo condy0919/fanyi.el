@@ -83,6 +83,28 @@
                              explain
                            "NO EXPLANATION"))))))))
 
+(defconst fanyi-youdao-thesaurus--pos-regexp
+  (concat "\\_<" (regexp-opt '("pron." "prep." "conj." "abbr." "det." "adj."
+                               "adv." "art." "vt." "vi." "n." "v.")))
+  "Part-of-speech labels starting at a word boundary.")
+
+(defun fanyi-youdao-thesaurus--propertize-pos (explanation)
+  "Return EXPLANATION with faces on independent part-of-speech labels."
+  (let ((text (copy-sequence explanation))
+        (case-fold-search nil)
+        (start 0))
+    (while (string-match fanyi-youdao-thesaurus--pos-regexp text start)
+      (let ((begin (match-beginning 0))
+            (end (match-end 0)))
+        ;; Permit Chinese definitions immediately after the label, while
+        ;; excluding labels that continue into an ASCII word or identifier.
+        (unless (and (< end (length text))
+                     (string-match-p "[A-Za-z0-9_]" (substring text end (1+ end))))
+          (add-text-properties
+           begin end '(face fanyi-pos-face font-lock-face fanyi-pos-face) text))
+        (setq start end)))
+    text))
+
 (defun fanyi-youdao-thesaurus-render (result _request)
   "Render RESULT in the buffer named `fanyi-buffer-name'.
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
@@ -92,21 +114,8 @@ before calling this function."
     (insert "# 有道同义词词典 \n\n")
     (cl-loop for (ent . explain) in result
              do (insert "- " ent "\n")
-             ;; Prettify POS, order matters. See `fanyi-mode-font-lock-keywords'.
              do (insert (propertize
-                         (s-replace-all '(("pron." . "(pron.)")
-                                          ("prep." . "(prep.)")
-                                          ("conj." . "(conj.)")
-                                          ("abbr." . "(abbr.)")
-                                          ("det."  . "(det.)")
-                                          ("adj."  . "(adj.)")
-                                          ("adv."  . "(adv.)")
-                                          ("art."  . "(art.)")
-                                          ("vt."   . "(vt.)")
-                                          ("vi."   . "(vi.)")
-                                          ("n."    . "(n.)")
-                                          ("v."    . "(v.)"))
-                                        explain)
+                         (fanyi-youdao-thesaurus--propertize-pos explain)
                          'line-prefix (s-repeat fanyi-youdao-thesaurus-indent " ")
                          'wrap-prefix (s-repeat fanyi-youdao-thesaurus-indent " ")))
              do (insert "\n"))

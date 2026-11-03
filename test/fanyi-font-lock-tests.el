@@ -84,5 +84,39 @@
     (search-forward "/italic/")
     (should (eq (get-text-property (match-beginning 0) 'face) 'italic))))
 
+(ert-deftest fanyi-youdao-preserves-explanations-and-semantic-pos-faces ()
+  (require 'fanyi-youdao-thesaurus)
+  (let* ((explanation
+          (concat "n. 名词；v. 动词；vt. 及物；vi. 不及物；pron. 代词；prep. 介词；"
+                  "conj. 连词；abbr. 缩写；det. 限定词；adj. 形容词；adv. 副词；art. 冠词；"
+                  "n.中文；(n.) 已有；abbreviation. Rev. n.example n._suffix N. 大写"))
+         (result (list (cons "sample" explanation))))
+    (with-temp-buffer
+      (fanyi-mode)
+      (let ((fanyi-buffer-name (buffer-name)))
+        (fanyi-youdao-thesaurus-render result nil))
+      (should (equal (buffer-substring-no-properties (point-min) (point-max))
+                     (concat "# 有道同义词词典 \n\n- sample\n" explanation "\n\n")))
+      ;; Styling a rendered result must not add properties to its source text.
+      (should-not (text-property-not-all 0 (length explanation) 'face nil explanation))
+      (should-not (text-property-not-all 0 (length explanation) 'font-lock-face nil explanation))
+      (cl-labels
+          ((check-faces ()
+             (goto-char (point-min))
+             (dolist (label '("n." "v." "vt." "vi." "pron." "prep." "conj." "abbr."
+                              "det." "adj." "adv." "art." "n.中文" "(n.)"))
+               (search-forward label)
+               (let ((begin (+ (match-beginning 0) (if (string-prefix-p "(" label) 1 0))))
+                 (should (eq (get-char-property begin 'face) 'fanyi-pos-face))
+                 (should (eq (get-text-property begin 'font-lock-face) 'fanyi-pos-face))))
+             (dolist (text '("abbreviation." "Rev." "n.example" "n._suffix" "N."))
+               (search-forward text)
+               (cl-loop for position from (match-beginning 0) below (match-end 0)
+                        do (should-not (eq (get-char-property position 'face) 'fanyi-pos-face))
+                        do (should-not (get-text-property position 'font-lock-face))))))
+        (check-faces)
+        (fanyi-test--fontify-mixed-result)
+        (check-faces)))))
+
 (provide 'fanyi-font-lock-tests)
 ;;; fanyi-font-lock-tests.el ends here

@@ -88,7 +88,7 @@ Temporarily rename an existing result buffer so its text and mode survive."
 (ert-deftest fanyi-provider-youdao-fixture ()
   (fanyi-test--with-rendered-fixture fanyi-youdao-thesaurus-provider "youdao.json"
     (should (= (length result) 2))
-    (dolist (text '("# 有道同义词词典" "- sample" "(n.) 样本；(vt.) 取样"
+    (dolist (text '("# 有道同义词词典" "- sample" "n. 样本；vt. 取样"
                     "- specimen" "NO EXPLANATION"))
       (should (string-match-p (regexp-quote text) (buffer-string))))))
 
