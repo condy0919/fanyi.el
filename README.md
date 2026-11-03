@@ -101,11 +101,14 @@ without usable dictionary content are reported as parsing failures; an explicit
 empty result from Youdao is reported as no results found.
 
 Longman uses Emacs's built-in `shr` renderer for dictionary HTML. Definitions,
-examples, lists, and inline formatting follow the document structure; audio
-buttons and dictionary links still play pronunciations and start Fanyi queries.
-Only dictionary content is selected, and rendering does not download images or
-other page resources. This replaces the previous SVG badges and hand-written
-layout; `fanyi-longman-svg-border-radius` is no longer used.
+lists, and inline formatting follow the document structure, with Fanyi headings,
+separate example lines, and persistent highlighting for parts of speech and
+grammar. Duplicate headwords, field codes, and signpost labels are omitted.
+Audio buttons play pronunciations, dictionary links start Fanyi queries, and
+related-topic links open in Emacs's EWW browser. The Origin label uses an SVG
+badge when supported (controlled by `fanyi-use-glyphs` and
+`fanyi-longman-svg-border-radius`), with a text fallback. Only dictionary content
+is selected; rendering does not download images or other page resources.
 
 Etymonline displays an `Open in browser` button immediately, without making an
 HTTP request or parsing its pages. Click it to read the current entry and

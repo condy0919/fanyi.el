@@ -2,8 +2,8 @@
 
 These are hand-written, reduced examples of the HTML and JSON structures
 consumed by the providers. They are synthetic regression data, not downloaded
-pages or snapshots of the current dictionary websites. Definitions and audio
-identifiers are test data; `example.invalid` URLs must never be fetched.
+pages or snapshots of the current dictionary websites. Most definitions and all
+audio identifiers are test data; `example.invalid` URLs must never be fetched.
 
 - `haici.html`: two pronunciations, four audio identifiers, two definitions,
   and a related word. Whitespace and the final placeholder list item match the
@@ -13,6 +13,9 @@ identifiers are test data; `example.invalid` URLs must never be fetched.
 - `longman-rich.html`: nested and unfamiliar markup, lists, paragraphs, a table,
   relative audio and help links, an encoded cross-reference, and unrelated page
   content that must not be rendered.
+- `longman-dragon.html`: reduced markup using the text reported by the user for
+  dragon, including a dictionary heading, topic and dictionary links,
+  duplicate headword markup, grammar labels, seven corpus examples, and origin.
 - `youdao.json`: two entries, including one without an explanation.
 - `youdao-empty.json`: a successful API response explicitly containing no entries.
 - `error-page.html`: a generic service error page with no dictionary structure.

@@ -13,6 +13,22 @@
     (insert html)
     (libxml-parse-html-region (point-min) (point-max))))
 
+(defun fanyi-test--refresh-font-lock ()
+  "Fontify and refontify the result as an interactive Fanyi buffer would."
+  (fanyi-mode)
+  (let ((noninteractive nil))
+    (font-lock-mode 1))
+  (font-lock-ensure)
+  (font-lock-flush)
+  (font-lock-ensure))
+
+(defun fanyi-test--has-face-p (position expected)
+  "Return whether POSITION has EXPECTED face before or after fontification."
+  (cl-some (lambda (property)
+             (let ((face (get-text-property position property)))
+               (or (eq face expected) (and (listp face) (memq expected face)))))
+           '(face font-lock-face)))
+
 (defun fanyi-test--find-action-button (action data)
   "Find a button invoking ACTION with DATA in the current buffer."
   (let ((position (point-min)) found button)
@@ -25,31 +41,32 @@
 
 (ert-deftest fanyi-shr-preserves-new-markup-and-document-structure ()
   (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-rich.html"
-                                     (let ((text (fanyi-test--rendered-text)))
-                                       (dolist (expected '("Nested bold italic and new field text."
-                                                           "First paragraph." "Second paragraph."
-                                                           "After the break." "First list item" "Second list item"
-                                                           "Form" "Meaning" "sampled" "past tense"
-                                                           "A newly formatted example." "From an older word."))
-                                         (should (string-match-p (regexp-quote expected) text))))
-                                     (should (string-match-p "^# Longman$" (buffer-string)))
-                                     (should (string-match-p "^## Rich test dictionary$" (buffer-string)))
-                                     ;; Paragraphs, br and list items should remain visibly separate.
-                                     (should (string-match-p "First paragraph\\.\n" (buffer-string)))
-                                     (should (string-match-p "Second paragraph\\.\n" (buffer-string)))
-                                     (should (string-match-p "First list item\n" (buffer-string)))))
+    (let ((text (fanyi-test--rendered-text)))
+      (dolist (expected '("Nested bold italic and new field text."
+                          "First paragraph." "Second paragraph."
+                          "After the break." "First list item" "Second list item"
+                          "Form" "Meaning" "sampled" "past tense"
+                          "A newly formatted example." "From an older word."))
+        (should (string-match-p (regexp-quote expected) text))))
+    (should (string-match-p "^# Longman$" (buffer-string)))
+    (should (string-match-p "^## Rich test dictionary$" (buffer-string)))
+    ;; Paragraphs, br and list items should remain visibly separate.
+    (should (string-match-p "First paragraph\\.\n" (buffer-string)))
+    (should (string-match-p "Second paragraph\\.\n" (buffer-string)))
+    (should (string-match-p "First list item\n" (buffer-string)))))
 
 (ert-deftest fanyi-shr-keeps-formatting-properties ()
   (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-rich.html"
-                                     (goto-char (point-min))
-                                     (search-forward "bold")
-                                     (let ((face (or (get-text-property (match-beginning 0) 'face)
-                                                     (get-text-property (match-beginning 0) 'font-lock-face))))
-                                       (should (or (eq face 'bold) (and (listp face) (memq 'bold face)))))
-                                     (search-forward "italic")
-                                     (let ((face (or (get-text-property (match-beginning 0) 'face)
-                                                     (get-text-property (match-beginning 0) 'font-lock-face))))
-                                       (should (or (eq face 'italic) (and (listp face) (memq 'italic face)))))))
+    (fanyi-test--refresh-font-lock)
+    (goto-char (point-min))
+    (search-forward "bold")
+    (let ((face (or (get-text-property (match-beginning 0) 'face)
+                    (get-text-property (match-beginning 0) 'font-lock-face))))
+      (should (or (eq face 'bold) (and (listp face) (memq 'bold face)))))
+    (search-forward "italic")
+    (let ((face (or (get-text-property (match-beginning 0) 'face)
+                    (get-text-property (match-beginning 0) 'font-lock-face))))
+      (should (or (eq face 'italic) (and (listp face) (memq 'italic face)))))))
 
 (ert-deftest fanyi-shr-selects-entries-and-does-not-fetch-resources ()
   (cl-letf (((symbol-function 'url-retrieve)
@@ -59,55 +76,57 @@
             ((symbol-function 'url-queue-retrieve)
              (lambda (&rest _) (ert-fail "Rendering must not fetch resources"))))
     (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-rich.html"
-                                       (dolist (unexpected '("Site navigation" "Advertisement" "Site footer" "Script body"
-                                                             "Invalid entry placeholder" "Unrelated entry"))
-                                         (should-not (string-match-p (regexp-quote unexpected) (buffer-string)))))))
+      (dolist (unexpected '("Site navigation" "Advertisement" "Site footer" "Script body"
+                            "Invalid entry placeholder" "Unrelated entry"))
+        (should-not (string-match-p (regexp-quote unexpected) (buffer-string)))))))
 
 (ert-deftest fanyi-shr-preserves-input-dom ()
   (let* ((dom (fanyi-test--read-fixture "longman-rich.html"))
          (before (copy-tree dom)))
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
-                                        (should (equal dom before)))))
+      (should (equal dom before)))))
 
 (ert-deftest fanyi-shr-audio-buttons-play-only-when-activated ()
   (let (played)
     (cl-letf (((symbol-function 'fanyi-play-sound)
                (lambda (url) (push url played))))
       (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-rich.html"
-                                         (should-not played)
-                                         (let ((button (fanyi-test--find-action-button
-                                                        #'fanyi-play-sound "https://www.ldoceonline.com/media/sample-uk.mp3")))
-                                           (should button)
-                                           (button-activate button))
-                                         (should (equal played '("https://www.ldoceonline.com/media/sample-uk.mp3")))))))
+        (should-not played)
+        (let ((button (fanyi-test--find-action-button
+                       #'fanyi-play-sound "https://www.ldoceonline.com/media/sample-uk.mp3")))
+          (should button)
+          (button-activate button))
+        (should (equal played '("https://www.ldoceonline.com/media/sample-uk.mp3")))))))
 
 (ert-deftest fanyi-shr-dictionary-links-decode-query-words ()
   (let (queries)
     (cl-letf (((symbol-function 'fanyi-dwim)
                (lambda (word) (push word queries))))
       (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-rich.html"
-                                         (should-not queries)
-                                         (let ((button (fanyi-test--find-action-button #'fanyi-dwim "ice cream")))
-                                           (should button)
-                                           ;; Native button navigation and activation should remain usable.
-                                           (should (keymapp (button-get button 'keymap)))
-                                           (button-activate button))
-                                         (should (equal queries '("ice cream")))))))
+        (should-not queries)
+        (let ((button (fanyi-test--find-action-button #'fanyi-dwim "ice cream")))
+          (should button)
+          ;; Native button navigation and activation should remain usable.
+          (should (keymapp (button-get button 'keymap)))
+          (button-activate button))
+        (should (equal queries '("ice cream")))))))
 
 (ert-deftest fanyi-shr-resolves-relative-external-links ()
   (let (opened)
     (cl-letf (((symbol-function 'browse-url)
                (lambda (url &rest _) (push url opened)))
               ((symbol-function 'browse-url-default-browser)
+               (lambda (url &rest _) (push url opened)))
+              ((symbol-function 'eww)
                (lambda (url &rest _) (push url opened))))
       (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-rich.html"
-                                         (should-not opened)
-                                         (goto-char (point-min))
-                                         (search-forward "Usage help")
-                                         (let ((button (button-at (match-beginning 0))))
-                                           (should button)
-                                           (button-activate button))
-                                         (should (equal opened '("https://www.ldoceonline.com/help/usage")))))))
+        (should-not opened)
+        (goto-char (point-min))
+        (search-forward "Usage help")
+        (let ((button (button-at (match-beginning 0))))
+          (should button)
+          (button-activate button))
+        (should (equal opened '("https://www.ldoceonline.com/help/usage")))))))
 
 (ert-deftest fanyi-shr-does-not-change-earlier-provider-results ()
   (with-temp-buffer
@@ -133,9 +152,9 @@
                       "<div class='etym'>From an older word.</div>"
                       "</div></div>"))))
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
-                                        (dolist (text '("A small amount." "Word family" "sampler" "From an older word."))
-                                          (should (= (how-many (regexp-quote text) (point-min) (point-max)) 1)))
-                                        (should (equal (fanyi-test--button-data #'fanyi-dwim) '("sampler"))))))
+      (dolist (text '("A small amount." "Word family" "sampler" "From an older word."))
+        (should (= (how-many (regexp-quote text) (point-min) (point-max)) 1)))
+      (should (equal (fanyi-test--button-data #'fanyi-dwim) '("sampler"))))))
 
 (ert-deftest fanyi-shr-separates-semantic-fields-without-splitting-words ()
   (let ((dom (fanyi-test--shr-html
@@ -148,10 +167,11 @@
                       "<span class='Crossref'><a href='/dictionary/example'>example</a></span>"
                       "</span></div></div>"))))
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
-                                        (let ((text (fanyi-test--rendered-text)))
-                                          (dolist (expected '("FOOD small sample A prefixed word with inline markup."
-                                                              "markup. SYN specimen example"))
-                                            (should (string-match-p (regexp-quote expected) text)))))))
+      (let ((text (fanyi-test--rendered-text)))
+        (should-not (string-match-p "FOOD" text))
+        (dolist (expected '("small sample A prefixed word with inline markup."
+                            "markup. SYN specimen example"))
+          (should (string-match-p (regexp-quote expected) text)))))))
 
 (ert-deftest fanyi-shr-audio-action-does-not-depend-on-source-tag ()
   (let ((dom (fanyi-test--shr-html
@@ -163,12 +183,115 @@
     (cl-letf (((symbol-function 'fanyi-play-sound)
                (lambda (url) (push url played))))
       (fanyi-test--with-rendered-response fanyi-longman-provider dom
-                                          (should-not played)
-                                          (let ((button (fanyi-test--find-action-button
-                                                         #'fanyi-play-sound "https://www.ldoceonline.com/media/button.mp3")))
-                                            (should button)
-                                            (button-activate button))
-                                          (should (equal played '("https://www.ldoceonline.com/media/button.mp3")))))))
+        (should-not played)
+        (let ((button (fanyi-test--find-action-button
+                       #'fanyi-play-sound "https://www.ldoceonline.com/media/button.mp3")))
+          (should button)
+          (button-activate button))
+        (should (equal played '("https://www.ldoceonline.com/media/button.mp3")))))))
+
+(ert-deftest fanyi-shr-dragon-heading-headword-and-labels ()
+  (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-dragon.html"
+    (should (string-match-p "^## From Longman Dictionary of Contemporary English$"
+                            (buffer-string)))
+    (should (string-match-p "^drag‧on /ˈdræɡən/ ●●○ noun \\[countable\\][ \t]*$"
+                            (buffer-string)))
+    (dolist (removed '("dragon drag‧on" "(noun)" "RF" "BAD-TEMPERED"))
+      (should-not (string-match-p (regexp-quote removed) (buffer-string))))))
+
+(ert-deftest fanyi-shr-dragon-topic-and-cross-reference-actions ()
+  (dolist (path '("/topic/folklore" "/Folklore-topic/"))
+    (let ((dom (fanyi-test--read-fixture "longman-dragon.html"))
+          (url (concat "https://www.ldoceonline.com" path))
+          topics queries)
+      (dom-set-attribute (car (dom-by-class dom "^topic$")) 'href path)
+      (cl-letf (((symbol-function 'eww)
+                 (lambda (url &rest _) (push url topics)))
+                ((symbol-function 'fanyi-dwim)
+                 (lambda (word) (push word queries))))
+        (fanyi-test--with-rendered-response fanyi-longman-provider dom
+          (fanyi-test--refresh-font-lock)
+          (should-not topics)
+          (should-not queries)
+          (let ((topic (fanyi-test--find-action-button #'eww url))
+                (crossref (fanyi-test--find-action-button #'fanyi-dwim "chase-the-dragon")))
+            (should topic)
+            (should crossref)
+            (should (string-match-p "→ chase the dragon" (buffer-string)))
+            (button-activate topic)
+            (button-activate crossref))
+          (should (equal topics (list url)))
+          (should (equal queries '("chase-the-dragon"))))))))
+
+(ert-deftest fanyi-shr-dragon-highlighting-survives-font-lock ()
+  (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-dragon.html"
+    (fanyi-test--refresh-font-lock)
+    (dolist (field '(("## From Longman" . fanyi-sub-headline-face)
+                     ("noun" . fanyi-pos-face)
+                     ("[countable]" . fanyi-longman-grammar-face)
+                     ("There, a little way along" . fanyi-longman-example-face)))
+      (goto-char (point-min))
+      (search-forward (car field))
+      (should (fanyi-test--has-face-p (match-beginning 0) (cdr field))))))
+
+(ert-deftest fanyi-shr-dragon-corpus-examples-have-separate-lines ()
+  (let ((shr-width 1000))
+    (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-dragon.html"
+      (goto-char (point-min))
+      (re-search-forward "^## Examples from the Corpus dragon$")
+      (let ((start (line-beginning-position 2)))
+        (re-search-forward "^\\(?:## \\|Origin dragon\\)")
+        (should
+         (equal (split-string (buffer-substring-no-properties start (line-beginning-position))
+                              "\n[ \t]*" t "[ \t]+")
+                '("• There, a little way along, a dragon had been painted on the wall in green."
+                  "• With the Sun in its present state of inactivity there are unlikely to be any dragons worth chasing."
+                  "• Anyone between five and 11 can enter, and the task is to draw, paint or model a green dragon."
+                  "• Is there anything in the dressing-up box that looks like dragon skin?"
+                  "• Now the dragons are few and those that are left slumber deeply."
+                  "• As the strength of the dragons waned so did the power of the Dragon Princes."
+                  "• Word arrived from Caledor that the dragons had been roused.")))))))
+
+(ert-deftest fanyi-shr-dragon-origin-is-one-paragraph-without-glyphs ()
+  (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-dragon.html"
+    (goto-char (point-min))
+    (re-search-forward "^Origin dragon (1200-1300) Old French Greek drakon “large snake”[ \t]*$")
+    (should-not (get-text-property (match-beginning 0) 'display))))
+
+(ert-deftest fanyi-shr-origin-keeps-emphasis-after-font-lock ()
+  (let ((dom (fanyi-test--read-fixture "longman-dragon.html")))
+    (setcar (car (dom-by-class dom "Etymon")) 'em)
+    (setcar (cadr (dom-by-class dom "LANG")) 'strong)
+    (fanyi-test--with-rendered-response fanyi-longman-provider dom
+      (fanyi-test--refresh-font-lock)
+      (goto-char (point-min))
+      (re-search-forward "^Origin dragon (1200-1300) Old French Greek drakon “large snake”[ \t]*$")
+      (dolist (field '(("Greek" . bold) ("drakon" . italic)))
+        (goto-char (point-min))
+        (search-forward (car field))
+        (should (fanyi-test--has-face-p (match-beginning 0) (cdr field)))))))
+
+(ert-deftest fanyi-shr-dragon-origin-svg-and-unavailable-svg-fallback ()
+  (dolist (svg-available '(t nil))
+    (let (labels)
+      (cl-letf (((symbol-function 'fanyi-display-glyphs-p) (lambda () t))
+                ((symbol-function 'image-type-available-p)
+                 (lambda (type) (and svg-available (eq type 'svg))))
+                ((symbol-function 'fanyi-longman-svg-tag-make)
+                 (lambda (text face)
+                   (push (cons text face) labels)
+                   '(image :type svg :data "<svg>Origin</svg>"))))
+        (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-dragon.html"
+          (goto-char (point-min))
+          (re-search-forward "^Origin dragon (1200-1300) Old French Greek drakon “large snake”[ \t]*$")
+          (let ((display (get-text-property (match-beginning 0) 'display)))
+            (if svg-available
+                (progn
+                  (should (member '("Origin" . fanyi-longman-svg-asset-face) labels))
+                  (should (eq (car-safe display) 'image))
+                  (should (eq (plist-get (cdr display) :type) 'svg)))
+              (should-not labels)
+              (should-not display))))))))
 
 (provide 'fanyi-shr-tests)
 ;;; fanyi-shr-tests.el ends here
