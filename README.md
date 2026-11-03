@@ -124,6 +124,16 @@ another request. To always use the stacked layout:
 
 `fanyi-youdao-thesaurus-indent` controls indentation in the stacked layout.
 
+Haici includes detailed Chinese and English definitions, bilingual examples,
+collocations, quotations and related words when supplied by the page. Website
+tabs become independent, initially expanded sections: use `TAB` to reach a
+section heading and `RET` to fold it. Inactive website tabs are included too.
+Dictionary links query the full word or phrase inside Emacs; other references
+open in EWW. Pronunciation buttons, word forms and the distribution chart remain
+available. The rich sections use `shr` with `shr-use-fonts` disabled, retain
+semantic highlighting, and reflow from cached content while preserving folds
+and reading position. Rendering does not fetch page scripts or images.
+
 Longman uses Emacs's built-in `shr` renderer for dictionary HTML. Definitions,
 lists, and inline formatting follow the document structure. A small set of
 Longman class rules supplies headword sizes, colors, headings and example
@@ -223,7 +233,8 @@ separately from both the provider and the request:
 - `parse(response, request)` returns dictionary data. Longman returns a prepared
   DOM that rendering and reflow reuse without repeating HTML conversion; the
   response DOM is left unchanged. Youdao returns word/explanation pairs, and
-  Haici returns a `fanyi-haici-result` record. Empty results still use `(throw 'not-found nil)`;
+  Haici returns a `fanyi-haici-result` record with a prepared DOM in `content`.
+  Empty results still use `(throw 'not-found nil)`;
   malformed responses signal `fanyi-parse-error`.
 - `render(result, request)` inserts the result at point in the current buffer.
   It does not select a buffer or move to the end of it. The dispatcher supplies

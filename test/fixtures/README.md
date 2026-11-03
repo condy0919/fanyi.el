@@ -3,11 +3,20 @@
 Most files are hand-written, reduced examples of the HTML and JSON structures
 consumed by the providers. These synthetic cases do not represent snapshots of
 the current sites. `example.invalid` URLs must never be fetched. The saved
-Longman references described below are exceptions, provided by the user.
+Longman and Haici references described below are exceptions, provided by the user.
 
 - `haici.html`: two pronunciations, four audio identifiers, two definitions,
   and a related word. Whitespace and the final placeholder list item match the
   structure expected by the original parser.
+- `haici-dragon-saved.html`: dictionary content from the user's saved Haici
+  dragon page at `/tmp/fanyi-haici-dragon`, beside its `_files` directory.
+  It retains the header, audio identifiers, chart data and all eight tabs,
+  including inactive tabs with `display: none`, website fold controls and
+  clipped-list styles. Scripts and generated Highcharts graphics are removed;
+  the chart containers and their data remain. Navigation, ads outside dictionary
+  content and browser extension markup are excluded. The saved stylesheet's
+  tab, part-of-speech, quotation and link rules inform the semantic SHR layout;
+  fonts, fixed heights and absolute positioning are not reproduced.
 - `longman.html`: a headword, British and American audio, a definition link,
   a cross-reference, an example with audio, and an origin section.
 - `longman-rich.html`: nested and unfamiliar markup, lists, paragraphs, a table,

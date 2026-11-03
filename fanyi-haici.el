@@ -28,6 +28,7 @@
 ;;; Code:
 
 (require 'fanyi-base)
+(require 'fanyi-shr)
 
 (require 'subr-x)
 (require 'dom)
@@ -36,11 +37,22 @@
 (require 'chart)
 (require 'cl-lib)
 (require 'button)
+(require 'url-parse)
+(require 'url-expand)
 
 (defface fanyi-haici-star-face
   '((t :foreground "gold"))
   "Face used for star of word."
   :group 'fanyi)
+
+(defface fanyi-haici-link-face
+  '((t :inherit link :weight bold))
+  "Face used for dictionary words and phrases."
+  :group 'fanyi)
+
+(define-button-type 'fanyi-haici-button
+  'face nil
+  'follow-link t)
 
 (defcustom fanyi-haici-chart-inhibit-same-window nil
   "Non-nil means the distribution chart will be popped in another window."
@@ -50,7 +62,7 @@
 (cl-defstruct fanyi-haici-result
   "Parsed Haici content for a single lookup."
   (syllable "-") (star 0) (star-desc "")
-  phonetics paraphrases distribution related etymons)
+  phonetics paraphrases distribution related etymons content)
 
 (defconst fanyi-haici-distribution-chart-title
   "fanyi-haici-distribution-chart"
@@ -103,7 +115,128 @@ static char* speaker_xpm[] = {
                    collect (list percent sense)))
       (error nil))))
 
-(defun fanyi-haici-parse (dom _request)
+(defun fanyi-haici--class-p (node class)
+  "Return non-nil if NODE has the exact CLASS token."
+  (member class (split-string (or (dom-attr node 'class) ""))))
+
+(defun fanyi-haici--text (node)
+  "Return NODE's text with HTML whitespace collapsed."
+  (string-trim (replace-regexp-in-string "[ \t\r\n]+" " " (dom-texts node ""))))
+
+(defun fanyi-haici--link-url (href base)
+  "Resolve an HTTP HREF against BASE, ignoring browser script actions."
+  (when (fanyi-haici--present-p href)
+    (let ((url (url-expand-file-name (string-trim href) base)))
+      (when (member (url-type (url-generic-parse-url url)) '("http" "https"))
+        url))))
+
+(defun fanyi-haici--link-word (url)
+  "Return the decoded dictionary word in URL, or nil for other pages."
+  (when url
+    (let ((parsed (url-generic-parse-url url)))
+      (when (and (member (url-host parsed) '("dict.cn" "www.dict.cn"))
+                 (string-match "\\`/\\([^/?#]+\\)\\(?:[?#].*\\)?\\'"
+                               (url-filename parsed)))
+        (decode-coding-string (url-unhex-string (match-string 1 (url-filename parsed)))
+                              'utf-8)))))
+
+(defun fanyi-haici--prepare-node (node request context)
+  "Copy NODE into a reusable SHR DOM for REQUEST and tab CONTEXT.
+Inactive layout tabs are dictionary content, even with display:none.
+Other hidden elements and browser controls are omitted."
+  (if (stringp node)
+      (replace-regexp-in-string "[ \t\r\n]+" " " node)
+    (let* ((tag (dom-tag node))
+           (classes (split-string (or (dom-attr node 'class) ""))))
+      (unless (or (memq tag '(script style iframe form input button textarea img svg
+                                     object embed audio video source link meta base))
+                  (cl-intersection classes '("fold" "unfold" "dict-chart" "wordbook"
+                                             "newflag" "wtip") :test #'equal)
+                  (dom-attr node 'slot)
+                  (string-prefix-p "div-gpt-ad-" (or (dom-attr node 'id) ""))
+                  (and (not (member "layout" classes))
+                       (or (assq 'hidden (dom-attributes node))
+                           (equal (dom-attr node 'aria-hidden) "true")
+                           (string-match-p "display[ \t]*:[ \t]*none"
+                                           (downcase (or (dom-attr node 'style) ""))))))
+        (let ((children (delq nil (mapcar (lambda (child)
+                                            (fanyi-haici--prepare-node child request context))
+                                          (dom-children node))))
+              (attributes (cl-loop for name in '(start value colspan rowspan)
+                                   for value = (dom-attr node name)
+                                   when value collect (cons name value)))
+              face block)
+          (cond
+           ((eq tag 'a)
+            (when-let* ((url (fanyi-haici--link-url (dom-attr node 'href)
+                                                    (fanyi-request-url request))))
+              (setq attributes `((href . ,url) (word . ,(fanyi-haici--link-word url))))))
+           ((and (member "sound" classes) (fanyi-haici--present-p (dom-attr node 'naudio)))
+            (setq tag 'fanyi-haici-audio
+                  attributes `((audio . ,(dom-attr node 'naudio))
+                               (sound-url . ,(fanyi-request-sound-url request))
+                               (female . ,(member "fsound" classes)))
+                  children nil))
+           ((and (eq tag 'span) (member context '("detail" "dual" "en")))
+            (setq face 'fanyi-pos-face block t))
+           ((eq tag 'bdo) (setq face 'shadow))
+           ((eq tag 'em) (setq face '(fanyi-pos-face bold)))
+           ((and (eq tag 'p) (member context '("en" "auth")))
+            (setq face 'shadow block t))
+           ((and (eq tag 'b) (equal context "auth"))
+            (setq face 'shadow block t))
+           ((and (eq tag 'ol) (equal context "sort")) (setq tag 'ul))
+           ((and (eq tag 'li) (equal context "sort"))
+            ;; Keep the translation on its own line, with the list's hanging
+            ;; indentation also applied to wrapped English and Chinese text.
+            (when-let* ((break (seq-find (lambda (child)
+                                           (and (consp child) (eq (dom-tag child) 'br)))
+                                         children))
+                        (tail (memq break children)))
+              (setcdr tail `((fanyi-haici-face ((face . shadow)) ,@(cdr tail)))))))
+          (when (and (member "nwd" classes) children)
+            (setq tag 'ul
+                  children (cl-loop for child in children
+                                    when (or (consp child) (fanyi-haici--present-p child))
+                                    collect `(li nil ,child))))
+          ;; Presentation is semantic; saved CSS, scripts and remote assets
+          ;; never control the reader's font, dimensions or network access.
+          (if face
+              `(fanyi-haici-face ((face . ,face) (block . ,block)) ,@children)
+            `(,tag ,attributes ,@children)))))))
+
+(defun fanyi-haici--content (dom request)
+  "Extract all dictionary tabs from DOM for REQUEST in document order."
+  (let (groups)
+    (dolist (group (dom-by-class dom "\\bsection\\b"))
+      (when (fanyi-haici--class-p group "section")
+        (let (title tabs)
+          (dolist (node (dom-non-text-children group))
+            (cond
+             ((eq (dom-tag node) 'h3) (setq title (fanyi-haici--text node)))
+             ((fanyi-haici--class-p node "layout")
+              (let* ((classes (split-string (or (dom-attr node 'class) "")))
+                     (context (seq-find (lambda (class) (member class classes))
+                                        '("detail" "dual" "en" "sort" "auth")))
+                     (body (fanyi-haici--prepare-node node request context)))
+                (when (fanyi-haici--present-p (fanyi-haici--text body))
+                  (push `(fanyi-haici-section ((title . ,(or title "更多释义"))
+                                               (class . ,(dom-attr node 'class)))
+                                              ,body)
+                        tabs)))
+              (setq title nil))))
+          (when tabs
+            (push `(div ((class . ,(dom-attr group 'class)))
+                        (fanyi-haici-heading nil
+                                             ,(cond ((fanyi-haici--class-p group "def") "释义")
+                                                    ((fanyi-haici--class-p group "sent") "用法与例句")
+                                                    ((fanyi-haici--class-p group "rel") "相关资料")
+                                                    (t (fanyi-haici--text (dom-child-by-tag group 'h2)))))
+                        ,@(nreverse tabs))
+                  groups)))))
+    `(div nil ,@(nreverse groups))))
+
+(defun fanyi-haici-parse (dom request)
   "Parse DOM, preserving definitions when optional data is absent.
 Signal `fanyi-parse-error' when no usable definitions can be extracted."
   (let ((result (make-fanyi-haici-result)))
@@ -114,8 +247,16 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
                    for para = (string-trim (dom-texts (dom-child-by-tag item 'strong) ""))
                    when (fanyi-haici--present-p para)
                    collect (list pos para)))
-    (unless (fanyi-haici-result-paraphrases result)
+    (setf (fanyi-haici-result-content result) (fanyi-haici--content dom request))
+    (unless (or (fanyi-haici-result-paraphrases result)
+                (seq-some (lambda (group)
+                            (and (fanyi-haici--class-p group "def")
+                                 (seq-some (lambda (item)
+                                             (fanyi-haici--present-p (fanyi-haici--text item)))
+                                           (dom-by-tag group 'li))))
+                          (dom-non-text-children (fanyi-haici-result-content result))))
       (signal 'fanyi-parse-error '("Haici response contains no usable definitions")))
+    (setf (fanyi-haici-result-syllable result) (fanyi-request-word request))
     (save-match-data
       ;; Syllable, could be nil.
       (when-let* ((str (dom-attr (dom-by-class dom "keyword") 'tip)))
@@ -170,11 +311,57 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
                      collect text)))
     result))
 
+(defun fanyi-haici--shr-face (dom)
+  "Render DOM with a semantic face and optional line boundaries."
+  (when (dom-attr dom 'block) (shr-ensure-newline))
+  (let ((start (point)))
+    (shr-generic dom)
+    (add-face-text-property start (point) (dom-attr dom 'face) t))
+  (when (dom-attr dom 'block) (shr-ensure-newline)))
+
+(defun fanyi-haici--shr-heading (dom)
+  "Render DOM as a second-level Fanyi outline heading."
+  (shr-ensure-paragraph)
+  (let ((start (point)))
+    (insert "## ")
+    (shr-generic dom)
+    (add-face-text-property start (point) 'fanyi-sub-headline-face))
+  (shr-ensure-paragraph))
+
+(defun fanyi-haici--shr-section (dom)
+  "Render DOM as a locally folding dictionary tab."
+  (shr-ensure-paragraph)
+  (fanyi-shr-insert-section
+   dom `(fanyi-haici-face ((face . bold)) ,(dom-attr dom 'title))
+   `(blockquote nil ,@(dom-children dom)))
+  (shr-ensure-paragraph))
+
+(defun fanyi-haici--shr-link (dom)
+  "Render DOM as a dictionary query button or an EWW link."
+  (let ((start (point)) (url (dom-attr dom 'href)) (word (dom-attr dom 'word)))
+    (shr-generic dom)
+    (when (and url (< start (point)))
+      (add-face-text-property start (point) 'fanyi-haici-link-face)
+      (make-text-button start (point)
+                        'type 'fanyi-haici-button
+                        'action (if word #'fanyi-dwim #'eww)
+                        'button-data (or word url)
+                        'help-echo url))))
+
+(defun fanyi-haici--shr-audio (dom)
+  "Render DOM's optional pronunciation as a native audio button."
+  (shr-insert " ")
+  (let ((female (dom-attr dom 'female)))
+    (fanyi-haici--insert-sound (dom-attr dom 'sound-url) (dom-attr dom 'audio)
+                               (if female 'fanyi-female-speaker-face 'fanyi-male-speaker-face)
+                               (if female "女声版发音" "男声版发音"))))
+
 (defun fanyi-haici--insert-sound (sound-url audio face description)
   "Insert an AUDIO button using SOUND-URL, FACE and DESCRIPTION when available."
   (when (fanyi-haici--present-p audio)
     (insert " ")
     (insert-button "🔊"
+                   'type 'fanyi-haici-button
                    'display (when (fanyi-display-glyphs-p)
                               (find-image `((:type xpm
                                                    :data ,fanyi-haici-speaker-xpm
@@ -184,6 +371,7 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
                    'action #'fanyi-play-sound
                    'button-data (format sound-url audio)
                    'face face
+                   'font-lock-face face
                    'follow-link t
                    'help-echo description)))
 
@@ -215,7 +403,7 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
   ;; ...
   (cl-loop for pa in (fanyi-haici-result-paraphrases result)
            for (pos p) = pa
-           do (insert "- " pos " " p "\n"))
+           do (insert "- " (propertize pos 'font-lock-face 'fanyi-pos-face) " " p "\n"))
   (insert "\n")
   ;; Make a button for distribution chart.
   (when-let* ((dist (fanyi-haici-result-distribution result)))
@@ -267,8 +455,19 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
                                'follow-link t)
              do (insert " "))
     (insert "\n\n"))
-  ;; The etymons.
-  (when-let* ((etymons (fanyi-haici-result-etymons result)))
+  ;; Rich tabs use the same folding, font-lock and cached reflow as Longman.
+  (when-let* ((content (fanyi-haici-result-content result))
+              (_ (dom-children content)))
+    (fanyi-shr-insert content
+                      '((a . fanyi-haici--shr-link)
+                        (fanyi-haici-face . fanyi-haici--shr-face)
+                        (fanyi-haici-heading . fanyi-haici--shr-heading)
+                        (fanyi-haici-section . fanyi-haici--shr-section)
+                        (fanyi-haici-audio . fanyi-haici--shr-audio)))
+    (insert "\n"))
+  ;; Older or partial responses can supply an origin outside the tab groups.
+  (when-let* ((etymons (fanyi-haici-result-etymons result))
+              (_ (not (dom-by-class (fanyi-haici-result-content result) "\\betm\\b"))))
     (insert "## 起源\n\n")
     (cl-loop for i in etymons
              do (insert "- " i "\n"))
