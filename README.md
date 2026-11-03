@@ -113,9 +113,9 @@ badge when supported (controlled by `fanyi-use-glyphs` and
 `fanyi-longman-svg-border-radius`), with a text fallback. Only dictionary content
 is selected; rendering does not download images or other page resources.
 
-Longman respects `shr-use-fonts` and `shr-use-colors`; graphical Emacs can use
-proportional fonts, while terminals use fixed-width layout. HTML regions reflow
-from their saved DOM when the displayed window changes width, without another
+Longman renders with `shr-use-fonts` locally disabled, using the buffer's default
+font and character-based layout. It still respects `shr-use-colors`. HTML regions
+reflow from their saved DOM when the displayed window changes width, without another
 request. Reading position, folded headings, and other dictionaries are retained.
 When the buffer appears in several windows, its selected window determines the
 layout. Use `C-u M-x fanyi-shr-reflow` to force a refresh after changing fonts or

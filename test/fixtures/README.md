@@ -41,5 +41,5 @@ containers, and corpus `NodeW` spans are bold. CSS `green` and `gray` are
 `#008000` and `#808080`; Emacs's named colors need not have those values.
 The style tests check the effective displayed face after font-lock refreshes.
 The reference has also been compared with an isolated graphical Emacs frame,
-including proportional-font reflow. Fanyi intentionally keeps `##` headings,
-query/audio buttons, hidden signposts, and the Origin SVG label.
+including reflow that preserves reading position and folded headings. Fanyi keeps
+`##` headings, query/audio buttons, hidden signposts, and the Origin SVG label.

@@ -35,15 +35,12 @@
   "Describe the rendering width and font settings of WINDOW."
   (list (window-body-width window t) shr-width
         (and (boundp 'shr-max-width) shr-max-width)
-        (and shr-use-fonts (display-graphic-p (window-frame window)))
         (frame-char-width (window-frame window)) shr-use-colors))
 
 (defun fanyi-shr--render (dom renderers window)
   "Insert DOM with RENDERERS, using WINDOW when it is displayed."
   (let ((start (point)) end
-        (shr-use-fonts (and shr-use-fonts
-                            (display-graphic-p
-                             (window-frame (or window (selected-window))))))
+        (shr-use-fonts nil)
         (shr-external-rendering-functions renderers)
         (shr-inhibit-images t)
         (shr-content-cache nil)
@@ -113,7 +110,7 @@
   "Insert DOM with RENDERERS and remember it for automatic width changes.
 The current buffer may already contain other dictionary results.  HTML text
 is marked with `fanyi-html', and its styling survives font-lock refreshes.
-Fonts and colors follow SHR's user options, with fixed-pitch text on terminals."
+Use the buffer's default font and character-based layout, with SHR's colors."
   (let ((start (point))
         (window (fanyi-shr--window))
         (inhibit-read-only t)
