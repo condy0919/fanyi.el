@@ -45,8 +45,8 @@
 
 (defconst fanyi-etymon-provider
   (fanyi-provider-create :url "https://www.etymonline.com/word/%s"
-                          :api-type 'browser
-                          :render #'fanyi-etymon-render)
+                         :api-type 'browser
+                         :render #'fanyi-etymon-render)
   "Etymonline browser entry configuration.")
 
 (provide 'fanyi-etymon)

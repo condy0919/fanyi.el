@@ -55,7 +55,7 @@
             (should-not (next-button (button-end button) t))
             (button-activate button)))
         (should (equal opened '("https://www.etymonline.com/word/second%2Fword"
-                                 "https://www.etymonline.com/word/ice%20cream%3F"))))
+                                "https://www.etymonline.com/word/ice%20cream%3F"))))
       (should (= (length fanyi--tasks) 1))
       (should (= fanyi--tasks-completed 1))
       (should (= fanyi--tasks-failed 0))

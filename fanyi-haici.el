@@ -208,9 +208,9 @@ before calling this function."
                do (unless first (insert "  "))
                do (insert label " " pronunciation)
                do (fanyi-haici--insert-sound (fanyi-request-sound-url request)
-                                            female 'fanyi-female-speaker-face "女声版发音")
+                                             female 'fanyi-female-speaker-face "女声版发音")
                do (fanyi-haici--insert-sound (fanyi-request-sound-url request)
-                                            male 'fanyi-male-speaker-face "男声版发音"))
+                                             male 'fanyi-male-speaker-face "男声版发音"))
       (insert "\n\n"))
     ;; Paraphrases.
     ;; - n. 荣誉；荣幸；尊敬；信用；正直；贞洁

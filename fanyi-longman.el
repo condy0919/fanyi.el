@@ -598,9 +598,9 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
 
 (defconst fanyi-longman-provider
   (fanyi-provider-create :url "https://www.ldoceonline.com/dictionary/%s"
-                          :api-type 'xml
-                          :parse #'fanyi-longman-parse
-                          :render #'fanyi-longman-render)
+                         :api-type 'xml
+                         :parse #'fanyi-longman-parse
+                         :render #'fanyi-longman-render)
   "Longman dictionary configuration.")
 
 (provide 'fanyi-longman)

@@ -134,8 +134,8 @@ See `fanyi-sound-player'."
                                        :name "fanyi-player-process"
                                        :buffer nil
                                        :command `(,fanyi-sound-player "-"
-                                                  ,@(fanyi--sound-player-options
-                                                     fanyi-sound-player))
+                                                                      ,@(fanyi--sound-player-options
+                                                                         fanyi-sound-player))
                                        :noquery t
                                        :connection-type 'pipe))
                                      delivered)

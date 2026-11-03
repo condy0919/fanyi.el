@@ -7,7 +7,7 @@
   (should-not
    (catch 'not-found
      (fanyi-parse-response (fanyi-make-request fanyi-youdao-thesaurus-provider "sample")
-                       (fanyi-test--read-fixture "youdao-empty.json"))
+                           (fanyi-test--read-fixture "youdao-empty.json"))
      'unexpected-success))
   (dolist (body '("null" "[]" "{}"
                   "{\"result\":{\"code\":500}}"

@@ -407,9 +407,9 @@ crossing into HTML and consuming delimiters in a later dictionary."
                                 "Search Word: ")))
                  (list (read-string prompt nil 'fanyi-history default))))
   (let ((requests (mapcar (lambda (provider)
-                           (fanyi-make-request (fanyi--resolve-provider provider)
-                                               (downcase word)))
-                         fanyi-providers)))
+                            (fanyi-make-request (fanyi--resolve-provider provider)
+                                                (downcase word)))
+                          fanyi-providers)))
     ;; Browser entries do not need either response parser.
     (when (and (seq-some (lambda (request) (eq (fanyi-request-api-type request) 'xml))
                          requests)
