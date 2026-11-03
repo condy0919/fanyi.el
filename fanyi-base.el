@@ -104,6 +104,22 @@ explicitly delete their processes here."
     (when fanyi-verbose
       (message "Fanyi audio: %s" text))))
 
+(defun fanyi--start-sound-player (player options input report)
+  "Start PLAYER with OPTIONS to play INPUT, reporting failures through REPORT."
+  (make-process
+   :name "fanyi-player-process"
+   :buffer nil
+   :command (append (list player input) options)
+   :noquery t
+   :connection-type 'pipe
+   :sentinel
+   (lambda (process event)
+     (when (or (and (eq (process-status process) 'exit)
+                    (/= (process-exit-status process) 0))
+               (eq (process-status process) 'signal))
+       (funcall report (list 'error (format "Player %s %s" player
+                                            (string-trim event))))))))
+
 (defun fanyi-play-sound (url)
   "Play URL via external program.
 See `fanyi-sound-player'."
@@ -111,51 +127,56 @@ See `fanyi-sound-player'."
     (user-error "Set `fanyi-sound-player' first"))
   (when (string-empty-p url)
     (user-error "No voice found"))
-  (condition-case err
-      (if fanyi-sound-player-support-https
-          (start-process fanyi-sound-player nil fanyi-sound-player url)
-        ;; Download first for players without HTTPS support.  "-" selects
-        ;; standard input; mplayer also needs a cache for this stream.
-        (let (response finished)
-          (setq response
-                (url-retrieve
-                 url
-                 (lambda (status)
-                   (let ((buffer (current-buffer)))
-                     (unwind-protect
-                         (condition-case err
-                             (progn
-                               (when (plist-member status :error)
-                                 (error "Audio download failed: %S"
-                                        (plist-get status :error)))
-                               (goto-char (1+ url-http-end-of-headers))
-                               (let ((proc
-                                      (make-process
-                                       :name "fanyi-player-process"
-                                       :buffer nil
-                                       :command `(,fanyi-sound-player "-"
-                                                                      ,@(fanyi--sound-player-options
-                                                                         fanyi-sound-player))
-                                       :noquery t
-                                       :connection-type 'pipe))
-                                     delivered)
-                                 (unwind-protect
-                                     (progn
-                                       (process-send-region proc (point) (point-max))
+  (let* ((player (copy-sequence fanyi-sound-player))
+         (options (mapcar #'copy-sequence (fanyi--sound-player-options player)))
+         reported
+         (report (lambda (err)
+                   ;; A failed player can also interrupt delivery to its pipe.
+                   (unless reported
+                     (setq reported t)
+                     (fanyi--report-sound-error err)))))
+    (condition-case err
+        (if fanyi-sound-player-support-https
+            (fanyi--start-sound-player player options url report)
+          ;; Download first for players without HTTPS support.  "-" selects
+          ;; standard input; mplayer also needs a cache for this stream.
+          (let (response finished)
+            (setq response
+                  (url-retrieve
+                   url
+                   (lambda (status)
+                     (let ((buffer (current-buffer)))
+                       (unwind-protect
+                           (condition-case err
+                               (progn
+                                 (when (plist-member status :error)
+                                   (error "Audio download failed: %S"
+                                          (plist-get status :error)))
+                                 (goto-char (1+ url-http-end-of-headers))
+                                 (let ((proc (fanyi--start-sound-player
+                                              player options "-" report))
+                                       delivered)
+                                   (unwind-protect
+                                       (progn
+                                         (process-send-region proc (point) (point-max))
+                                         (when (process-live-p proc)
+                                           (process-send-eof proc))
+                                         (setq delivered t))
+                                     (unless delivered
+                                       ;; Cleanup after an error or quit is not a
+                                       ;; second playback failure.
+                                       (set-process-sentinel proc #'ignore)
                                        (when (process-live-p proc)
-                                         (process-send-eof proc))
-                                       (setq delivered t))
-                                   (when (and (not delivered) (process-live-p proc))
-                                     (delete-process proc)))))
-                           (error (fanyi--report-sound-error err)))
-                       (setq finished t)
-                       (fanyi--cleanup-response response)
-                       (fanyi--cleanup-response buffer))))
-                 nil t t))
-          ;; A synchronous callback can finish before RESPONSE is assigned.
-          (when finished
-            (fanyi--cleanup-response response))))
-    (error (fanyi--report-sound-error err))))
+                                         (delete-process proc))))))
+                             (error (funcall report err)))
+                         (setq finished t)
+                         (fanyi--cleanup-response response)
+                         (fanyi--cleanup-response buffer))))
+                   nil t t))
+            ;; A synchronous callback can finish before RESPONSE is assigned.
+            (when finished
+              (fanyi--cleanup-response response))))
+      (error (funcall report err)))))
 
 (defconst fanyi-buffer-name "*fanyi*"
   "The default name of translation buffer.")
