@@ -28,3 +28,4 @@ jobs:
 
     - run: cask install
     - run: make compile
+    - run: make test

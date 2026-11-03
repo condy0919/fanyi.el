@@ -6,4 +6,9 @@ compile:
 	-L .							\
 	-f batch-byte-compile *.el
 
-.PHONY: compile
+test:
+	$(CASK) exec $(EMACS) -Q -batch \
+	-L . -l test/fanyi-tests.el \
+	-f ert-run-tests-batch-and-exit
+
+.PHONY: compile test

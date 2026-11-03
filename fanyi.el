@@ -131,50 +131,63 @@
 (defvar fanyi--tasks-failed 0)
 (defvar fanyi--tasks-completed 0)
 
+(defvar fanyi--query-id 0
+  "Identifier of the current query.")
+
+(cl-defstruct (fanyi--task (:constructor fanyi--make-task))
+  query-id instance buffer)
+
+(defun fanyi--cancel-task (task)
+  "Cancel the network request associated with TASK."
+  (let ((buffer (fanyi--task-buffer task)) seen)
+    (while (and (buffer-live-p buffer) (not (memq buffer seen)))
+      (push buffer seen)
+      (let ((next (buffer-local-value 'url-redirect-buffer buffer))
+            (process (get-buffer-process buffer)))
+        (when process
+          (delete-process process))
+        (kill-buffer buffer)
+        (setq buffer next)))))
+
 (defun fanyi--spawn (instance)
-  "Spawn a thread to lookup words via INSTANCE."
-  (let ((url (format (oref instance url)
-                     (oref instance word))))
-    (cl-pushnew
-     (make-thread
-      (lambda ()
-        (let ((url-request-method (oref instance method))
-              (url-request-extra-headers (oref instance headers))
-              (url-request-data (oref instance body)))
-          (url-retrieve url (lambda (status)
-                              ;; Something went wrong.
-                              (when (or (not status) (plist-member status :error))
-                                (cl-incf fanyi--tasks-failed)
-                                (fanyi-user-error "Something went wrong.\n\n%s" (pp-to-string (plist-get status :error))))
-                              ;; Redirection is inhibited. In most cases, the word is misspelled by users.
-                              (when (plist-member status :redirect)
-                                (cl-incf fanyi--tasks-failed)
-                                (fanyi-user-error "Did you misspell the word?\n\n%s" (pp-to-string (plist-get status :redirect))))
-                              ;; Move point to the real http content. Plus 1 for '\n'.
-                              (goto-char (1+ url-http-end-of-headers))
-                              ;; Normalize data.
-                              ;;
-                              ;; `json-read' failed to parse in undecoded buffer.
-                              ;;
-                              ;; https://debbugs.gnu.org/cgi/bugreport.cgi?bug=50391
-                              (let ((result (pcase (oref instance api-type)
-                                              ('xml (libxml-parse-html-region (point) (point-max) url))
-                                              ('json (json-parse-buffer)))))
-                                (unless
-                                    (catch 'not-found
-                                      ;; Extract information. A `not-found' exception may be thrown.
-                                      (fanyi-parse-from instance result)
-                                      ;; Since `fanyi-render' manipulates `fanyi-buffer-name',
-                                      ;; a mutex is required in multi-threaded
-                                      ;; situation.
-                                      (with-mutex fanyi-buffer-mtx
-                                        (fanyi-render instance))
-                                      (cl-incf fanyi--tasks-completed))
-                                  (cl-incf fanyi--tasks-failed))))
-                        nil
-                        t
-                        t))))
-     fanyi--tasks)))
+  "Look up words asynchronously via INSTANCE for the current query."
+  (let* ((url (format (oref instance url) (oref instance word)))
+         (task (fanyi--make-task :query-id fanyi--query-id
+                                 :instance instance))
+         (url-request-method (oref instance method))
+         (url-request-extra-headers (oref instance headers))
+         (url-request-data (oref instance body)))
+    ;; Register before starting the request: a callback may run immediately.
+    (push task fanyi--tasks)
+    (setf (fanyi--task-buffer task)
+          (url-retrieve
+           url
+           (lambda (status)
+             ;; Cancelling a request is best effort.  Its callback may already
+             ;; be queued, so never let an old query affect the current one.
+             (if (/= (fanyi--task-query-id task) fanyi--query-id)
+                 (kill-buffer (current-buffer))
+               ;; Something went wrong.
+               (when (or (not status) (plist-member status :error))
+                 (cl-incf fanyi--tasks-failed)
+                 (fanyi-user-error "Something went wrong.\n\n%s"
+                                   (pp-to-string (plist-get status :error))))
+               (when (plist-member status :redirect)
+                 (cl-incf fanyi--tasks-failed)
+                 (fanyi-user-error "Did you misspell the word?\n\n%s"
+                                   (pp-to-string (plist-get status :redirect))))
+               (goto-char (1+ url-http-end-of-headers))
+               (let ((result (pcase (oref instance api-type)
+                               ('xml (libxml-parse-html-region (point) (point-max) url))
+                               ('json (json-parse-buffer)))))
+                 (unless
+                     (catch 'not-found
+                       (fanyi-parse-from instance result)
+                       (with-mutex fanyi-buffer-mtx
+                         (fanyi-render instance))
+                       (cl-incf fanyi--tasks-completed))
+                   (cl-incf fanyi--tasks-failed)))))
+           nil t t))))
 
 (defvar fanyi-current-word nil)
 
@@ -288,11 +301,11 @@
     (error "This function requires Emacs to be compiled with libjson"))
   ;; Save current query word.
   (setq fanyi-current-word word)
-  ;; Cancel the still pending threads.
-  (seq-do (lambda (th)
-            (when (thread-live-p th)
-              (thread-signal th nil nil)))
-          fanyi--tasks)
+  ;; Invalidate callbacks before cancelling requests, which can itself invoke
+  ;; process sentinels.  `url-retrieve' is already asynchronous; no threads are
+  ;; needed to start concurrent dictionary requests.
+  (cl-incf fanyi--query-id)
+  (mapc #'fanyi--cancel-task fanyi--tasks)
   (setq fanyi--tasks nil)
   ;; Reset the counter of completed/failed tasks.
   (setq fanyi--tasks-completed 0)
