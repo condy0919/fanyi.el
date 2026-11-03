@@ -114,5 +114,66 @@
           (button-activate button))
         (should (equal queries '("imaginary")))))))
 
+(ert-deftest fanyi-longman-class-rule-order-controls-conflicting-styles ()
+  (dolist (classes '("first second" "second first"))
+    (let* ((fanyi-longman--class-styles
+            '(("first" :tag fanyi-line :face fanyi-longman-grammar-face)
+              ("second" :tag fanyi-heading :face fanyi-longman-headword-face :indent 2)))
+           (rules (copy-tree fanyi-longman--class-styles))
+           (dom `(div ((class . "dictionary"))
+                      (div ((class . "dictentry"))
+                           (span ((class . "DEF")) "before"
+                                 (span ((class . ,classes)) "label") "after"))))
+           (original (copy-tree dom)))
+      (fanyi-test--with-rendered-response fanyi-longman-provider dom
+        (fanyi-test--longman-style-fontify)
+        ;; The first rule supplies the tag and face; the second still supplies
+        ;; its independent indentation, regardless of the HTML class order.
+        (should (string-match-p "^  label$" (buffer-string)))
+        (should-not (string-match-p "## label" (buffer-string)))
+        (let ((face (fanyi-test--longman-style-face "label")))
+          (should (fanyi-test--longman-style-has-face-p face 'fanyi-longman-grammar-face))
+          (should-not (fanyi-test--longman-style-has-face-p face 'fanyi-longman-headword-face)))
+        (should (equal dom original))
+        (should (equal fanyi-longman--class-styles rules))))))
+
+(ert-deftest fanyi-longman-explicit-nil-rule-values-preserve-native-inline-content ()
+  (let* ((fanyi-longman--class-styles
+          '(("first" :tag nil :face nil :space nil)
+            ("second" :tag fanyi-line :face bold :space t)))
+         (dom '(div ((class . "dictionary"))
+                    (div ((class . "dictentry"))
+                         (span ((class . "DEF")) "before"
+                               (em ((class . "second first")) "label") "after")))))
+    (fanyi-test--with-rendered-response fanyi-longman-provider dom
+      (fanyi-test--longman-style-fontify)
+      (should (string-match-p "beforelabelafter" (buffer-string)))
+      (let ((face (fanyi-test--longman-style-face "label")))
+        (should (fanyi-test--longman-style-has-face-p face 'italic))
+        (should-not (fanyi-test--longman-style-has-face-p face 'bold))))))
+
+(ert-deftest fanyi-longman-context-overrides-keep-original-tags-for-origin-and-notes ()
+  (let ((dom '(div ((class . "dictionary"))
+                   (div ((class . "dictentry"))
+                        (span ((class . "DEF")) "Definition.")
+                        (span ((class . "F2NBox"))
+                              (span ((class . "heading EXPL")) "Register") " inline qualifier"
+                              (span ((class . "EXPL")) "Note body.")))
+                   (div ((class . "etym"))
+                        (span ((class . "asset_intro")) "Origin")
+                        (span ((class . "HWD")) "term") " "
+                        (span ((class . "Sense")) "root phrase") " "
+                        (div ((class . "EXAMPLE")) "origin example")))))
+    (fanyi-test--with-rendered-response fanyi-longman-provider dom
+      (fanyi-test--longman-style-fontify)
+      ;; Context intentionally bypasses class tags here: origin flattens the
+      ;; original HTML and note headings change only the semantic face.
+      (should (string-match-p "^Origin term root phrase origin example$" (buffer-string)))
+      (should (string-match-p "^[ \t]*Register inline qualifier$" (buffer-string)))
+      (should (string-match-p "^[ \t]*Note body\\.$" (buffer-string)))
+      (let ((face (fanyi-test--longman-style-face "Register")))
+        (should (fanyi-test--longman-style-has-face-p face 'fanyi-longman-note-heading-face))
+        (should-not (fanyi-test--longman-style-has-face-p face 'fanyi-longman-box-heading-face))))))
+
 (provide 'fanyi-longman-style-tests)
 ;;; fanyi-longman-style-tests.el ends here

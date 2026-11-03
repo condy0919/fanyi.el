@@ -353,13 +353,23 @@ A word-family anchor without a URL becomes a query link in CONTEXT."
         (setf (alist-get 'word attributes) (string-trim (dom-texts node "")))))
     (cons tag attributes)))
 
+(defun fanyi-longman--class-style (classes)
+  "Merge rules matching CLASSES, keeping the first value for each property.
+Rule order determines precedence, independently of the order in CLASSES.
+An explicit nil value also takes precedence over later rules."
+  (let (style)
+    (dolist (rule fanyi-longman--class-styles)
+      (when (member (car rule) classes)
+        (cl-loop for (property value) on (cdr rule) by #'cddr
+                 unless (plist-member style property)
+                 do (setq style (plist-put style property value)))))
+    style))
+
 (defun fanyi-longman--node-style (tag classes context audio)
-  "Resolve TAG, CLASSES and CONTEXT to SHR styling, accounting for AUDIO."
-  (let ((style (copy-sequence
-                (apply #'append
-                       (mapcar (lambda (rule)
-                                 (when (member (car rule) classes) (cdr rule)))
-                               fanyi-longman--class-styles)))))
+  "Apply CONTEXT and AUDIO choices to the base styling for CLASSES.
+TAG is the original HTML tag: some contexts deliberately bypass the class
+renderer.  Use the class tag only when no contextual branch applies."
+  (let ((style (fanyi-longman--class-style classes)))
     (cond
      (audio (setq tag 'fanyi-audio))
      ((member "etym" classes) (setq tag 'fanyi-origin))
