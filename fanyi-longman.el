@@ -130,7 +130,7 @@
 
 (defface fanyi-longman-frequency-face
   '((t :foreground "red" :weight bold :box (:line-width 1 :color "red")))
-  "Face used for frequency labels."
+  "Face used for frequency labels and their outlined SVG badges."
   :group 'fanyi)
 
 (defface fanyi-longman-homonym-face
@@ -208,19 +208,29 @@ retain Fanyi's requested presentation.  This is not a CSS interpreter.")
   'face nil)
 
 (defun fanyi-longman-svg-tag-make (text face)
-  "Create a rounded SVG label displaying TEXT with FACE."
+  "Create a rounded SVG label displaying TEXT with FACE.
+A boxed FACE produces a transparent badge with a one-pixel outline."
   (let* ((height (frame-char-height))
          (padding (frame-char-width))
          (width (* padding (+ (string-width text) 2)))
+         (foreground (face-attribute face :foreground nil t))
+         (box (face-attribute face :box nil t))
+         (border (and box (not (eq box 'unspecified))
+                      (or (and (stringp box) box)
+                          (and (listp box) (plist-get box :color))
+                          foreground)))
+         (inset (if border 0.5 0))
          (svg (svg-create width height)))
-    (svg-rectangle svg 0 0 width height
+    (svg-rectangle svg inset inset (- width (* 2 inset)) (- height (* 2 inset))
                    :rx fanyi-longman-svg-border-radius
-                   :fill (face-attribute face :background nil t))
+                   :fill (if border "none" (face-attribute face :background nil t))
+                   :stroke (or border "none") :stroke-width (if border 1 0))
     (svg-text svg text :x padding :y (* height 0.75)
               :font-family (face-attribute (if shr-use-fonts 'variable-pitch 'default)
                                            :family nil t)
               :font-size (* height 0.75)
-              :fill (face-attribute face :foreground nil t))
+              :font-weight (if (eq (face-attribute face :weight nil t) 'bold) "bold" "normal")
+              :fill foreground)
     (svg-image svg :ascent 'center)))
 
 (defun fanyi-longman--class-p (node class)
@@ -440,10 +450,18 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
 (defun fanyi-longman--shr-label (dom &optional face uppercase)
   "Render DOM as an inline label using FACE, optionally in UPPERCASE."
   (shr-insert " ")
-  (let ((start (point)))
+  (let ((start (point))
+        (face (or face 'fanyi-longman-frequency-face)))
     (shr-generic dom)
     (when uppercase (upcase-region start (point)))
-    (add-face-text-property start (point) (or face 'fanyi-longman-frequency-face))
+    (add-face-text-property start (point) face)
+    (when (and (fanyi-longman--class-p dom "FREQ")
+               (fanyi-display-glyphs-p) (image-type-available-p 'svg))
+      (put-text-property start (point) 'display
+                         (fanyi-longman-svg-tag-make
+                          (buffer-substring-no-properties start (point)) face))
+      ;; The image supplies its own rounded border.
+      (add-face-text-property start (point) '(:box nil)))
     (when (dom-attr dom 'title)
       (put-text-property start (point) 'help-echo (dom-attr dom 'title))))
   (shr-insert " "))

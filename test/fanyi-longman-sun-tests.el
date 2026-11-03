@@ -245,5 +245,125 @@ Allow subsequent text on the line when PREFIX is non-nil."
               (button-activate button)
               (should (equal played (list (button-get button 'button-data)))))))))))
 
+(defun fanyi-test--sun-check-frequency-display (svg)
+  "Check that sun's frequency labels use SVG or their text fallback."
+  (dolist (label '(("S2" . "Top 2000 spoken words")
+                   ("W1" . "Top 1000 written words")))
+    (goto-char (point-min))
+    (search-forward (car label))
+    (let ((start (match-beginning 0))
+          (end (point)))
+      ;; Keep both letters searchable/copyable and attach the tooltip to all
+      ;; of the displayed label, rather than replacing its underlying text.
+      (should (equal (buffer-substring-no-properties start end) (car label)))
+      (dolist (position (number-sequence start (1- end)))
+        (let ((display (get-char-property position 'display))
+              (face (get-char-property position 'face)))
+          (should (equal (get-char-property position 'help-echo) (cdr label)))
+          (should (fanyi-test--longman-style-has-face-p
+                   face 'fanyi-longman-frequency-face))
+          (if svg
+              (progn
+                (should (eq (car-safe display) 'image))
+                (should (eq (plist-get (cdr display) :type) 'svg))
+                (should (string-match-p (regexp-quote (car label))
+                                        (plist-get (cdr display) :data)))
+                ;; The SVG owns its border; do not draw an Emacs face box
+                ;; around it a second time.  Retain the named face beneath.
+                (should (equal (car face) '(:box nil))))
+            (should-not display)
+            (should-not (member '(:box nil) face)))))
+      ;; Whitespace beside a label must not become part of the image.
+      (should-not (get-char-property (1- start) 'display))
+      (should-not (get-char-property end 'display)))))
+
+(ert-deftest fanyi-longman-sun-frequency-svg-survives-font-lock-and-reflow ()
+  (let ((shr-width 74) labels)
+    (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) t))
+              ((symbol-function 'image-type-available-p) (lambda (type) (eq type 'svg)))
+              ((symbol-function 'fanyi-longman-svg-tag-make)
+               (lambda (text face)
+                 (push (cons text face) labels)
+                 `(image :type svg :data
+                         ,(format "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>%s</text></svg>"
+                                  text)))))
+      (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-sun-saved.html"
+        ;; Fixture rendering normally disables glyphs.  Enable them inside
+        ;; that binding and initialize the mode before populating its cache.
+        (let ((fanyi-use-glyphs t))
+          (fanyi-mode)
+          (let ((inhibit-read-only t)) (erase-buffer))
+          (save-window-excursion
+            (set-window-buffer nil (current-buffer))
+            (fanyi-render instance)
+            (fanyi-test--sun-check-frequency-display t)
+            (let ((noninteractive nil)) (font-lock-mode 1))
+            (font-lock-ensure)
+            (font-lock-flush)
+            (font-lock-ensure)
+            (fanyi-test--sun-check-frequency-display t)
+            (let ((lines (count-lines (point-min) (point-max)))
+                  (shr-width 54))
+              (fanyi-shr-reflow)
+              (font-lock-flush)
+              (font-lock-ensure)
+              (should (> (count-lines (point-min) (point-max)) lines))
+              (fanyi-test--sun-check-frequency-display t))
+            (dolist (label '("S2" "W1"))
+              (should (member (cons label 'fanyi-longman-frequency-face) labels)))
+            ;; Origin keeps its existing SVG, while group headings retain
+            ;; text and their own face rather than becoming frequency badges.
+            (should (member '("Origin" . fanyi-longman-svg-asset-face) labels))
+            (goto-char (point-min))
+            (search-forward "Origin sun1 Old English sunne")
+            (should (eq (car-safe (get-char-property (match-beginning 0) 'display)) 'image))
+            (dolist (heading '("VERBS" "ADJECTIVES/NOUN + SUN" "PHRASES" "NOUNS"))
+              (fanyi-test--sun-line heading)
+              (back-to-indentation)
+              (should-not (get-char-property (point) 'display))
+              (should (fanyi-test--longman-style-has-face-p
+                       (get-char-property (point) 'face)
+                       'fanyi-longman-group-heading-face)))))))))
+
+(ert-deftest fanyi-longman-sun-frequency-svg-falls-back-to-styled-text ()
+  ;; Respect the user setting, missing SVG support, and text-only displays
+  ;; independently.  Do not mock `fanyi-display-glyphs-p' past these checks.
+  (dolist (settings '((nil t t) (t nil t) (t t nil)))
+    (ert-info ((format "Glyphs, SVG support, image display: %S" settings))
+      (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) (nth 2 settings)))
+                ((symbol-function 'image-type-available-p)
+                 (lambda (type) (and (nth 1 settings) (eq type 'svg))))
+                ((symbol-function 'fanyi-longman-svg-tag-make)
+                 (lambda (&rest _) (ert-fail "SVG generation must be skipped"))))
+        (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-sun-saved.html"
+          ;; Explicitly set this inside the fixture macro, which has its own
+          ;; default binding, before rendering the response under test.
+          (let ((fanyi-use-glyphs (car settings)))
+            (let ((inhibit-read-only t)) (erase-buffer))
+            (fanyi-render instance)
+            (fanyi-test--longman-style-fontify)
+            (fanyi-test--sun-check-frequency-display nil)
+            (should (face-attribute 'fanyi-longman-frequency-face :box nil t))
+            (goto-char (point-min))
+            (search-forward "Origin sun1 Old English sunne")
+            (should-not (get-char-property (match-beginning 0) 'display))))))))
+
+(ert-deftest fanyi-longman-sun-svg-preserves-origin-fill-and-frequency-outline ()
+  ;; Exercise the real SVG builder.  An unspecified face box is truthy in
+  ;; Lisp, but must not turn Origin's filled badge into a transparent outline.
+  (should (eq (face-attribute 'fanyi-longman-svg-asset-face :box nil t) 'unspecified))
+  (cl-letf (((symbol-function 'svg-image) (lambda (dom &rest _) dom)))
+    (let* ((origin (fanyi-longman-svg-tag-make "Origin" 'fanyi-longman-svg-asset-face))
+           (frequency (fanyi-longman-svg-tag-make "S2" 'fanyi-longman-frequency-face))
+           (origin-rect (car (dom-by-tag origin 'rect)))
+           (frequency-rect (car (dom-by-tag frequency 'rect))))
+      (should origin-rect)
+      (should frequency-rect)
+      (should (equal (dom-attr origin-rect 'fill)
+                     (face-attribute 'fanyi-longman-svg-asset-face :background nil t)))
+      (should (equal (dom-attr origin-rect 'stroke) "none"))
+      (should (equal (dom-attr frequency-rect 'fill) "none"))
+      (should (equal (dom-attr frequency-rect 'stroke) "red")))))
+
 (provide 'fanyi-longman-sun-tests)
 ;;; fanyi-longman-sun-tests.el ends here

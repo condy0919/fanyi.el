@@ -109,8 +109,8 @@ emphasis and persistent highlighting for parts of speech and grammar; it does
 not implement a general CSS engine. Duplicate headwords and hidden field labels
 are omitted, along with signpost labels.
 Audio buttons play pronunciations, dictionary links start Fanyi queries, and
-related-topic links open in Emacs's EWW browser. The Origin label uses an SVG
-badge when supported (controlled by `fanyi-use-glyphs` and
+related-topic links open in Emacs's EWW browser. Origin and frequency labels
+such as S2 and W1 use SVG badges when supported (controlled by `fanyi-use-glyphs` and
 `fanyi-longman-svg-border-radius`), with a text fallback. Only dictionary content
 is selected; rendering does not download images or other page resources.
 
