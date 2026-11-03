@@ -112,6 +112,7 @@ explicitly delete their processes here."
    :command (append (list player input) options)
    :noquery t
    :connection-type 'pipe
+   :coding 'binary
    :sentinel
    (lambda (process event)
      (when (or (and (eq (process-status process) 'exit)
