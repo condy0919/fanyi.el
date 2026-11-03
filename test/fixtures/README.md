@@ -69,7 +69,7 @@ containers, and corpus `NodeW` spans are bold. CSS `green` and `gray` are
 The style tests check the effective displayed face after font-lock refreshes.
 The reference has also been compared with an isolated graphical Emacs frame,
 including reflow that preserves reading position and folded headings. Fanyi keeps
-`##` headings, query/audio buttons, hidden signposts, and the Origin SVG label.
+`##` headings, query/audio buttons, visible signposts, and the Origin SVG label.
 
 The saved sun reference adds cross-reference-only senses, a collocation box
 with four groups and 14 collocations, grammar example groups, multiple corpus

@@ -52,6 +52,7 @@
                               (buffer-string)))
       (should (string-match-p "Origin dragon (1200-1300) Old French Greek drakon “large snake”"
                               (buffer-string)))
+      ;; This page marks BAD-TEMPERED as hidden ACTIV, not a visible SIGNPOST.
       (dolist (hidden '("BAD-TEMPERED" "RF" "dragondrag‧on" "dragon drag‧on"))
         (should-not (string-match-p (regexp-quote hidden) (buffer-string)))))))
 

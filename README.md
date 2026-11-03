@@ -111,7 +111,7 @@ Longman class rules supplies headword sizes, colors, headings and example
 indentation, based on a saved page and its CSS. This preserves native HTML
 emphasis and persistent highlighting for parts of speech and grammar; it does
 not implement a general CSS engine. Duplicate headwords and hidden field labels
-are omitted, along with signpost labels.
+are omitted. Visible signpost labels use the site's uppercase orange badges.
 Audio buttons play pronunciations, dictionary links start Fanyi queries, and
 related-topic links open in Emacs's EWW browser. Word family, Origin, and frequency
 labels such as S2 and W1 use SVG badges when supported (controlled by `fanyi-use-glyphs` and

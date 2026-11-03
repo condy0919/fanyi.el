@@ -168,8 +168,7 @@
                       "</span></div></div>"))))
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
       (let ((text (fanyi-test--rendered-text)))
-        (should-not (string-match-p "FOOD" text))
-        (dolist (expected '("small sample A prefixed word with inline markup."
+        (dolist (expected '("FOOD small sample A prefixed word with inline markup."
                             "markup. SYN specimen example"))
           (should (string-match-p (regexp-quote expected) text)))))))
 
@@ -196,7 +195,8 @@
                             (buffer-string)))
     (should (string-match-p "^drag‧on /ˈdræɡən/ ●●○ noun \\[countable\\][ \t]*$"
                             (buffer-string)))
-    (dolist (removed '("dragon drag‧on" "(noun)" "RF" "BAD-TEMPERED"))
+    (should (string-match-p "BAD-TEMPERED" (buffer-string)))
+    (dolist (removed '("dragon drag‧on" "(noun)" "RF"))
       (should-not (string-match-p (regexp-quote removed) (buffer-string))))))
 
 (ert-deftest fanyi-shr-dragon-topic-and-cross-reference-actions ()
@@ -229,6 +229,7 @@
     (dolist (field '(("## From Longman" . fanyi-sub-headline-face)
                      ("noun" . fanyi-pos-face)
                      ("[countable]" . fanyi-longman-grammar-face)
+                     ("BAD-TEMPERED" . fanyi-longman-signpost-face)
                      ("There, a little way along" . fanyi-longman-example-face)))
       (goto-char (point-min))
       (search-forward (car field))

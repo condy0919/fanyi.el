@@ -133,6 +133,11 @@
   "Face used for frequency labels and their outlined SVG badges."
   :group 'fanyi)
 
+(defface fanyi-longman-signpost-face
+  '((t :foreground "white" :background "#f18500" :weight bold))
+  "Face used for the site's orange sense labels and their SVG badges."
+  :group 'fanyi)
+
 (defface fanyi-longman-homonym-face
   '((t :foreground "red" :weight bold :height 1.0))
   "Face used for superscript homonym numbers in dictionary entries."
@@ -143,6 +148,7 @@
     ("asset_intro" :tag fanyi-heading)
     ("Head" :tag fanyi-line :space t)
     ("Sense" :tag fanyi-sense)
+    ("SIGNPOST" :tag fanyi-signpost)
     ("Crossref" :tag fanyi-line :space t)
     ("topics_container" :tag div)
     ("EXAMPLE" :tag fanyi-example)
@@ -191,8 +197,8 @@
     ("ORIGIN" :space t)
     ("TRAN" :space t))
   "Small subset of Longman's CSS expressed as SHR layout and Emacs faces.
-Based on user-saved dragon and sun pages; see test/fixtures/README.md.
-Source and corpus headings, hidden signposts, buttons and Origin badges
+Based on user-saved dragon, sun and explode pages; see test/fixtures/README.md.
+Source and corpus headings, buttons and inline SVG labels
 retain Fanyi's requested presentation.  This is not a CSS interpreter.")
 
 (declare-function fanyi-dwim "fanyi")
@@ -308,7 +314,7 @@ The saved page puts the corpus label and title in sibling containers."
   (or (memq (dom-tag node) '(script style iframe form input img svg
                                     object embed audio video source link meta base))
       (and (eq (dom-tag node) 'button) (not (dom-attr node 'data-src-mp3)))
-      (cl-intersection classes '("FIELD" "ACTIV" "SIGNPOST" "suppressed")
+      (cl-intersection classes '("FIELD" "ACTIV" "suppressed")
                        :test #'equal)
       (and (memq 'hyphenated context) (member "HWD" classes))
       (dom-attr node 'hidden)
@@ -470,17 +476,17 @@ The returned DOM is ready for SHR; DOM itself is not modified."
         (face (or face 'fanyi-longman-frequency-face)))
     (shr-generic dom)
     (when uppercase (upcase-region start (point)))
-    (add-face-text-property start (point) face)
-    (when (and (fanyi-longman--class-p dom "FREQ")
-               (fanyi-display-glyphs-p) (image-type-available-p 'svg))
-      (put-text-property start (point) 'display
-                         (fanyi-longman-svg-tag-make
-                          (buffer-substring-no-properties start (point)) face))
-      ;; The image supplies its own rounded border.
-      (add-face-text-property start (point) '(:box nil)))
+    (if (or (fanyi-longman--class-p dom "FREQ")
+            (fanyi-longman--class-p dom "SIGNPOST"))
+        (fanyi-longman--badge start (point) face)
+      (add-face-text-property start (point) face))
     (when (dom-attr dom 'title)
       (put-text-property start (point) 'help-echo (dom-attr dom 'title))))
   (shr-insert " "))
+
+(defun fanyi-longman--shr-signpost (dom)
+  "Render DOM as the site's uppercase orange sense badge."
+  (fanyi-longman--shr-label dom 'fanyi-longman-signpost-face t))
 
 (defun fanyi-longman--shr-group-heading (dom)
   "Render DOM as a separate collocation group label."
@@ -607,7 +613,8 @@ Keep the underlying text available for searching and copying."
           (mapcar (lambda (face)
                     (mapcar (lambda (attribute) (face-attribute face attribute frame t))
                             '(:foreground :background :weight :box)))
-                  '(fanyi-longman-frequency-face fanyi-longman-svg-asset-face)))))
+                  '(fanyi-longman-frequency-face fanyi-longman-svg-asset-face
+                                                 fanyi-longman-signpost-face)))))
 
 (defun fanyi-longman-render (content _request)
   "Render prepared CONTENT with Fanyi headings and actions."
@@ -623,6 +630,7 @@ Keep the underlying text available for searching and copying."
        (fanyi-line . fanyi-longman--shr-line)
        (fanyi-block . fanyi-longman--shr-block)
        (fanyi-label . fanyi-longman--shr-label)
+       (fanyi-signpost . fanyi-longman--shr-signpost)
        (fanyi-group-heading . fanyi-longman--shr-group-heading)
        (fanyi-homonym . fanyi-longman--shr-homonym)
        (fanyi-sense . fanyi-longman--shr-sense)
