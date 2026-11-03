@@ -419,14 +419,21 @@ crossing into HTML and consuming delimiters in a later dictionary."
 
 ;;;###autoload
 (defun fanyi-dwim (word)
-  "Translate WORD."
-  (interactive (let* ((default (if (use-region-p)
+  "Translate WORD after trimming surrounding whitespace.
+Record every accepted query in `fanyi-history', with the most recent first."
+  (interactive (let* ((history-add-new-input nil)
+                      (default (if (use-region-p)
                                    (buffer-substring-no-properties (region-beginning) (region-end))
                                  (thing-at-point 'word t)))
                       (prompt (if (stringp default)
                                   (format "Search Word (default \"%s\"): " default)
                                 "Search Word: ")))
                  (list (read-string prompt nil 'fanyi-history default))))
+  (unless (stringp word)
+    (user-error "Query must be a string"))
+  (setq word (string-trim (substring-no-properties word)))
+  (when (string-empty-p word)
+    (user-error "Query must not be empty"))
   (let ((requests (mapcar (lambda (provider)
                             (fanyi-make-request (fanyi--resolve-provider provider)
                                                 (downcase word)))
@@ -440,6 +447,9 @@ crossing into HTML and consuming delimiters in a later dictionary."
                          requests)
                (not (fboundp 'json-parse-buffer)))
       (error "This function requires Emacs to be compiled with libjson"))
+    (let ((history-delete-duplicates t))
+      ;; Also remove duplicates restored from history by older versions.
+      (add-to-history 'fanyi-history word nil t))
     ;; Save current query word.
     (setq fanyi-current-word word)
     ;; Invalidate callbacks before cancelling requests, which can itself invoke
@@ -474,12 +484,7 @@ non-nil."
   (if-let ((word (if (use-region-p)
                      (buffer-substring-no-properties (region-beginning) (region-end))
                    (thing-at-point 'word t))))
-      (progn
-        ;; Calling `fanyi-dwim' with an argument will never prompt users, no
-        ;; `read-string' function calls, then no new item in `fanyi-history'. We
-        ;; manually push the word to `fanyi-history'.
-        (fanyi-dwim word)
-        (cl-pushnew word fanyi-history))
+      (fanyi-dwim word)
     (call-interactively #'fanyi-dwim)))
 
 ;;;###autoload

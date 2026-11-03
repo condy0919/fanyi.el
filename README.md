@@ -37,6 +37,10 @@ M-x package-install RET fanyi RET
 point is wanted. A new command `fanyi-from-history` is introduced to browse the
 search history.
 
+Queries trim surrounding whitespace and reject empty input. All query entry
+points, including dictionary buttons, bookmarks, and Org links, update the
+same history, with duplicate words moved to the front.
+
 If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim`, `fanyi-dwim2` and
 `fanyi-from-history`, try
 
