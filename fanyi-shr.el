@@ -2,6 +2,7 @@
 
 ;; Copyright (C) 2026 Zhiwei Chen
 ;; SPDX-License-Identifier: GPL-3.0-or-later
+;; Package-Requires: ((emacs "29.1"))
 
 ;;; Commentary:
 ;; Render dictionary DOMs in isolated regions and reflow them when displayed
@@ -33,8 +34,7 @@
 
 (defun fanyi-shr--layout (window)
   "Describe the rendering width and font settings of WINDOW."
-  (list (window-body-width window t) shr-width
-        (and (boundp 'shr-max-width) shr-max-width)
+  (list (window-body-width window t) shr-width shr-max-width
         (frame-char-width (window-frame window)) shr-use-colors))
 
 (defun fanyi-shr--render (dom renderers window)
@@ -50,26 +50,22 @@
         (fontification-functions nil))
     (cl-labels
         ((render ()
-           (let ((hscroll (window-hscroll)))
-             (unwind-protect
-                 (save-restriction
-                   (goto-char start)
-                   (narrow-to-region start start)
-                   (shr-insert-document dom)
-                   (delete-trailing-whitespace (point-min) (point-max))
-                   ;; Font-lock owns `face'; keep HTML styling across refontify.
-                   (let ((position (point-min)) next)
-                     (while (< position (point-max))
-                       (setq next (next-single-property-change
-                                   position 'face nil (point-max)))
-                       (when (get-text-property position 'face)
-                         (put-text-property position next 'font-lock-face
-                                            (get-text-property position 'face)))
-                       (setq position next)))
-                   (put-text-property (point-min) (point-max) 'fanyi-html t)
-                   (setq end (point-max)))
-               ;; Emacs 27's SHR does not restore horizontal scrolling itself.
-               (set-window-hscroll nil hscroll)))))
+           (save-restriction
+             (goto-char start)
+             (narrow-to-region start start)
+             (shr-insert-document dom)
+             (delete-trailing-whitespace (point-min) (point-max))
+             ;; Font-lock owns `face'; keep HTML styling across refontify.
+             (let ((position (point-min)) next)
+               (while (< position (point-max))
+                 (setq next (next-single-property-change
+                             position 'face nil (point-max)))
+                 (when (get-text-property position 'face)
+                   (put-text-property position next 'font-lock-face
+                                      (get-text-property position 'face)))
+                 (setq position next)))
+             (put-text-property (point-min) (point-max) 'fanyi-html t)
+             (setq end (point-max)))))
       (if window
           (with-selected-window window
             (save-excursion (render)))

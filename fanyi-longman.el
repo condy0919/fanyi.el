@@ -6,7 +6,7 @@
 ;; Keywords: convenience, tools
 ;; URL: https://github.com/condy0919/fanyi.el
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "27.1"))
+;; Package-Requires: ((emacs "29.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -456,7 +456,7 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
 
 (defun fanyi-longman--shr-homonym (dom)
   "Render DOM as a superscript number at the surrounding body text size."
-  ;; Newer SHR's `sup' also shrinks the text, unlike Longman's HOMNUM rule.
+  ;; SHR's `sup' also shrinks the text, unlike Longman's HOMNUM rule.
   (let ((start (point)))
     (shr-generic dom)
     (put-text-property start (point) 'display '(raise 0.2))))

@@ -1,6 +1,6 @@
 [![build](https://github.com/condy0919/fanyi.el/actions/workflows/build.yml/badge.svg)](https://github.com/condy0919/fanyi.el/actions/workflows/build.yml)
 [![License](http://img.shields.io/:license-gpl3-blue.svg)](LICENSE)
-![Supports Emacs 27.1-28.x](https://img.shields.io/badge/Supports-Emacs_27.1_--_28.x-blueviolet.svg?style=flat-square&logo=GNU%20Emacs&logoColor=white)
+![Supports Emacs 29.1+](https://img.shields.io/badge/Supports-Emacs_29.1%2B-blueviolet.svg?style=flat-square&logo=GNU%20Emacs&logoColor=white)
 [![MELPA](https://melpa.org/packages/fanyi-badge.svg)](https://melpa.org/#/fanyi)
 
 # fanyi.el
@@ -23,6 +23,8 @@
 
 ## Installation
 
+Requires Emacs 29.1 or later.
+
 Install `fanyi.el` from [MELPA](https://melpa.org) with:
 
 ```
@@ -39,7 +41,6 @@ If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim`, `fanyi-dwim2` and
 `fanyi-from-history`, try
 
 ``` emacs-lisp
-;; Emacs 28+
 (setq read-extended-command-predicate #'command-completion-default-include-p)
 ```
 
@@ -146,12 +147,7 @@ if your sound player can be launched with `your-sound-player url`. Otherwise it 
    The icon is emoji, install the proper font to display it. If you use archlinux, `yay -S ttf-symbola` without additional settings. For MacOS users, add the following elisp to your Emacs config.
    ```elisp
    ;; "Apple Color Emoji" is bundled with MacOS.
-   ;;
-   ;; Emacs 29, 28
    (set-fontset-font t 'emoji (font-spec :family "Apple Color Emoji") nil 'prepend)
-
-   ;; Emacs 27
-   (set-fontset-font t 'symbol (font-spec :family "Apple Color Emoji") nil 'prepend)
    ```
 
 2. A dictionary reports `Could not parse dictionary response`.

@@ -141,5 +141,24 @@
     (should (equal (format (oref instance url) (oref instance word))
                    "https://proxy.invalid/suggest?q=second&num=9&mode=brief#details"))))
 
+(ert-deftest fanyi-config-eldoc-keeps-help-local-and-preserves-global-fallback ()
+  (let* ((global-functions (list (lambda (_callback) "Other documentation")))
+         (eldoc-documentation-functions global-functions)
+         (eldoc-documentation-strategy #'eldoc-documentation-default)
+         displayed
+         (eldoc-display-functions
+          (list (lambda (docs _interactive) (setq displayed (mapcar #'car docs))))))
+    (with-temp-buffer
+      (insert (propertize "🔊" 'help-echo "Play British pronunciation") " plain")
+      (fanyi-mode)
+      (goto-char (point-min))
+      (should (local-variable-p 'eldoc-documentation-functions))
+      (eldoc-print-current-symbol-info t)
+      (should (equal displayed '("Play British pronunciation")))
+      (goto-char (point-max))
+      (eldoc-print-current-symbol-info t)
+      (should (equal displayed '("Other documentation"))))
+    (should (eq eldoc-documentation-functions global-functions))))
+
 (provide 'fanyi-config-tests)
 ;;; fanyi-config-tests.el ends here

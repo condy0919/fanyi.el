@@ -78,6 +78,18 @@
             (should (equal (fanyi-shr-test--text) fanyi-shr-test--text)))
         (kill-buffer " *fanyi-shr-other-window*")))))
 
+(ert-deftest fanyi-shr-rendering-preserves-horizontal-scroll ()
+  (fanyi-shr-test--with-window
+    (set-window-hscroll nil 7)
+    (fanyi-shr-insert `(p nil ,fanyi-shr-test--text) nil)
+    (should (= (window-hscroll) 7))
+    (should (equal (fanyi-shr-test--text) fanyi-shr-test--text))
+    (let ((shr-width 35))
+      (fanyi-shr-reflow)
+      (should (= (window-hscroll) 7))
+      (should (<= (fanyi-shr-test--max-line-width) shr-width))
+      (should (equal (fanyi-shr-test--text) fanyi-shr-test--text)))))
+
 (ert-deftest fanyi-shr-reflows-only-when-layout-changes ()
   (fanyi-shr-test--with-window
     (let ((renders 0)
@@ -187,7 +199,9 @@
             (start (marker-position (fanyi-shr--region-start (car fanyi-shr--regions))))
             (end (marker-position (fanyi-shr--region-end (car fanyi-shr--regions)))))
         (setq fail t)
+        (set-window-hscroll nil 7)
         (should-error (fanyi-shr-reflow t))
+        (should (= (window-hscroll) 7))
         (should (equal-including-properties before (buffer-string)))
         (should (= start (fanyi-shr--region-start (car fanyi-shr--regions))))
         (should (= end (fanyi-shr--region-end (car fanyi-shr--regions))))))))
