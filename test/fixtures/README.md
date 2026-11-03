@@ -3,7 +3,7 @@
 Most files are hand-written, reduced examples of the HTML and JSON structures
 consumed by the providers. These synthetic cases do not represent snapshots of
 the current sites. `example.invalid` URLs must never be fetched. The saved
-Longman reference described below is an exception, provided by the user.
+Longman references described below are exceptions, provided by the user.
 
 - `haici.html`: two pronunciations, four audio identifiers, two definitions,
   and a related word. Whitespace and the final placeholder list item match the
@@ -25,6 +25,18 @@ Longman reference described below is an exception, provided by the user.
   `common.css`, plus the original base font and link treatment. Open the saved
   HTML in a browser to inspect it without fetching page resources. It excludes
   page chrome and remote icon fonts, so the browser reference has no audio icons.
+- `longman-sun-saved.html`: the actual dictionary subtree from the browser-saved
+  https://www.ldoceonline.com/dictionary/sun page supplied on 2026-11-03 as
+  `/tmp/sun`. It retains all four entries (newspaper, noun, verb, abbreviation),
+  the collocation box, both corpus sections, and origin. Only three advertising
+  containers and their scripts were removed. Original whitespace, classes, links,
+  and inactive audio URL attributes are preserved, including the hidden
+  `suppressed LEXVAR` spelling that previously leaked into the rendered headword.
+- `longman-sun-saved.css`: relevant rules from `/tmp/sun_files/common_VJuP.css`
+  in their original declaration order, with the base font and link treatment.
+  Unrelated selectors, responsive page chrome, remote icon fonts and resources
+  are excluded. The HTML loads only this local stylesheet; dictionary links and
+  audio data remain available to offline parser tests without fetching them.
 - `youdao.json`: two entries, including one without an explanation.
 - `youdao-empty.json`: a successful API response explicitly containing no entries.
 - `error-page.html`: a generic service error page with no dictionary structure.
@@ -43,3 +55,11 @@ The style tests check the effective displayed face after font-lock refreshes.
 The reference has also been compared with an isolated graphical Emacs frame,
 including reflow that preserves reading position and folded headings. Fanyi keeps
 `##` headings, query/audio buttons, hidden signposts, and the Origin SVG label.
+
+The saved sun reference adds cross-reference-only senses, a collocation box
+with four groups and 14 collocations, grammar example groups, multiple corpus
+titles, frequency labels, and superscript homonym numbers. Its tests check
+line boundaries and spacing, font-lock preservation, query/audio actions, and
+consistent example indentation with and without audio buttons. These are
+semantic layout checks rather than browser pixel comparisons; SHR continues to
+use the user's fixed-width font preference.

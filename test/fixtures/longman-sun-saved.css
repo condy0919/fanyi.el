@@ -1,0 +1,281 @@
+/* Relevant rules from the user-saved sun page's common_VJuP.css, 2026-11-03.
+ * Open longman-sun-saved.html locally for the browser reference.
+ * Original declaration order is retained; unrelated selectors, responsive page
+ * chrome, advertising, remote resources and icon fonts are excluded.
+ */
+body { font-family: Arial, Helvetica, sans-serif; font-size: 16px; color: #333; }
+a { color: inherit; text-decoration: inherit; }
+.EXAMPLE {
+    color:#778899;
+    margin-left:20px;
+}
+.title {
+    display : block;
+}
+.Crossrefto {
+    color : blue;
+    font-weight:bold
+}
+.suppressed {
+    display : none;
+}
+.dictentry {
+    display : block;
+    margin-bottom : 25px;
+}
+.dictionary_intro {
+    display : block;
+    background-color:#35a3ff;
+    color:#fff;
+    padding-left:10px;
+    margin:5px 0 10px -7px
+}
+.asset_intro {
+    border : solid 1px ;
+    border-color : #f1d600;
+    background-color:#f1d600;
+    color : #fff;
+    font-weight:normal;
+    border-radius : 5px;
+    -moz-border-radius : 5px;
+    -webkit-border-radius : 5px;
+    padding-left : 3px;
+    padding-right : 3px;
+}
+.yellow_box {
+    margin-top: 22px;
+    display: table;
+}
+.ldoceEntry .Entry {
+    font-size : 12pt;
+    text-align : justify;
+    display : block;
+    margin-top : 8px;
+}
+.ldoceEntry .ACTIV {
+    display : none;
+}
+.ldoceEntry .Crossrefto {
+    font-weight : bold;
+    font-size : 120%;
+}
+.ldoceEntry .Entry {
+    font-size : 11pt;
+    text-align : justify;
+}
+.ldoceEntry .EXAMPLE {
+    display : block;
+    margin-left : 20px;
+    color : gray;
+}
+.ldoceEntry .FIELD {
+    display : none;
+}
+.ldoceEntry .FREQ {
+    color : red;
+    border-color : red;
+}
+.ldoceEntry .LEVEL {
+    color : red;
+    font-size : 120%;
+}
+.ldoceEntry .FULLFORM {
+    font-weight : bold;
+}
+.ldoceEntry .GEO, .ldoceEntry .geo {
+    font-weight : normal;
+    color : #364395;
+}
+.ldoceEntry .GLOSS {
+    color : #364395;
+    font-weight : normal;
+    font-style : normal;
+}
+.ldoceEntry .GRAM {
+    color : green;
+    font-weight:bold;
+    margin:0 5px 10px 3px
+}
+.ldoceEntry .GramExa {
+    display : block;
+}
+.ldoceEntry .frequent .HOMNUM {
+    vertical-align : super;
+    font-size : 12pt;
+    color : red;
+    font-weight : bold;
+}
+.ldoceEntry .frequent .HYPHENATION {
+    color : red;
+    font-size : 160%;
+}
+.ldoceEntry .HOMNUM {
+    vertical-align : super;
+    font-size : 12pt;
+    color : red;
+    font-weight : bold;
+}
+.ldoceEntry .HWD {
+    display : none;
+}
+.ldoceEntry .HYPHENATION {
+    font-weight : bold;
+    font-size : 160%;
+    color : red;
+}
+.ldoceEntry .LEXVAR {
+    font-weight : bold;
+}
+.ldoceEntry .LINKWORD {
+    color : #364395;
+}
+.ldoceEntry .ORTHVAR {
+    font-weight : bold;
+}
+.ldoceEntry .POS {
+    color : green;
+    font-weight:bold;
+    margin:0 0 0 10px
+}
+.ldoceEntry .PRESPARTX {
+    font-weight : bold;
+}
+.ldoceEntry .PROPFORM {
+    font-weight : bold;
+    margin-left : 20px;
+}
+.ldoceEntry .PTandPPX {
+    font-weight : bold;
+}
+.ldoceEntry .REFHWD {
+    font-weight : bold;
+    font-style : normal;
+}
+.ldoceEntry .REGISTERLAB {
+    color : purple;
+    font-style : italic;
+}
+.ldoceEntry .Sense {
+    display : block;
+    margin-left : 20px;
+    margin-bottom : 15px;
+}
+.ldoceEntry .sensenum {
+    font-style : normal;
+    font-weight : bold;
+    color : black;
+}
+.ldoceEntry .FREQ {
+    display : inline-block;
+    font-style : normal;
+    font-weight : bold;
+    text-transform : uppercase;
+    border-radius : 5px;
+    -moz-border-radius : 5px;
+    -webkit-border-radius : 5px;
+    border : solid 1px;
+    padding-left : 4px;
+    padding-right : 4px;
+}
+.ldoceEntry .ColloBox {
+    display : block;
+    border-radius : 5px;
+    -moz-border-radius : 5px;
+    -webkit-border-radius : 5px;
+    border : solid #364395 1px;
+    padding : 15px;
+    margin : 8px 0;
+}
+.ColloBox .heading {
+    line-height:2em;
+    margin:0 10px 0  0
+}
+.ldoceEntry .HEADING, .ldoceEntry .heading {
+    font-weight : bold;
+    font-size : 120%;
+    color : #364395;
+}
+.ldoceEntry .SECHEADING {
+    display : table;
+    border-radius : 5px;
+    -moz-border-radius : 5px;
+    -webkit-border-radius : 5px;
+    border : solid #6f469d 2px;
+    padding-left : 4px;
+    padding-right : 20px;
+    margin:25px 0 10px 0;
+    font-weight : bold;
+    color : white;
+    text-transform : uppercase;
+    background-color : #6f469d;
+}
+.ldoceEntry .Collocate {
+    display : block;
+    margin:15px 0 0 6px;
+}
+.ldoceEntry .COLLOC {
+    font-weight : bold;
+}
+span.geo {
+    font-weight : normal;
+    font-style : italic;
+    color : #364395;
+}
+span.sensenum {
+    font-style : normal;
+    font-weight : bold;
+    margin-right : 5px;
+    margin-left : 3px;
+
+}
+span.heading {
+    font-weight : bold;
+    font-size : 120%;
+    color : #364395;
+}
+.exaGroup .exaGroup {
+    display : block;
+    margin-bottom : 20px;
+}
+.exaGroup .title {
+    font-size : 110%;
+    font-weight : bold;
+    color : black;
+    display : block;
+    margin-left : 5px;
+    margin-top: 15px;
+}
+.exaGroup .exa {
+    display : block;
+    color : gray;
+    margin-left : 15px;
+}
+.exaGroup .NodeW {
+    font-weight : bold;
+}
+.asset {
+    margin-top : 30px;
+}
+.Entry .topics_container {
+	display: table;
+}
+.Entry .related_topics {
+    padding: 0 4px 1px 0;
+    font-size: 16px;
+    font-family: Tahoma, Arial, Helvetica;
+    color: #000;
+}
+.Entry .topic {
+    color: red;
+    text-decoration:underline
+}
+.etym .Head {
+	font-weight: bold;
+}
+.etym .Head .HOMNUM {
+	vertical-align: super;
+    font-size: 12pt;
+}
+.suppressed {
+    display: none;
+}

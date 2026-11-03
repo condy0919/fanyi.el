@@ -117,6 +117,27 @@
   "Face used for links within definitions and examples."
   :group 'fanyi)
 
+(defface fanyi-longman-box-heading-face
+  '((t :foreground "#364395" :weight bold :height 1.2))
+  "Face used for collocation box headings."
+  :group 'fanyi)
+
+(defface fanyi-longman-group-heading-face
+  '((t :foreground "white" :background "#6f469d" :weight bold
+       :box (:line-width 2 :color "#6f469d")))
+  "Face used for collocation group labels."
+  :group 'fanyi)
+
+(defface fanyi-longman-frequency-face
+  '((t :foreground "red" :weight bold :box (:line-width 1 :color "red")))
+  "Face used for frequency labels."
+  :group 'fanyi)
+
+(defface fanyi-longman-homonym-face
+  '((t :foreground "red" :weight bold :height 1.0))
+  "Face used for superscript homonym numbers in dictionary entries."
+  :group 'fanyi)
+
 (defconst fanyi-longman--class-styles
   '(("dictionary_intro" :tag fanyi-heading)
     ("asset_intro" :tag fanyi-heading)
@@ -126,10 +147,22 @@
     ("topics_container" :tag div)
     ("EXAMPLE" :tag fanyi-example)
     ("exa" :tag fanyi-example)
+    ("exaEntry" :tag fanyi-block)
+    ("ColloBox" :tag fanyi-block :indent 2)
+    ("Section" :tag fanyi-block)
+    ("heading" :face fanyi-longman-box-heading-face)
+    ("HEADING" :face fanyi-longman-box-heading-face)
+    ("SECHEADING" :tag fanyi-group-heading)
+    ("Collocate" :tag fanyi-block :indent 1)
+    ("COLLOC" :face bold)
+    ("GramExa" :tag fanyi-line)
+    ("PROPFORM" :tag fanyi-line :indent 2 :face bold)
+    ("PROPFORMPREP" :tag fanyi-line :indent 2 :face bold)
     ("title" :tag span :face bold)
     ("headword" :tag span :face bold)
     ("HYPHENATION" :face fanyi-longman-headword-face)
     ("HWD" :face bold)
+    ("HOMNUM" :tag fanyi-homonym :face fanyi-longman-homonym-face)
     ("PHRVBHWD" :face fanyi-longman-headword-face)
     ("POS" :face (fanyi-longman-pos-face fanyi-pos-face) :space t)
     ("pos" :face (fanyi-longman-pos-face fanyi-pos-face) :space t)
@@ -137,14 +170,18 @@
     ("LEVEL" :face fanyi-longman-dot-face :space t)
     ("REGISTERLAB" :face fanyi-longman-registerlab-face :space t)
     ("GEO" :face fanyi-longman-geo-face :space t)
+    ("geo" :face fanyi-longman-geo-face)
     ("GLOSS" :face fanyi-longman-geo-face)
     ("NodeW" :face bold)
     ("sensenum" :face bold :space t)
     ("LEXUNIT" :face bold :space t)
     ("LEXVAR" :face bold :space t)
     ("REFHWD" :face bold)
+    ("PTandPPX" :face bold)
+    ("PRESPARTX" :face bold)
+    ("FULLFORM" :face bold)
     ("PronCodes" :space t)
-    ("FREQ" :space t)
+    ("FREQ" :tag fanyi-label)
     ("AC" :space t)
     ("DEF" :space t)
     ("DATE" :space t)
@@ -154,7 +191,7 @@
     ("ORIGIN" :space t)
     ("TRAN" :space t))
   "Small subset of Longman's CSS expressed as SHR layout and Emacs faces.
-The source is the user-saved dragon page; see test/fixtures/README.md.
+Based on user-saved dragon and sun pages; see test/fixtures/README.md.
 Source and corpus headings, hidden signposts, buttons and Origin badges
 retain Fanyi's requested presentation.  This is not a CSS interpreter.")
 
@@ -252,7 +289,7 @@ The saved page puts the corpus label and title in sibling containers."
 
 (defun fanyi-longman--prepare-node (node base &optional context)
   "Copy NODE for shr, adapting CSS layout and resolving URLs against BASE.
-CONTEXT records word-family, headword and origin sections enclosing NODE.
+CONTEXT records the semantic sections enclosing NODE.
 Keep ordinary HTML and unfamiliar inline markup for shr to render."
   (if (stringp node)
       node
@@ -268,6 +305,10 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
            (context (append
                      (when (member "wordfams" classes) '(family))
                      (when (member "etym" classes) '(origin))
+                     (when (member "Sense" classes) '(sense))
+                     (when (member "asset_intro" classes) '(asset-heading))
+                     (when (cl-intersection classes '("exaGroup" "corpus") :test #'equal)
+                       '(corpus))
                      (when (and (member "Head" classes)
                                 (fanyi-longman--nodes node "HYPHENATION"))
                        '(hyphenated))
@@ -275,7 +316,8 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
       (unless (or (memq tag '(script style iframe form input img svg
                                      object embed audio video source link meta base))
                   (and (eq tag 'button) (not (dom-attr node 'data-src-mp3)))
-                  (cl-intersection classes '("FIELD" "ACTIV" "SIGNPOST") :test #'equal)
+                  (cl-intersection classes '("FIELD" "ACTIV" "SIGNPOST" "suppressed")
+                                   :test #'equal)
                   (and (memq 'hyphenated context) (member "HWD" classes))
                   (dom-attr node 'hidden)
                   (equal (dom-attr node 'aria-hidden) "true")
@@ -287,6 +329,8 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
                                            (fanyi-longman--group-assets (dom-children node)))))
                (audio (fanyi-longman--http-url (dom-attr node 'data-src-mp3) base))
                (face (plist-get style :face)))
+          (when (plist-get style :indent)
+            (setf (alist-get 'fanyi-indent attributes) (plist-get style :indent)))
           ;; URL normalization avoids relying on shr's document-local base URL.
           (when (eq tag 'a)
             (setf (alist-get 'href attributes)
@@ -304,10 +348,20 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
               (push '(fanyi-origin-label nil "Origin") children)))
            ((and (memq 'origin context) (member "asset_intro" classes))
             (setq tag 'fanyi-origin-label))
+           ((and (memq 'origin context) (member "HOMNUM" classes))
+            (setq tag 'fanyi-homonym face 'bold))
            ((memq 'origin context)
             ;; Keep emphasis and links while laying out the origin inline.
             (when (memq tag '(div p h1 h2 h3 h4 h5 h6 br))
               (setq tag 'span)))
+           ((and (member "Crossref" classes) (memq 'sense context))
+            (setq tag 'span))
+           ((and (member "title" classes) (memq 'corpus context)
+                 (not (memq 'asset-heading context)))
+            (setq tag 'fanyi-block face 'fanyi-longman-heading-face)
+            (setf (alist-get 'fanyi-indent attributes) 1))
+           ((and (member "HEADING" classes) (member "newline" classes))
+            (setq tag 'fanyi-line))
            ((plist-get style :tag) (setq tag (plist-get style :tag))))
           (when (plist-get style :space)
             (setq children (append '(" ") children '(" "))))
@@ -373,8 +427,39 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
 (defun fanyi-longman--shr-line (dom)
   "Render DOM on a separate line."
   (shr-ensure-newline)
-  (shr-generic dom)
+  (let ((shr-indentation (+ shr-indentation (or (dom-attr dom 'fanyi-indent) 0))))
+    (shr-generic dom))
   (shr-ensure-newline))
+
+(defun fanyi-longman--shr-block (dom)
+  "Render DOM as a paragraph with optional indentation."
+  (shr-ensure-paragraph)
+  (fanyi-longman--shr-line dom)
+  (shr-ensure-paragraph))
+
+(defun fanyi-longman--shr-label (dom &optional face uppercase)
+  "Render DOM as an inline label using FACE, optionally in UPPERCASE."
+  (shr-insert " ")
+  (let ((start (point)))
+    (shr-generic dom)
+    (when uppercase (upcase-region start (point)))
+    (add-face-text-property start (point) (or face 'fanyi-longman-frequency-face))
+    (when (dom-attr dom 'title)
+      (put-text-property start (point) 'help-echo (dom-attr dom 'title))))
+  (shr-insert " "))
+
+(defun fanyi-longman--shr-group-heading (dom)
+  "Render DOM as a separate collocation group label."
+  (shr-ensure-paragraph)
+  (fanyi-longman--shr-label dom 'fanyi-longman-group-heading-face t)
+  (shr-ensure-newline))
+
+(defun fanyi-longman--shr-homonym (dom)
+  "Render DOM as a superscript number at the surrounding body text size."
+  ;; Newer SHR's `sup' also shrinks the text, unlike Longman's HOMNUM rule.
+  (let ((start (point)))
+    (shr-generic dom)
+    (put-text-property start (point) 'display '(raise 0.2))))
 
 (defun fanyi-longman--shr-sense (dom)
   "Render DOM with the site's sense indentation and paragraph spacing."
@@ -404,17 +489,21 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
 (defun fanyi-longman--shr-audio (dom)
   "Insert a pronunciation button for DOM without starting playback."
   (shr-insert " ")
-  (insert-button "🔊"
-                 'type 'fanyi-longman-button
-                 'action #'fanyi-play-sound
-                 'button-data (dom-attr dom 'src)
-                 'face (cond ((fanyi-longman--class-p dom "brefile") 'fanyi-female-speaker-face)
-                             ((fanyi-longman--class-p dom "amefile") 'fanyi-male-speaker-face)
-                             (t 'fanyi-longman-example-face))
-                 'help-echo (cond ((fanyi-longman--class-p dom "brefile") "Play British pronunciation")
-                                  ((fanyi-longman--class-p dom "amefile") "Play American pronunciation")
-                                  (t "Play example"))
-                 'follow-link t)
+  (let ((start (point)))
+    ;; SHR must see the first character to mark this line for indentation
+    ;; and wrapping, including examples that begin with a speaker button.
+    (shr-insert "🔊")
+    (make-text-button start (point)
+                      'type 'fanyi-longman-button
+                      'action #'fanyi-play-sound
+                      'button-data (dom-attr dom 'src)
+                      'face (cond ((fanyi-longman--class-p dom "brefile") 'fanyi-female-speaker-face)
+                                  ((fanyi-longman--class-p dom "amefile") 'fanyi-male-speaker-face)
+                                  (t 'fanyi-longman-example-face))
+                      'help-echo (cond ((fanyi-longman--class-p dom "brefile") "Play British pronunciation")
+                                       ((fanyi-longman--class-p dom "amefile") "Play American pronunciation")
+                                       (t "Play example"))
+                      'follow-link t))
   (shr-insert " ")
   (shr-generic dom))
 
@@ -483,6 +572,10 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
        (fanyi-heading . fanyi-longman--shr-heading)
        (fanyi-face . fanyi-longman--shr-face)
        (fanyi-line . fanyi-longman--shr-line)
+       (fanyi-block . fanyi-longman--shr-block)
+       (fanyi-label . fanyi-longman--shr-label)
+       (fanyi-group-heading . fanyi-longman--shr-group-heading)
+       (fanyi-homonym . fanyi-longman--shr-homonym)
        (fanyi-sense . fanyi-longman--shr-sense)
        (fanyi-example . fanyi-longman--shr-example)
        (fanyi-origin . fanyi-longman--shr-origin)
