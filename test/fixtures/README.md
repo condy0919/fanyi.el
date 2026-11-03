@@ -37,6 +37,21 @@ Longman references described below are exceptions, provided by the user.
   Unrelated selectors, responsive page chrome, remote icon fonts and resources
   are excluded. The HTML loads only this local stylesheet; dictionary links and
   audio data remain available to offline parser tests without fetching them.
+- `longman-explode-saved.html`: the actual dictionary subtree from the user's
+  browser-saved https://www.ldoceonline.com/dictionary/explode page at
+  `/tmp/explode`. It retains the word family, six senses, five visible signposts,
+  Register box, two thesaurus groups with ten entries, corpus, and origin.
+  Only two advertising containers, their scripts, and adjacent advertising
+  indentation were removed; inline dictionary whitespace, classes, links, and
+  inactive audio attributes are retained.
+  This includes the plain-text adjective `exploding` and the unlinked verb
+  `span.w`, which exercise different word-family markup from the anchors.
+- `longman-explode-saved.css`: relevant presentation rules from
+  `/tmp/explode_files/common_4Vww.css`, preserving declaration order and recording
+  source line numbers. It includes the original narrow-screen word-family rule
+  that starts each part of speech on a new line below 762 pixels. Unrelated
+  selectors, scripts, remote fonts, and resources are excluded; the HTML loads
+  only this local stylesheet.
 - `youdao.json`: two entries, including one without an explanation.
 - `youdao-empty.json`: a successful API response explicitly containing no entries.
 - `error-page.html`: a generic service error page with no dictionary structure.
@@ -63,3 +78,10 @@ line boundaries and spacing, font-lock preservation, query/audio actions, and
 consistent example indentation with and without audio buttons. These are
 semantic layout checks rather than browser pixel comparisons; SHR continues to
 use the user's fixed-width font preference.
+
+The saved explode reference adds word-family grouping, visible orange signposts,
+Register explanations with emphasized expressions, and a thesaurus with nested
+groups and separate entries. `F2NBox` and `ThesBox` are block containers;
+`EXPL` and `Exponent` supply line boundaries even though their HTML tags are
+spans. `EXP`, `EXPR`, and `COLLOINEXA` mark bold semantic text, while `ACTIV`
+remains hidden. The local CSS preserves these distinctions for offline review.

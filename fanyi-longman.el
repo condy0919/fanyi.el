@@ -340,6 +340,8 @@ A word-family anchor without a URL becomes a query link in CONTEXT."
      ((member "etym" classes) (setq tag 'fanyi-origin))
      ((and (memq 'origin context) (member "asset_intro" classes))
       (setq tag 'fanyi-origin-label))
+     ((and (memq 'family context) (member "asset_intro" classes))
+      (setq tag 'fanyi-asset-label))
      ((and (memq 'origin context) (member "HOMNUM" classes))
       (setq tag 'fanyi-homonym style (plist-put style :face 'bold)))
      ((memq 'origin context)
@@ -500,16 +502,22 @@ The returned DOM is ready for SHR; DOM itself is not modified."
     (shr-generic dom))
   (shr-ensure-paragraph))
 
-(defun fanyi-longman--shr-origin-label (dom)
-  "Render DOM as an Origin badge, with a text fallback."
+(defun fanyi-longman--badge (start end face)
+  "Style the text between START and END as a badge using FACE.
+Keep the underlying text available for searching and copying."
+  (add-face-text-property start end face)
+  (when (and (< start end) (fanyi-display-glyphs-p) (image-type-available-p 'svg))
+    (put-text-property start end 'display
+                       (fanyi-longman-svg-tag-make
+                        (buffer-substring-no-properties start end) face))
+    ;; The image supplies its own background and border.
+    (add-face-text-property start end '(:box nil))))
+
+(defun fanyi-longman--shr-asset-label (dom)
+  "Render DOM as an inline asset badge, with a styled text fallback."
   (let ((start (point)))
     (shr-generic dom)
-    (when (and (fanyi-display-glyphs-p) (image-type-available-p 'svg))
-      (put-text-property
-       start (point) 'display
-       (fanyi-longman-svg-tag-make
-        (buffer-substring-no-properties start (point))
-        'fanyi-longman-svg-asset-face)))
+    (fanyi-longman--badge start (point) 'fanyi-longman-svg-asset-face)
     (shr-insert " ")))
 
 (defun fanyi-longman--shr-origin (dom)
@@ -620,7 +628,8 @@ The returned DOM is ready for SHR; DOM itself is not modified."
        (fanyi-sense . fanyi-longman--shr-sense)
        (fanyi-example . fanyi-longman--shr-example)
        (fanyi-origin . fanyi-longman--shr-origin)
-       (fanyi-origin-label . fanyi-longman--shr-origin-label))
+       (fanyi-origin-label . fanyi-longman--shr-asset-label)
+       (fanyi-asset-label . fanyi-longman--shr-asset-label))
      #'fanyi-longman--render-style)
     (goto-char (point-max))
     (unless (bolp) (insert "\n"))

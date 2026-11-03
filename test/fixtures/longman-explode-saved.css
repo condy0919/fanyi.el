@@ -1,0 +1,379 @@
+/* Relevant rules from the user-saved explode page, 2026-11-03.
+ * Original selector/declaration order is retained; each rule records its
+ * source line in /tmp/explode_files/common_4Vww.css. Page chrome, ads,
+ * remote resources and icon fonts are excluded.
+ */
+body { font-family: Arial, Helvetica, sans-serif; font-size: 16px; color: #333; }
+a { color: inherit; text-decoration: inherit; }
+/* common_4Vww.css:600 */
+.EXAMPLE {
+    color:#778899;
+    margin-left:20px;
+}
+/* common_4Vww.css:638 */
+.tooltip {
+	color: red;
+}
+@media screen and (max-width: 761px) {
+/* common_4Vww.css:1409 */
+.dictionary {
+        margin-bottom: 10px;
+}
+}
+@media screen and (max-width: 761px) {
+/* common_4Vww.css:1412 */
+.dictionary_intro {
+        margin: 5px 0 10px 0px !important
+}
+}
+@media screen and (max-width: 761px) {
+/* common_4Vww.css:1475 */
+.pos:before {
+        content: '';
+        display: block;
+}
+}
+/* common_4Vww.css:1647 */
+.title {
+    display : block;
+}
+/* common_4Vww.css:1677 */
+.title:before {
+    content : 'title: ';
+}
+/* common_4Vww.css:1682 */
+.exaGroup .title:before {
+    content : '';
+}
+/* common_4Vww.css:1687 */
+.Crossrefto {
+    color : blue;
+    font-weight:bold
+}
+/* common_4Vww.css:1720 */
+.dictentry {
+    display : block;
+    margin-bottom : 25px;
+}
+/* common_4Vww.css:1725 */
+.dictionary_intro {
+    display : block;
+    background-color:#35a3ff;
+    color:#fff;
+    padding-left:10px;
+    margin:5px 0 10px -7px
+}
+/* common_4Vww.css:1733 */
+.asset_intro {
+    border : solid 1px ;
+    border-color : #f1d600;
+    background-color:#f1d600;
+    color : #fff;
+    font-weight:normal;
+    border-radius : 5px;
+    -moz-border-radius : 5px;
+    -webkit-border-radius : 5px;
+    padding-left : 3px;
+    padding-right : 3px;
+}
+/* common_4Vww.css:1752 */
+.yellow_box {
+    margin-top: 22px;
+    display: table;
+}
+/* common_4Vww.css:1758 */
+.ldoceEntry .Entry {
+    font-size : 12pt;
+    text-align : justify;
+    display : block;
+    margin-top : 8px;
+}
+/* common_4Vww.css:1776 */
+.ldoceEntry .ACTIV {
+    display : none;
+}
+/* common_4Vww.css:1807 */
+.ldoceEntry .COLLOINEXA {
+    font-weight : bold;
+}
+/* common_4Vww.css:1822 */
+.ldoceEntry .Crossrefto {
+    font-weight : bold;
+    font-size : 120%;
+}
+/* common_4Vww.css:1834 */
+.ldoceEntry .Entry {
+    font-size : 11pt;
+    text-align : justify;
+}
+/* common_4Vww.css:1845 */
+.ldoceEntry .EXAMPLE {
+    display : block;
+    margin-left : 20px;
+    color : gray;
+}
+/* common_4Vww.css:1858 */
+.ldoceEntry .synopp {
+    color : #fff;
+    border-color: #f1d600;
+    background-color:#f1d600;
+}
+/* common_4Vww.css:1865 */
+.ldoceEntry .FREQ {
+    color : red;
+    border-color : red;
+}
+/* common_4Vww.css:1871 */
+.ldoceEntry .LEVEL {
+    color : red;
+    font-size : 120%;
+}
+/* common_4Vww.css:1882 */
+.ldoceEntry .GEO {
+    font-weight : normal;
+    color : #364395;
+}
+/* common_4Vww.css:1896 */
+.ldoceEntry .GRAM {
+    color : green;
+    font-weight:bold;
+    margin:0 5px 10px 3px
+}
+/* common_4Vww.css:1904 */
+.ldoceEntry .GramExa {
+    display : block;
+}
+/* common_4Vww.css:1931 */
+.ldoceEntry .frequent .HYPHENATION {
+    color : red;
+    font-size : 160%;
+}
+/* common_4Vww.css:1943 */
+.ldoceEntry .HWD {
+    display : none;
+}
+/* common_4Vww.css:1948 */
+.ldoceEntry .HYPHENATION {
+    font-weight : bold;
+    font-size : 160%;
+    color : red;
+}
+/* common_4Vww.css:2002 */
+.ldoceEntry .POS {
+    color : green;
+    font-weight:bold;
+    margin:0 0 0 10px
+}
+/* common_4Vww.css:2022 */
+.ldoceEntry .PROPFORMPREP {
+    font-weight : bold;
+    margin-left : 20px;
+}
+/* common_4Vww.css:2040 */
+.ldoceEntry .REFHWD {
+    font-weight : bold;
+    font-style : normal;
+}
+/* common_4Vww.css:2057 */
+.ldoceEntry .RELATEDWD {
+    font-weight : bold;
+    color:blue;
+}
+/* common_4Vww.css:2069 */
+.ldoceEntry .Sense {
+    display : block;
+    margin-left : 20px;
+    margin-bottom : 15px;
+}
+/* common_4Vww.css:2075 */
+.ldoceEntry .SIGNPOST {
+    background-color: #f18500;
+    color: white;
+    font-weight: bold;
+    font-size: 79%;
+    text-transform: uppercase;
+    border-radius: 5px;
+    -moz-border-radius: 5px;
+    -webkit-border-radius: 5px;
+    padding: 0px 5px;
+    letter-spacing: 1px;
+}
+/* common_4Vww.css:2102 */
+.ldoceEntry .SYN {
+    font-weight : bold;
+}
+/* common_4Vww.css:2125 */
+.ldoceEntry .neutral {
+    color : black;
+    font-style : normal;
+    font-weight : normal;
+    font-variant : normal;
+}
+/* common_4Vww.css:2159 */
+.ldoceEntry .sensenum {
+    font-style : normal;
+    font-weight : bold;
+    color : black;
+}
+/* common_4Vww.css:2166 */
+.ldoceEntry .synopp,
+.ldoceEntry .FREQ {
+    display : inline-block;
+    font-style : normal;
+    font-weight : bold;
+    text-transform : uppercase;
+    border-radius : 5px;
+    -moz-border-radius : 5px;
+    -webkit-border-radius : 5px;
+    border : solid 1px;
+    padding-left : 4px;
+    padding-right : 4px;
+}
+/* common_4Vww.css:2182 */
+.ldoceEntry .ThesBox,
+.ldoceEntry .F2NBox {
+    display : block;
+    border-radius : 5px;
+    -moz-border-radius : 5px;
+    -webkit-border-radius : 5px;
+    border : solid #364395 1px;
+    padding : 15px;
+    margin : 8px 0;
+}
+/* common_4Vww.css:2210 */
+.ThesBox .heading {
+    line-height:2em
+}
+/* common_4Vww.css:2214 */
+.ldoceEntry .heading {
+    font-weight : bold;
+    font-size : 120%;
+    color : #364395;
+}
+/* common_4Vww.css:2225 */
+.ldoceEntry .SECHEADING {
+    display : table;
+    border-radius : 5px;
+    -moz-border-radius : 5px;
+    -webkit-border-radius : 5px;
+    border : solid #6f469d 2px;
+    padding-left : 4px;
+    padding-right : 20px;
+    margin:25px 0 10px 0;
+    font-weight : bold;
+    color : white;
+    text-transform : uppercase;
+    background-color : #6f469d;
+}
+/* common_4Vww.css:2241 */
+.ldoceEntry .Exponent {
+    display : block;
+    margin:15px 0 0 6px;
+}
+/* common_4Vww.css:2247 */
+.ldoceEntry .EXPL {
+    display : block;
+}
+/* common_4Vww.css:2251 */
+.ldoceEntry .EXP,
+.ldoceEntry .EXPR {
+    font-weight : bold;
+}
+/* common_4Vww.css:2285 */
+.ldoceEntry .DEFBOLD {
+    font-weight : bold;
+}
+/* common_4Vww.css:2289 */
+.ldoceEntry .exafile {
+    color : gray;
+    font-style : normal;
+    font-size : 120%;
+    padding: 5px;
+}
+/* common_4Vww.css:2296 */
+.ldoceEntry .amefile {
+    color : #4693db;
+    font-size : 130%;
+    padding-left: 5px;
+}
+/* common_4Vww.css:2302 */
+.ldoceEntry .brefile {
+    color : #fa6360;
+    font-size : 130%;
+    padding-left: 5px;
+}
+/* common_4Vww.css:2578 */
+span.neutral {
+    font-style : normal;
+    font-weight : normal;
+    font-variant : normal;
+}
+/* common_4Vww.css:2600 */
+span.sensenum {
+    font-style : normal;
+    font-weight : bold;
+    margin-right : 5px;
+    margin-left : 3px;
+}
+/* common_4Vww.css:2609 */
+span.synopp {
+    font-style : normal;
+    font-weight : bold;
+    color : darkblue;
+}
+/* common_4Vww.css:2635 */
+span.heading {
+    font-weight : bold;
+    font-size : 120%;
+    color : #364395;
+}
+/* common_4Vww.css:2836 */
+.exaGroup .exaGroup {
+    display : block;
+    margin-bottom : 20px;
+}
+/* common_4Vww.css:2841 */
+.exaGroup .title {
+    font-size : 110%;
+    font-weight : bold;
+    color : black;
+    display : block;
+    margin-left : 5px;
+    margin-top: 15px;
+}
+/* common_4Vww.css:2850 */
+.exaGroup .exa {
+    display : block;
+    color : gray;
+    margin-left : 15px;
+}
+/* common_4Vww.css:2856 */
+.exaGroup .NodeW {
+    font-weight : bold;
+}
+/* common_4Vww.css:2860 */
+.asset {
+    margin-top : 30px;
+}
+/* common_4Vww.css:2886 */
+.pos {
+	color: green;
+	font-weight: normal;
+}
+/* common_4Vww.css:2890 */
+.wordfams {
+	font-weight: bold;
+}
+/* common_4Vww.css:2893 */
+.wordfams .crossRef,
+.wordfams .w {
+	margin: 0 6px;
+}
+/* common_4Vww.css:2896 */
+.wordfams .crossRef {
+	border-bottom: thin dotted gray;
+}
+/* common_4Vww.css:2900 */
+.etym .Head {
+	font-weight: bold;
+}
