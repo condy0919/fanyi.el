@@ -316,9 +316,9 @@ Use the buffer's default font and character-based layout, with SHR's colors."
                                 (fanyi-shr--section-body-end section))))
                 (fanyi-shr--region-sections region)))
         replacement)
-    (dolist (section sections) (delete-overlay (fanyi-shr--section-overlay section)))
     (condition-case error-data
         (atomic-change-group
+          (dolist (section sections) (delete-overlay (fanyi-shr--section-overlay section)))
           (delete-region start end)
           (goto-char start)
           (setq replacement (fanyi-shr--render (fanyi-shr--region-dom region)
@@ -327,23 +327,29 @@ Use the buffer's default font and character-based layout, with SHR's colors."
             (when-let* ((old (cl-find (fanyi-shr--section-identity section) sections
                                       :key #'fanyi-shr--section-identity :test #'eq)))
               (fanyi-shr--section-set-closed section (fanyi-shr--section-closed old)))))
-      (error
-       ;; Text is restored by the change group; restore its boundary markers.
-       (set-marker (fanyi-shr--region-start region) start)
-       (set-marker (fanyi-shr--region-end region) end)
-       (mapc #'fanyi-shr--section-forget replacement)
-       (dolist (markers saved)
-         (dolist (state markers) (set-marker (car state) (cdr state))))
-       (dolist (section sections)
-         (move-overlay (fanyi-shr--section-overlay section)
-                       (fanyi-shr--section-body-start section)
-                       (fanyi-shr--section-body-end section) (current-buffer)))
-       (signal (car error-data) (cdr error-data))))
-    (mapc #'fanyi-shr--section-forget sections)
-    (set-marker (fanyi-shr--region-start region) start)
-    (set-marker (fanyi-shr--region-end region) (point))
-    (setf (fanyi-shr--region-layout region) layout
-          (fanyi-shr--region-sections region) replacement)))
+      ((error quit)
+       (unwind-protect
+           (let ((inhibit-quit t))
+             ;; Text is restored by the change group; restore the old state
+             ;; before discarding the replacement's overlays and markers.
+             (set-marker (fanyi-shr--region-start region) start)
+             (set-marker (fanyi-shr--region-end region) end)
+             (dolist (markers saved)
+               (dolist (state markers) (set-marker (car state) (cdr state))))
+             (dolist (section sections)
+               (move-overlay (fanyi-shr--section-overlay section)
+                             (fanyi-shr--section-body-start section)
+                             (fanyi-shr--section-body-end section) (current-buffer)))
+             (mapc #'fanyi-shr--section-forget replacement))
+         ;; A cleanup failure must not replace the original error or C-g.
+         (signal (car error-data) (cdr error-data)))))
+    ;; The text has committed; finish switching its cached state together.
+    (let ((inhibit-quit t))
+      (mapc #'fanyi-shr--section-forget sections)
+      (set-marker (fanyi-shr--region-start region) start)
+      (set-marker (fanyi-shr--region-end region) (point))
+      (setf (fanyi-shr--region-layout region) layout
+            (fanyi-shr--region-sections region) replacement))))
 
 (defun fanyi-shr--outline-folds (regions)
   "Remember outline folds overlapping REGIONS before replacing their text."
