@@ -193,6 +193,14 @@ Nil disables the timeout."
     (setf (fanyi--task-done task) t))
   (mapc #'fanyi--cancel-task fanyi--tasks))
 
+(defun fanyi--quit-task (task condition)
+  "Cancel TASK's resources and propagate the original quit CONDITION."
+  (unwind-protect
+      (let ((inhibit-quit t))
+        (fanyi--cancel-task task)
+        (force-mode-line-update t))
+    (signal (car condition) (cdr condition))))
+
 (defun fanyi--report-task-error (task description)
   "Display TASK's failure DESCRIPTION and a retry action."
   (let* ((request (fanyi--task-request task))
@@ -273,7 +281,8 @@ Nil disables the timeout."
                             t)
                     (error "No results found")))
                 (fanyi--render-task task))
-            (error (fanyi--finish-task task (error-message-string err)))))
+            (error (fanyi--finish-task task (error-message-string err)))
+            (quit (fanyi--quit-task task err))))
       (fanyi--cleanup-response response-buffer)
       (fanyi--cleanup-response (fanyi--task-buffer task)))))
 
@@ -308,7 +317,8 @@ Nil disables the timeout."
       (error
        (unwind-protect
            (fanyi--finish-task task (error-message-string err))
-         (fanyi--cancel-task task))))
+         (fanyi--cancel-task task)))
+      (quit (fanyi--quit-task task err)))
     task))
 
 (defun fanyi-format-header-line ()
