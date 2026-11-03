@@ -5,17 +5,23 @@
 (require 'json)
 (require 'fanyi)
 
-(defclass fanyi-test-service (fanyi-base-service)
-  ((definition :initform nil)))
+(defun fanyi-test--parse (response _request)
+  "Return the definition from the test RESPONSE."
+  (gethash "definition" response))
 
-(cl-defmethod fanyi-parse-from ((this fanyi-test-service) response)
-  (oset this definition (gethash "definition" response)))
-
-(cl-defmethod fanyi-render ((this fanyi-test-service))
+(defun fanyi-test--render (result request)
+  "Render the test RESULT for REQUEST."
   (with-current-buffer (get-buffer-create fanyi-buffer-name)
     (let ((inhibit-read-only t))
       (goto-char (point-max))
-      (insert (oref this word) ": " (oref this definition) "\n"))))
+      (insert (fanyi-request-word request) ": " result "\n"))))
+
+(defun fanyi-test--provider (&optional url)
+  "Return a test provider descriptor using URL."
+  (fanyi-provider-create :url (or url "https://example.invalid/%s")
+                         :api-type 'json
+                         :parse #'fanyi-test--parse
+                         :render #'fanyi-test--render))
 
 (cl-defstruct fanyi-test-request callback buffer)
 
@@ -60,10 +66,7 @@ including one delivered by a redirected request."
   "Evaluate BODY with isolated query state and mocked HTTP requests."
   (declare (indent 0) (debug t))
   `(let* ((fanyi-buffer-name (generate-new-buffer-name " *fanyi-test*"))
-          (fanyi-providers (list (fanyi-test-service
-                                 :word "dummy"
-                                 :url "https://example.invalid/%s"
-                                 :api-type 'json)))
+          (fanyi-providers (list (fanyi-test--provider)))
           (fanyi-auto-select nil)
           (fanyi-current-word nil)
           (fanyi--query-id 0)
@@ -188,23 +191,64 @@ including one delivered by a redirected request."
           (with-current-buffer fanyi-buffer-name
             (should (equal (buffer-string) "word: definition\n"))))))))
 
+(ert-deftest fanyi-query-passes-request-options-to-http-retrieval ()
+  (fanyi-test--with-query
+    (let ((provider (car fanyi-providers)) captured)
+      (setf (fanyi-provider-method provider) "POST"
+            (fanyi-provider-headers provider) '(("X-Token" . "test-token"))
+            (fanyi-provider-body provider) "payload")
+      (cl-letf (((symbol-function 'url-retrieve)
+                 (lambda (url &rest args)
+                   (setq captured (list url url-request-method
+                                        url-request-extra-headers url-request-data))
+                   (apply #'fanyi-test--retrieve url args))))
+        (fanyi-dwim "Mixed Word?"))
+      (should (equal captured
+                     '("https://example.invalid/mixed%20word%3F" "POST"
+                       (("X-Token" . "test-token")) "payload")))
+      (should (equal fanyi-current-word "Mixed Word?")))))
+
+(ert-deftest fanyi-query-shared-provider-keeps-requests-and-results-independent ()
+  (fanyi-test--with-query
+    (let* ((provider (car fanyi-providers))
+           (before (prin1-to-string provider)))
+      (setq fanyi-providers (list provider provider))
+      (fanyi-dwim "word")
+      (let ((first (cadr fanyi--tasks))
+            (second (car fanyi--tasks)))
+        (should-not (eq (fanyi--task-request first) (fanyi--task-request second)))
+        ;; Responses can arrive in reverse order, and a previous result can
+        ;; still be rendered after the other request has finished parsing.
+        (fanyi-test--respond (cadr fanyi-test--requests) nil "second result")
+        (fanyi-test--respond (car fanyi-test--requests) nil "first result")
+        (should (equal (fanyi--task-result first) "first result"))
+        (should (equal (fanyi--task-result second) "second result"))
+        (should (= fanyi--tasks-completed 2))
+        (should (equal (prin1-to-string provider) before))
+        (with-current-buffer fanyi-buffer-name
+          (should (equal (buffer-string) "word: second result\nword: first result\n")))
+        (with-temp-buffer
+          (let ((fanyi-buffer-name (buffer-name)))
+            (fanyi-render-result (fanyi--task-request second) (fanyi--task-result second)))
+          (should (equal (buffer-string) "word: second result\n")))))))
+
 (ert-deftest fanyi-query-isolates-failures-and-cleans-response ()
   (fanyi-test--with-query
     (setq fanyi-providers (list (car fanyi-providers)
-                                (clone (car fanyi-providers))))
+                                (car fanyi-providers)))
     (dolist (failure '(http json parse render not-found))
       (ert-info ((format "Failure stage: %S" failure))
         (setq fanyi-test--requests nil)
         (fanyi-dwim "word")
-        (let ((parse (symbol-function 'fanyi-parse-from))
-              (render (symbol-function 'fanyi-render)))
-          (cl-letf (((symbol-function 'fanyi-parse-from)
+        (let ((parse (symbol-function 'fanyi-parse-response))
+              (render (symbol-function 'fanyi-render-result)))
+          (cl-letf (((symbol-function 'fanyi-parse-response)
                      (lambda (&rest args)
                        (pcase failure
                          ('parse (error "Malformed dictionary response"))
                          ('not-found (throw 'not-found nil))
                          (_ (apply parse args)))))
-                    ((symbol-function 'fanyi-render)
+                    ((symbol-function 'fanyi-render-result)
                      (lambda (&rest args)
                        (if (eq failure 'render)
                            (with-current-buffer fanyi-buffer-name
@@ -252,9 +296,9 @@ including one delivered by a redirected request."
            parsed rendered)
       (cl-letf (((symbol-function 'json-parse-buffer)
                  (lambda (&rest _) (setq parsed t)))
-                ((symbol-function 'fanyi-parse-from)
+                ((symbol-function 'fanyi-parse-response)
                  (lambda (&rest _) (setq parsed t)))
-                ((symbol-function 'fanyi-render)
+                ((symbol-function 'fanyi-render-result)
                  (lambda (&rest _) (setq rendered t))))
         ;; Error pages need not have the provider's response format.  Report
         ;; the HTTP failure before trying to interpret this HTML as JSON.
@@ -312,7 +356,7 @@ including one delivered by a redirected request."
 (ert-deftest fanyi-query-start-error-does-not-block-other-provider ()
   (fanyi-test--with-query
     (setq fanyi-providers (list (car fanyi-providers)
-                                (clone (car fanyi-providers))))
+                                (car fanyi-providers)))
     (let ((attempts 0))
       (cl-letf (((symbol-function 'url-retrieve)
                  (lambda (&rest args)

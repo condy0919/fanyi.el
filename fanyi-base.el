@@ -1,4 +1,4 @@
-;;; fanyi-base.el --- The base class of all dictionaries -*- lexical-binding: t -*-
+;;; fanyi-base.el --- Shared dictionary definitions and utilities -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022 Zhiwei Chen
 ;; SPDX-License-Identifier: GPL-3.0-or-later
@@ -23,12 +23,12 @@
 
 ;;; Commentary:
 ;;
-;; The base class of all dictionaries.
+;; Dictionary configuration, request snapshots, and shared utilities.
 
 ;;; Code:
 
 (require 'url)
-(require 'eieio)
+(require 'cl-lib)
 
 ;; Silence compile warning.
 (defvar url-http-end-of-headers)
@@ -172,57 +172,65 @@ See `fanyi-sound-player'."
 (defvar fanyi-mode-font-lock-keywords-extra nil
   "Dicts can define their own font-lock keywords.")
 
-(defclass fanyi-base-service ()
-  ((word :initarg :word
-         :type string
-         :protection :protected
-         :documentation "The query word.")
-   (url :initarg :url
-        :type string
-        :protection :protected
-        :documentation "Dictionary translation url.")
-   (sound-url :initarg :sound-url
-              :type string
-              :protection :protected
-              :documentation "Dictionary sound url.")
-   (method :initarg :method
-           :initform "GET"
-           :type string
-           :protection :protected
-           :documentation "HTTP method. Default to GET.")
-   (headers :initarg :headers
-            :initform nil
-            :type list
-            :protection :protected
-            :documentation "Extra HTTP headers.")
-   (body :initarg :body
-         :initform nil
-         :protection :protected
-         :documentation "HTTP body.")
-   (api-type :initarg :api-type
-             :type symbol
-             :protection :protected
-             :documentation "Response type: xml, json, or browser for a link without a request."))
-  "The base class of dictionary service."
-  :abstract t)
+(cl-defstruct (fanyi-provider (:constructor fanyi-provider-create))
+  "Dictionary configuration shared across queries, without request state.
+URL is a format string accepting an encoded query word.  API-TYPE is
+`xml', `json', or `browser'.  PREPARE, if present, receives a fresh request
+and may adjust it.  PARSE receives (response request) and returns a result;
+RENDER receives (result request).  Browser providers do not need PARSE."
+  url sound-url (method "GET") headers body api-type prepare parse render)
 
-;; Silence unknown slots warning.
-(eieio-declare-slots :word :url :sound-url :method :headers :body :api-type)
+(cl-defstruct (fanyi-request (:constructor fanyi-request-create))
+  "A single query's resolved parameters and callbacks.
+WORD is the query text; URL is the final encoded URL.  The result is stored
+separately, so parsing and rendering do not modify this request."
+  word url sound-url method headers body api-type parse render)
+
+(defun fanyi--copy-request-value (value)
+  "Copy strings and lists in request configuration VALUE."
+  (cond ((consp value)
+         (cons (fanyi--copy-request-value (car value))
+               (fanyi--copy-request-value (cdr value))))
+        ((stringp value) (copy-sequence value))
+        (t value)))
+
+(defun fanyi-make-request (provider word)
+  "Create a request for WORD from PROVIDER without changing its configuration.
+Copy mutable HTTP settings and capture callbacks before invoking PREPARE.
+Subsequent provider configuration changes apply only to future requests."
+  (unless (and (fanyi-provider-p provider)
+               (stringp (fanyi-provider-url provider))
+               (memq (fanyi-provider-api-type provider) '(xml json browser))
+               (functionp (fanyi-provider-render provider))
+               (or (eq (fanyi-provider-api-type provider) 'browser)
+                   (functionp (fanyi-provider-parse provider)))
+               (or (null (fanyi-provider-prepare provider))
+                   (functionp (fanyi-provider-prepare provider))))
+    (user-error "Invalid dictionary provider: %S" provider))
+  (let ((request
+         (fanyi-request-create
+          :word (copy-sequence word)
+          :url (format (fanyi-provider-url provider) (url-hexify-string word))
+          :sound-url (fanyi--copy-request-value (fanyi-provider-sound-url provider))
+          :method (fanyi--copy-request-value (fanyi-provider-method provider))
+          :headers (fanyi--copy-request-value (fanyi-provider-headers provider))
+          :body (fanyi--copy-request-value (fanyi-provider-body provider))
+          :api-type (fanyi-provider-api-type provider)
+          :parse (fanyi-provider-parse provider)
+          :render (fanyi-provider-render provider))))
+    (when (fanyi-provider-prepare provider)
+      (funcall (fanyi-provider-prepare provider) request))
+    request))
 
 (define-error 'fanyi-parse-error "Could not parse dictionary response")
 
-(cl-defmethod fanyi-set-query-word ((this fanyi-base-service) query)
-  "Set QUERY word to THIS.
-QUERY could be a sentence for some services."
-  (oset this word (url-hexify-string query)))
+(defun fanyi-parse-response (request response)
+  "Parse RESPONSE for REQUEST and return independent dictionary data."
+  (funcall (fanyi-request-parse request) response request))
 
-(cl-defmethod fanyi-parse-from ((this fanyi-base-service) _dom)
-  "Implement your own `fanyi-parse-from' for THIS class."
-  (error "Implement `fanyi-parse-from' for class '%s'" (eieio-object-class-name this)))
-
-(cl-defmethod fanyi-render ((this fanyi-base-service))
-  "Implement your own `fanyi-render' for THIS class."
-  (error "Implement `fanyi-render' for class '%s'" (eieio-object-class-name this)))
+(defun fanyi-render-result (request result)
+  "Render RESULT for REQUEST into the Fanyi buffer."
+  (funcall (fanyi-request-render request) result request))
 
 (defmacro fanyi-with-fanyi-buffer (&rest body)
   "Evaluate BODY with `*fanyi*' buffer temporarily current."

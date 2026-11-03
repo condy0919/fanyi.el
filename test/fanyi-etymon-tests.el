@@ -15,7 +15,7 @@
     (let (opened)
       (cl-letf (((symbol-function 'url-retrieve)
                  (lambda (&rest _) (ert-fail "Etymonline must not request HTTP")))
-                ((symbol-function 'fanyi-parse-from)
+                ((symbol-function 'fanyi-parse-response)
                  (lambda (&rest _) (ert-fail "Etymonline must not parse a response")))
                 ((symbol-function 'browse-url-default-browser)
                  (lambda (&rest _) (setq opened t))))

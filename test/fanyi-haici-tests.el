@@ -6,7 +6,7 @@
   (let ((response (fanyi-test--read-fixture "haici.html")))
     (dom-remove-node response (car (dom-by-class response "phonetic")))
     (fanyi-test--with-rendered-response fanyi-haici-provider response
-      (should (= (length (oref instance paraphrases)) 2))
+      (should (= (length (fanyi-haici-result-paraphrases result)) 2))
       (should (string-match-p "样本；例子" (buffer-string)))
       (should (string-match-p "取样；尝试" (buffer-string)))
       (should-not (fanyi-test--button-data #'fanyi-play-sound)))))
@@ -45,7 +45,7 @@
            (insert "<html><body><ul class='dict-basic-ul'><li><span>n.</span><strong>first meaning</strong></li><li><span>v.</span><strong>last <b>meaning</b></strong></li></ul></body></html>")
            (libxml-parse-html-region (point-min) (point-max)))))
     (fanyi-test--with-rendered-response fanyi-haici-provider response
-      (should (equal (oref instance paraphrases)
+      (should (equal (fanyi-haici-result-paraphrases result)
                      '(("n." "first meaning") ("v." "last meaning"))))
       (should (string-match-p "last meaning" (buffer-string))))))
 
@@ -56,7 +56,7 @@
     (let ((response (with-temp-buffer
                       (insert html)
                       (libxml-parse-html-region (point-min) (point-max)))))
-      (should-error (fanyi-parse-from (clone fanyi-haici-provider) response)
+      (should-error (fanyi-parse-response (fanyi-make-request fanyi-haici-provider "sample") response)
                     :type 'fanyi-parse-error))))
 
 (ert-deftest fanyi-haici-ignores-malformed-optional-sections ()
@@ -69,10 +69,10 @@
       (dom-append-child (dom-by-tag response 'body)
                         '(div ((class . "layout etm")) (span nil) (p nil " ")))
       (fanyi-test--with-rendered-response fanyi-haici-provider response
-        (should (= (length (oref instance paraphrases)) 2))
-        (should-not (oref instance distribution))
-        (should-not (oref instance related))
-        (should-not (oref instance etymons))
+        (should (= (length (fanyi-haici-result-paraphrases result)) 2))
+        (should-not (fanyi-haici-result-distribution result))
+        (should-not (fanyi-haici-result-related result))
+        (should-not (fanyi-haici-result-etymons result))
         (should (string-match-p "样本；例子" (buffer-string)))))))
 
 (ert-deftest fanyi-haici-reads-chart-fields-independent-of-json-key-order ()
@@ -82,7 +82,7 @@
      '(div ((id . "dict-chart-basic")
             (data . "{\"1\":{\"sense\":\"noun\",\"percent\":75},\"2\":{\"percent\":25,\"sense\":\"verb\"}}"))))
     (fanyi-test--with-rendered-response fanyi-haici-provider response
-      (should (equal (oref instance distribution) '((75 "noun") (25 "verb"))))
+      (should (equal (fanyi-haici-result-distribution result) '((75 "noun") (25 "verb"))))
       (should (string-match-p "Click to view the distribution chart" (buffer-string))))))
 
 (provide 'fanyi-haici-tests)

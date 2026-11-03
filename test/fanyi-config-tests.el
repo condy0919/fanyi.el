@@ -7,11 +7,9 @@
 (defvar fanyi-youdao-thesaurus-max-count)
 
 (defconst fanyi-test-first-provider
-  (fanyi-test-service :word "dummy" :url "https://first.invalid/%s"
-                      :api-type 'json))
+  (fanyi-test--provider "https://first.invalid/%s"))
 (defconst fanyi-test-second-provider
-  (fanyi-test-service :word "dummy" :url "https://second.invalid/%s"
-                      :api-type 'json))
+  (fanyi-test--provider "https://second.invalid/%s"))
 
 (defconst fanyi-test--project-directory
   (file-name-directory
@@ -20,7 +18,9 @@
 
 (ert-deftest fanyi-config-setq-changes-enabled-providers ()
   (fanyi-test--with-query
-    (let (urls)
+    (let ((first-before (copy-fanyi-provider fanyi-test-first-provider))
+          (second-before (copy-fanyi-provider fanyi-test-second-provider))
+          urls)
       (cl-letf (((symbol-function 'url-retrieve)
                  (lambda (url &rest args)
                    (push url urls)
@@ -34,10 +34,10 @@
                        "https://second.invalid/second")))
       (should (equal fanyi-providers '(fanyi-test-second-provider)))
       (should (= (length fanyi--tasks) 1))
-      (should-not (eq (fanyi--task-instance (car fanyi--tasks))
-                      fanyi-test-second-provider))
-      (should (equal (oref fanyi-test-first-provider word) "dummy"))
-      (should (equal (oref fanyi-test-second-provider word) "dummy")))))
+      (should (equal (fanyi-request-url (fanyi--task-request (car fanyi--tasks)))
+                     "https://second.invalid/second"))
+      (should (equal fanyi-test-first-provider first-before))
+      (should (equal fanyi-test-second-provider second-before)))))
 
 (ert-deftest fanyi-config-customize-keeps-provider-symbols ()
   (fanyi-test--with-query
@@ -54,18 +54,77 @@
             (should (= (length fanyi-test--requests) 2)))
         (setplist 'fanyi-providers properties)))))
 
-(ert-deftest fanyi-config-accepts-existing-service-instances ()
+(ert-deftest fanyi-config-requests-are-independent-of-provider-descriptor ()
   (fanyi-test--with-query
-    (let ((template (car fanyi-providers)))
+    (let* ((template (car fanyi-providers))
+           (before (prin1-to-string template)))
       (fanyi-dwim "First")
-      (let ((first-instance (fanyi--task-instance (car fanyi--tasks))))
+      (let ((first-request (fanyi--task-request (car fanyi--tasks))))
         (fanyi-dwim "Second")
-        (should-not (eq first-instance
-                        (fanyi--task-instance (car fanyi--tasks)))))
-      (should-not (eq template (fanyi--task-instance (car fanyi--tasks))))
-      (should (equal (oref template word) "dummy"))
-      (should (equal (oref (fanyi--task-instance (car fanyi--tasks)) word)
+        (should-not (eq first-request (fanyi--task-request (car fanyi--tasks))))
+        (should (equal (fanyi-request-word first-request) "first"))
+        (should (equal (fanyi-request-url first-request) "https://example.invalid/first")))
+      (should (equal (prin1-to-string template) before))
+      (should (equal (fanyi-request-word (fanyi--task-request (car fanyi--tasks)))
                      "second")))))
+
+(ert-deftest fanyi-config-request-copies-mutable-http-settings ()
+  (let* ((word (copy-sequence "Ice Cream?"))
+         (headers (list (cons (copy-sequence "X-Token") (copy-sequence "original"))))
+         (body (copy-sequence "payload"))
+         (method (copy-sequence "POST"))
+         (sound-url (copy-sequence "https://audio.invalid/%s"))
+         (provider (fanyi-test--provider)))
+    (setf (fanyi-provider-headers provider) headers
+          (fanyi-provider-body provider) body
+          (fanyi-provider-method provider) method
+          (fanyi-provider-sound-url provider) sound-url)
+    (let ((first (fanyi-make-request provider word))
+          (second (fanyi-make-request provider word)))
+      ;; Mutating strings inside an alist must not reach an active request.
+      (aset word 0 ?X)
+      (aset (caar headers) 0 ?Z)
+      (aset (cdar headers) 0 ?X)
+      (setcdr headers (list (cons "Extra" "new")))
+      (aset body 0 ?X)
+      (aset method 0 ?H)
+      (aset sound-url 8 ?X)
+      (dolist (request (list first second))
+        (should (equal (fanyi-request-word request) "Ice Cream?"))
+        (should (equal (fanyi-request-url request)
+                       "https://example.invalid/Ice%20Cream%3F"))
+        (should (equal (fanyi-request-headers request) '(("X-Token" . "original"))))
+        (should (equal (fanyi-request-body request) "payload"))
+        (should (equal (fanyi-request-method request) "POST"))
+        (should (equal (fanyi-request-sound-url request) "https://audio.invalid/%s")))
+      ;; Requests must not share their copied settings with one another.
+      (aset (cdar (fanyi-request-headers first)) 0 ?Y)
+      (aset (fanyi-request-body first) 0 ?Y)
+      (should (equal (fanyi-request-headers second) '(("X-Token" . "original"))))
+      (should (equal (fanyi-request-body second) "payload")))))
+
+(ert-deftest fanyi-config-request-freezes-descriptor-and-callbacks ()
+  (let ((provider (fanyi-test--provider)) rendered)
+    (setf (fanyi-provider-parse provider) (lambda (_response _request) "old result")
+          (fanyi-provider-render provider)
+          (lambda (result request) (push (list 'old result (fanyi-request-url request)) rendered)))
+    (let ((old (fanyi-make-request provider "first")))
+      (setf (fanyi-provider-url provider) "https://changed.invalid/%s"
+            (fanyi-provider-api-type provider) 'xml
+            (fanyi-provider-method provider) "POST"
+            (fanyi-provider-parse provider) (lambda (_response _request) "new result")
+            (fanyi-provider-render provider)
+            (lambda (result request) (push (list 'new result (fanyi-request-url request)) rendered)))
+      (let ((new (fanyi-make-request provider "second")))
+        (should (eq (fanyi-request-api-type old) 'json))
+        (should (equal (fanyi-request-method old) "GET"))
+        (should (eq (fanyi-request-api-type new) 'xml))
+        (should (equal (fanyi-request-method new) "POST"))
+        (fanyi-render-result old (fanyi-parse-response old nil))
+        (fanyi-render-result new (fanyi-parse-response new nil))
+        (should (equal (nreverse rendered)
+                       '((old "old result" "https://example.invalid/first")
+                         (new "new result" "https://changed.invalid/second"))))))))
 
 (ert-deftest fanyi-config-before-load-is-lazy-and-preserves-highlighting ()
   ;; A fresh Emacs proves neither loading fanyi nor setting its configuration
@@ -111,35 +170,40 @@
     (let ((fanyi-youdao-thesaurus-max-count 3)
           (template (symbol-value 'fanyi-youdao-thesaurus-provider))
           urls)
-      (let ((original-url (oref template url)))
+      (let ((before (prin1-to-string template)) first-request)
         (setq fanyi-providers '(fanyi-youdao-thesaurus-provider))
         (cl-letf (((symbol-function 'url-retrieve)
                    (lambda (url &rest args)
                      (push url urls)
                      (apply #'fanyi-test--retrieve url args))))
           (fanyi-dwim "word")
+          (setq first-request (fanyi--task-request (car fanyi--tasks)))
           (setq fanyi-youdao-thesaurus-max-count 7)
           (fanyi-dwim "word"))
         (should (equal (reverse urls)
                        '("https://dict.youdao.com/suggest?q=word&doctype=json&num=3"
                          "https://dict.youdao.com/suggest?q=word&doctype=json&num=7")))
-        (should (equal (oref template url) original-url))
-        (should (equal (oref template word) "dummy"))))))
+        (should (equal (fanyi-request-url first-request)
+                       "https://dict.youdao.com/suggest?q=word&doctype=json&num=3"))
+        (should (equal (prin1-to-string template) before))))))
 
 (ert-deftest fanyi-config-youdao-count-preserves-custom-endpoint ()
   (require 'fanyi-youdao-thesaurus)
-  (let ((instance (fanyi-youdao-thesaurus-service
-                   :word "dummy"
-                   :url "https://proxy.invalid/suggest?q=%s&num=2&mode=brief#details"
-                   :api-type 'json))
+  (let ((provider (copy-fanyi-provider fanyi-youdao-thesaurus-provider))
         (fanyi-youdao-thesaurus-max-count 7))
-    (fanyi-set-query-word instance "first word")
-    (should (equal (format (oref instance url) (oref instance word))
-                   "https://proxy.invalid/suggest?q=first%20word&num=7&mode=brief#details"))
-    (setq fanyi-youdao-thesaurus-max-count 9)
-    (fanyi-set-query-word instance "second")
-    (should (equal (format (oref instance url) (oref instance word))
-                   "https://proxy.invalid/suggest?q=second&num=9&mode=brief#details"))))
+    (setf (fanyi-provider-url provider)
+          "https://proxy.invalid/suggest?q=%s&num=2&mode=brief#details")
+    (let* ((before (prin1-to-string provider))
+           (first (fanyi-make-request provider "first word")))
+      (should (equal (fanyi-request-url first)
+                     "https://proxy.invalid/suggest?q=first%20word&num=7&mode=brief#details"))
+      (setq fanyi-youdao-thesaurus-max-count 9)
+      (let ((second (fanyi-make-request provider "second")))
+        (should (equal (fanyi-request-url second)
+                       "https://proxy.invalid/suggest?q=second&num=9&mode=brief#details")))
+      (should (equal (fanyi-request-url first)
+                     "https://proxy.invalid/suggest?q=first%20word&num=7&mode=brief#details"))
+      (should (equal (prin1-to-string provider) before)))))
 
 (ert-deftest fanyi-config-eldoc-keeps-help-local-and-preserves-global-fallback ()
   (let* ((global-functions (list (lambda (_callback) "Other documentation")))

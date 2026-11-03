@@ -132,13 +132,13 @@
   (with-temp-buffer
     (let* ((fanyi-buffer-name (buffer-name))
            (fanyi-use-glyphs nil)
-           (instance (clone fanyi-longman-provider))
+           (request (fanyi-make-request fanyi-longman-provider "sample"))
+           (result (fanyi-parse-response
+                    request (fanyi-test--read-fixture "longman-rich.html")))
            (prefix (propertize "# Other dictionary\n\nKeep this text.\n\n"
                                'face 'bold 'help-echo "original")))
       (insert prefix)
-      (fanyi-set-query-word instance "sample")
-      (fanyi-parse-from instance (fanyi-test--read-fixture "longman-rich.html"))
-      (fanyi-render instance)
+      (fanyi-render-result request result)
       (should (equal-including-properties
                (buffer-substring (point-min) (+ (point-min) (length prefix))) prefix))
       (should (string-match-p "# Longman" (buffer-string))))))

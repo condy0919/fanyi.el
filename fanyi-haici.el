@@ -48,40 +48,10 @@
   :type 'boolean
   :group 'fanyi)
 
-(defclass fanyi-haici-service (fanyi-base-service)
-  ((syllable :initarg :syllable
-             :initform "-"
-             :type string
-             :documentation "Syllable of the word.")
-   (star :initarg :star
-         :initform 0
-         :type number
-         :documentation "Frequency of the word.")
-   (star-desc :initarg :star-desc
-              :initform ""
-              :type string
-              :documentation "Frequency description of the word.")
-   (phonetics :initarg :phonetics
-              :type list
-              :documentation "List of (label pronunciation female-audio male-audio).
-The label identifies the pronunciation without relying on its position.")
-   (paraphrases :initarg :paraphrases
-                :type list
-                :documentation "List of (pos . paraphrase).")
-   (distribution :initarg :distribution
-                 :initform nil
-                 :type list
-                 :documentation "List of (percent . sense).")
-   (related :initarg :related
-            :type list
-            :documentation "List of other parts of speech.")
-   (etymons :initarg :etymons
-            :type list
-            :documentation "The etymons of the word."))
-  "The Haici dictionary service.")
-
-;; Silence unknown slots warning.
-(eieio-declare-slots :syllable :star :star-desc :phonetics :paraphrases :distribution :related :etymons)
+(cl-defstruct fanyi-haici-result
+  "Parsed Haici content for a single lookup."
+  (syllable "-") (star 0) (star-desc "")
+  phonetics paraphrases distribution related etymons)
 
 (defconst fanyi-haici-distribution-chart-title
   "fanyi-haici-distribution-chart"
@@ -134,72 +104,74 @@ static char* speaker_xpm[] = {
                    collect (list percent sense)))
       (error nil))))
 
-(cl-defmethod fanyi-parse-from ((this fanyi-haici-service) dom)
-  "Complete THIS from DOM, preserving definitions when optional data is absent.
+(defun fanyi-haici-parse (dom _request)
+  "Parse DOM, preserving definitions when optional data is absent.
 Signal `fanyi-parse-error' when no usable definitions can be extracted."
-  ;; Locate elements rather than depending on whitespace or a final dummy li.
-  (oset this paraphrases
-        (cl-loop for item in (dom-by-tag (dom-by-class dom "dict-basic-ul") 'li)
-                 for pos = (string-trim (dom-texts (dom-child-by-tag item 'span) ""))
-                 for para = (string-trim (dom-texts (dom-child-by-tag item 'strong) ""))
-                 when (fanyi-haici--present-p para)
-                 collect (list pos para)))
-  (unless (oref this paraphrases)
-    (signal 'fanyi-parse-error '("Haici response contains no usable definitions")))
-  ;; Syllable, could be nil.
-  (when-let* ((str (dom-attr (dom-by-class dom "keyword") 'tip))
-              (matches (s-match "\\([a-zA-Z·]+\\)" str)))
-    (oset this syllable (nth 1 matches)))
-  ;; Star and description, could be nil.
-  (when-let* ((str (dom-attr (dom-by-class dom "level-title") 'level))
-              (matches (s-match "\\([12345]\\)" str)))
-    (oset this star (string-to-number (nth 1 matches)))
-    (oset this star-desc str))
-  (oset this phonetics
-        (cl-loop for item in (dom-non-text-children (dom-by-class dom "phonetic"))
-                 for phonetic = (dom-search item (lambda (node) (dom-attr node 'lang)))
-                 for pronunciation = (string-trim (dom-texts phonetic ""))
-                 for label-text = (string-trim (dom-text item))
-                 for lang = (downcase (or (dom-attr phonetic 'lang) ""))
-                 for label = (cond ((string-match-p "\\`\\(?:英\\|UK\\|British\\)" label-text) "英")
-                                   ((string-match-p "\\`\\(?:美\\|US\\|American\\)" label-text) "美")
-                                   ((equal lang "en-gb") "英")
-                                   ((equal lang "en-us") "美")
-                                   (t "音标"))
-                 for female = (dom-attr (dom-by-class item "\\bfsound\\b") 'naudio)
-                 for male = (dom-attr
-                             (dom-search item
-                                         (lambda (node)
-                                           (let ((classes (split-string (or (dom-attr node 'class) ""))))
-                                             (and (member "sound" classes)
-                                                  (not (member "fsound" classes))))))
-                             'naudio)
-                 when (or (fanyi-haici--present-p pronunciation)
-                          (fanyi-haici--present-p female)
-                          (fanyi-haici--present-p male))
-                 collect (list label pronunciation female male)))
-  (oset this distribution
-        (fanyi-haici--distribution (dom-attr (dom-by-id dom "dict-chart-basic") 'data)))
-  ;; Ignore incomplete related-word pairs.
-  (oset this related
-        (cl-loop for (label word)
-                 in (seq-partition
-                     (mapcar (lambda (node) (string-trim (dom-texts node "")))
-                             (dom-non-text-children (dom-by-class dom "shape")))
-                     2)
-                 when (and (fanyi-haici--present-p label)
-                           (fanyi-haici--present-p word))
-                 collect (list label word)))
-  (let* ((section (dom-by-class dom "\\betm\\b"))
-         (items (or (dom-by-tag section 'li) (dom-by-tag section 'p))))
-    (oset this etymons
-          (cl-loop for item in items
-                   for text = (string-trim (dom-texts item ""))
-                   when (fanyi-haici--present-p text)
-                   collect text))))
+  (let ((result (make-fanyi-haici-result)))
+    ;; Locate elements rather than depending on whitespace or a final dummy li.
+    (setf (fanyi-haici-result-paraphrases result)
+          (cl-loop for item in (dom-by-tag (dom-by-class dom "dict-basic-ul") 'li)
+                   for pos = (string-trim (dom-texts (dom-child-by-tag item 'span) ""))
+                   for para = (string-trim (dom-texts (dom-child-by-tag item 'strong) ""))
+                   when (fanyi-haici--present-p para)
+                   collect (list pos para)))
+    (unless (fanyi-haici-result-paraphrases result)
+      (signal 'fanyi-parse-error '("Haici response contains no usable definitions")))
+    ;; Syllable, could be nil.
+    (when-let* ((str (dom-attr (dom-by-class dom "keyword") 'tip))
+                (matches (s-match "\\([a-zA-Z·]+\\)" str)))
+      (setf (fanyi-haici-result-syllable result) (nth 1 matches)))
+    ;; Star and description, could be nil.
+    (when-let* ((str (dom-attr (dom-by-class dom "level-title") 'level))
+                (matches (s-match "\\([12345]\\)" str)))
+      (setf (fanyi-haici-result-star result) (string-to-number (nth 1 matches))
+            (fanyi-haici-result-star-desc result) str))
+    (setf (fanyi-haici-result-phonetics result)
+          (cl-loop for item in (dom-non-text-children (dom-by-class dom "phonetic"))
+                   for phonetic = (dom-search item (lambda (node) (dom-attr node 'lang)))
+                   for pronunciation = (string-trim (dom-texts phonetic ""))
+                   for label-text = (string-trim (dom-text item))
+                   for lang = (downcase (or (dom-attr phonetic 'lang) ""))
+                   for label = (cond ((string-match-p "\\`\\(?:英\\|UK\\|British\\)" label-text) "英")
+                                     ((string-match-p "\\`\\(?:美\\|US\\|American\\)" label-text) "美")
+                                     ((equal lang "en-gb") "英")
+                                     ((equal lang "en-us") "美")
+                                     (t "音标"))
+                   for female = (dom-attr (dom-by-class item "\\bfsound\\b") 'naudio)
+                   for male = (dom-attr
+                               (dom-search item
+                                           (lambda (node)
+                                             (let ((classes (split-string (or (dom-attr node 'class) ""))))
+                                               (and (member "sound" classes)
+                                                    (not (member "fsound" classes))))))
+                               'naudio)
+                   when (or (fanyi-haici--present-p pronunciation)
+                            (fanyi-haici--present-p female)
+                            (fanyi-haici--present-p male))
+                   collect (list label pronunciation female male)))
+    (setf (fanyi-haici-result-distribution result)
+          (fanyi-haici--distribution (dom-attr (dom-by-id dom "dict-chart-basic") 'data)))
+    ;; Ignore incomplete related-word pairs.
+    (setf (fanyi-haici-result-related result)
+          (cl-loop for (label word)
+                   in (seq-partition
+                       (mapcar (lambda (node) (string-trim (dom-texts node "")))
+                               (dom-non-text-children (dom-by-class dom "shape")))
+                       2)
+                   when (and (fanyi-haici--present-p label)
+                             (fanyi-haici--present-p word))
+                   collect (list label word)))
+    (let* ((section (dom-by-class dom "\\betm\\b"))
+           (items (or (dom-by-tag section 'li) (dom-by-tag section 'p))))
+      (setf (fanyi-haici-result-etymons result)
+            (cl-loop for item in items
+                     for text = (string-trim (dom-texts item ""))
+                     when (fanyi-haici--present-p text)
+                     collect text)))
+    result))
 
-(defun fanyi-haici--insert-sound (this audio face description)
-  "Insert an AUDIO button for THIS with FACE and DESCRIPTION when available."
+(defun fanyi-haici--insert-sound (sound-url audio face description)
+  "Insert an AUDIO button using SOUND-URL, FACE and DESCRIPTION when available."
   (when (fanyi-haici--present-p audio)
     (insert " ")
     (insert-button "🔊"
@@ -210,44 +182,46 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
                                                    :color-symbols
                                                    (("color" . ,(face-attribute face :foreground)))))))
                    'action #'fanyi-play-sound
-                   'button-data (format (oref this sound-url) audio)
+                   'button-data (format sound-url audio)
                    'face face
                    'follow-link t
                    'help-echo description)))
 
-(cl-defmethod fanyi-render ((this fanyi-haici-service))
-  "Render THIS page into a buffer named `fanyi-buffer-name'.
+(defun fanyi-haici-render (result request)
+  "Render RESULT for REQUEST in the buffer named `fanyi-buffer-name'.
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
-before calling this method."
+before calling this function."
   (fanyi-with-fanyi-buffer
     ;; The headline about Haici service.
     (insert "# 海词\n\n")
     ;; Syllables and star/level description.
-    (insert (oref this syllable)
+    (insert (fanyi-haici-result-syllable result)
             " "
-            (s-repeat (oref this star) "★")
+            (s-repeat (fanyi-haici-result-star result) "★")
             " "
-            (oref this star-desc)
+            (fanyi-haici-result-star-desc result)
             "\n\n")
     ;; Each available pronunciation carries its own label and optional audio.
-    (when (oref this phonetics)
-      (cl-loop for (label pronunciation female male) in (oref this phonetics)
+    (when (fanyi-haici-result-phonetics result)
+      (cl-loop for (label pronunciation female male) in (fanyi-haici-result-phonetics result)
                for first = t then nil
                do (unless first (insert "  "))
                do (insert label " " pronunciation)
-               do (fanyi-haici--insert-sound this female 'fanyi-female-speaker-face "女声版发音")
-               do (fanyi-haici--insert-sound this male 'fanyi-male-speaker-face "男声版发音"))
+               do (fanyi-haici--insert-sound (fanyi-request-sound-url request)
+                                            female 'fanyi-female-speaker-face "女声版发音")
+               do (fanyi-haici--insert-sound (fanyi-request-sound-url request)
+                                            male 'fanyi-male-speaker-face "男声版发音"))
       (insert "\n\n"))
     ;; Paraphrases.
     ;; - n. 荣誉；荣幸；尊敬；信用；正直；贞洁
     ;; - vt. 尊敬；使荣幸；对...表示敬意；兑现
     ;; ...
-    (cl-loop for pa in (oref this paraphrases)
+    (cl-loop for pa in (fanyi-haici-result-paraphrases result)
              for (pos p) = pa
              do (insert "- " pos " " p "\n"))
     (insert "\n")
     ;; Make a button for distribution chart.
-    (when-let ((dist (oref this distribution)))
+    (when-let ((dist (fanyi-haici-result-distribution result)))
       (insert-button "Click to view the distribution chart"
                      'action (lambda (dist)
                                ;; `switch-to-buffer' is used in `chart-bar-quickie' which means a new chart buffer will
@@ -286,7 +260,7 @@ before calling this method."
                      'follow-link t)
       (insert "\n\n"))
     ;; Make buttons for related words.
-    (when-let ((rs (oref this related)))
+    (when-let ((rs (fanyi-haici-result-related result)))
       (cl-loop for r in rs
                for (k v) = r
                do (insert k " ")
@@ -297,7 +271,7 @@ before calling this method."
                do (insert " "))
       (insert "\n\n"))
     ;; The etymons.
-    (when-let ((etymons (oref this etymons)))
+    (when-let ((etymons (fanyi-haici-result-etymons result)))
       (insert "## 起源\n\n")
       (cl-loop for i in etymons
                do (insert "- " i "\n"))
@@ -305,7 +279,7 @@ before calling this method."
     ;; Visit the url for more information.
     (insert-button "Browse the full page via eww"
                    'action #'eww
-                   'button-data (format (oref this url) (oref this word))
+                   'button-data (fanyi-request-url request)
                    'follow-link t)
     (insert "\n\n")))
 
@@ -313,11 +287,12 @@ before calling this method."
 (add-to-list 'fanyi-mode-font-lock-keywords-extra '("★" . 'fanyi-haici-star-face))
 
 (defconst fanyi-haici-provider
-  (fanyi-haici-service :word "dummy"
-                       :url "https://dict.cn/%s"
-                       :sound-url "https://audio.dict.cn/%s"
-                       :api-type 'xml)
-  "Haici dictionary service instance.")
+  (fanyi-provider-create :url "https://dict.cn/%s"
+                         :sound-url "https://audio.dict.cn/%s"
+                         :api-type 'xml
+                         :parse #'fanyi-haici-parse
+                         :render #'fanyi-haici-render)
+  "Haici dictionary provider.")
 
 (provide 'fanyi-haici)
 ;;; fanyi-haici.el ends here

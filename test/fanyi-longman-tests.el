@@ -36,7 +36,7 @@
                   "<div class='dictionary'><div class='dictentry'></div></div>"
                   "<div class='dictionary'><div class='dictentry'><span class='Sense'><span class='DEF'> </span></span></div></div>"
                   "<div class='dictionary'><div class='dictentry'><span class='Sense'><span class='Crossref'><a href='/help'>Help</a></span></span></div></div>"))
-    (should-error (fanyi-parse-from (clone fanyi-longman-provider)
+    (should-error (fanyi-parse-response (fanyi-make-request fanyi-longman-provider "sample")
                                     (fanyi-test--longman-html html))
                   :type 'fanyi-parse-error)))
 

@@ -42,7 +42,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
     (should-not (dom-by-class dom "am-dictionary"))
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
       (should (equal dom before))
-      (should (dom-by-class (oref instance content) "suppressed"))
+      (should (dom-by-class result "suppressed"))
       (let ((case-fold-search nil))
         (should-not (string-match-p
                      "The Sun" (buffer-substring-no-properties (point-min) (point-max)))))
@@ -111,7 +111,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
         (should (fanyi-test--longman-style-has-face-p
                  (get-char-property (point) 'face) 'bold))))
     ;; Each collocation's example survives on a more deeply indented line.
-    (dolist (node (dom-by-class (oref instance content) "^Collocate$"))
+    (dolist (node (dom-by-class result "^Collocate$"))
       (let* ((phrase (dom-texts (car (dom-by-class node "\\bCOLLOC\\b")) ""))
              (example (dom-texts (car (dom-by-class node "^EXAMPLE$")) ""))
              (phrase-start (fanyi-test--sun-line phrase t))
@@ -209,7 +209,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
         (let ((inhibit-read-only t)) (erase-buffer))
         (save-window-excursion
           (set-window-buffer nil (current-buffer))
-          (fanyi-render instance)
+          (fanyi-render-result request result)
           (let ((noninteractive nil)) (font-lock-mode 1))
           (font-lock-ensure)
           (let ((indents (fanyi-test--sun-example-indents))
@@ -295,7 +295,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
           (let ((inhibit-read-only t)) (erase-buffer))
           (save-window-excursion
             (set-window-buffer nil (current-buffer))
-            (fanyi-render instance)
+            (fanyi-render-result request result)
             (fanyi-test--sun-check-frequency-display t)
             (let ((noninteractive nil)) (font-lock-mode 1))
             (font-lock-ensure)
@@ -340,7 +340,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
           ;; default binding, before rendering the response under test.
           (let ((fanyi-use-glyphs (car settings)))
             (let ((inhibit-read-only t)) (erase-buffer))
-            (fanyi-render instance)
+            (fanyi-render-result request result)
             (fanyi-test--longman-style-fontify)
             (fanyi-test--sun-check-frequency-display nil)
             (should (face-attribute 'fanyi-longman-frequency-face :box nil t))

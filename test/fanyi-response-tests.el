@@ -6,7 +6,7 @@
 (ert-deftest fanyi-youdao-distinguishes-empty-results-from-invalid-data ()
   (should-not
    (catch 'not-found
-     (fanyi-parse-from (clone fanyi-youdao-thesaurus-provider)
+     (fanyi-parse-response (fanyi-make-request fanyi-youdao-thesaurus-provider "sample")
                        (fanyi-test--read-fixture "youdao-empty.json"))
      'unexpected-success))
   (dolist (body '("null" "[]" "{}"
@@ -16,7 +16,7 @@
                   "{\"result\":{\"code\":200},\"data\":{\"entries\":[{}]}}"
                   "{\"result\":{\"code\":200},\"data\":{\"entries\":[{\"entry\":\" \"}]}}"))
     (should-error
-     (fanyi-parse-from (clone fanyi-youdao-thesaurus-provider) (json-parse-string body))
+     (fanyi-parse-response (fanyi-make-request fanyi-youdao-thesaurus-provider "sample") (json-parse-string body))
      :type 'fanyi-parse-error)))
 
 (ert-deftest fanyi-youdao-keeps-entry-without-usable-explanation ()
@@ -26,7 +26,7 @@
       (puthash "explain" explain entry)
       (fanyi-test--with-rendered-response fanyi-youdao-thesaurus-provider data
         (should (string-match-p "- sample" (buffer-string)))
-        (should (equal (cdar (oref instance entries)) "NO EXPLANATION"))))))
+        (should (equal (cdar result) "NO EXPLANATION"))))))
 
 (ert-deftest fanyi-invalid-html-is-failed-not-completed ()
   (fanyi-test--with-query

@@ -166,6 +166,30 @@ Tests use mocked requests and the small HTML/JSON samples in `test/fixtures/`;
 they do not contact dictionary websites. The fixtures exercise parsing and
 rendering, but are not a check of the websites' current availability.
 
+Dictionary modules expose `fanyi-provider` records containing configuration
+and ordinary callbacks. The existing provider symbols in `fanyi-providers`
+remain the normal configuration interface. Direct records are also accepted;
+use `copy-fanyi-provider` to customize an endpoint without changing a built-in
+provider.
+
+`fanyi-make-request` creates a separate snapshot for each lookup, copying the
+HTTP settings and capturing the callbacks. Parsed data is stored on the task,
+separately from both the provider and the request:
+
+- `prepare(request)` is optional and adjusts only that request, for example
+  to apply Youdao's current result limit.
+- `parse(response, request)` returns dictionary data. Longman returns a DOM,
+  Youdao returns word/explanation pairs, and Haici returns a
+  `fanyi-haici-result` record. Empty results still use `(throw 'not-found nil)`;
+  malformed responses signal `fanyi-parse-error`.
+- `render(result, request)` displays the result. Browser providers skip parsing
+  and receive a nil result. Rendering still runs inside an atomic change group.
+
+The former EIEIO service classes and generic methods have been removed.
+New providers use `fanyi-provider-create` with `:parse` and `:render` callbacks,
+and optionally `:prepare`. Restart Emacs after upgrading from the EIEIO version
+so previously loaded provider objects are replaced with the new records.
+
 ## Similar projects
 
 - [youdao-dictionary](https://github.com/xuchunyang/youdao-dictionary.el)

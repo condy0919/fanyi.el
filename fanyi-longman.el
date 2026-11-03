@@ -195,12 +195,6 @@ Based on user-saved dragon and sun pages; see test/fixtures/README.md.
 Source and corpus headings, hidden signposts, buttons and Origin badges
 retain Fanyi's requested presentation.  This is not a CSS interpreter.")
 
-(defclass fanyi-longman-service (fanyi-base-service)
-  ((content :initform nil :type list
-            :documentation "Selected original dictionary DOM."))
-  "The Longman dictionary service.")
-
-(eieio-declare-slots :content)
 (declare-function fanyi-dwim "fanyi")
 (autoload 'eww "eww")
 
@@ -393,9 +387,9 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
       (list node)
     (cl-mapcan #'fanyi-longman--sections (dom-non-text-children node))))
 
-(cl-defmethod fanyi-parse-from ((this fanyi-longman-service) dom)
-  "Select usable dictionary content from DOM for THIS."
-  (let* ((base (format (oref this url) (oref this word)))
+(defun fanyi-longman-parse (dom request)
+  "Return usable dictionary content from DOM for REQUEST."
+  (let* ((base (fanyi-request-url request))
          (dictionary (car (fanyi-longman--nodes dom "dictionary")))
          (sections (seq-filter
                     (lambda (node)
@@ -405,7 +399,7 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
                     (fanyi-longman--sections dictionary))))
     (unless (seq-some (lambda (node) (fanyi-longman--class-p node "dictentry")) sections)
       (signal 'fanyi-parse-error '("Longman response contains no usable dictionary entries")))
-    (oset this content (copy-tree `(div nil ,@sections)))))
+    (copy-tree `(div nil ,@sections))))
 
 (defun fanyi-longman--shr-heading (dom)
   "Render DOM as a Fanyi outline heading."
@@ -576,14 +570,14 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
     (add-face-text-property start (point) 'fanyi-longman-example-face)
     (shr-ensure-newline)))
 
-(cl-defmethod fanyi-render ((this fanyi-longman-service))
-  "Render THIS with shr, adapting only Fanyi headings and actions."
+(defun fanyi-longman-render (content request)
+  "Render CONTENT for REQUEST with Fanyi headings and actions."
   (fanyi-with-fanyi-buffer
     (insert "# Longman\n\n")
     (fanyi-shr-insert
      `(fanyi-face ((face . fanyi-longman-body-face))
                   ,(fanyi-longman--prepare-node
-                    (oref this content) (format (oref this url) (oref this word))))
+                    content (fanyi-request-url request)))
      '((a . fanyi-longman--shr-link)
        (fanyi-query . fanyi-longman--shr-link)
        (fanyi-audio . fanyi-longman--shr-audio)
@@ -603,11 +597,11 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
     (insert "\n")))
 
 (defconst fanyi-longman-provider
-  (fanyi-longman-service :word "dummy"
-                         :url "https://www.ldoceonline.com/dictionary/%s"
-                         :sound-url "unused"
-                         :api-type 'xml)
-  "Longman dictionary service instance.")
+  (fanyi-provider-create :url "https://www.ldoceonline.com/dictionary/%s"
+                          :api-type 'xml
+                          :parse #'fanyi-longman-parse
+                          :render #'fanyi-longman-render)
+  "Longman dictionary configuration.")
 
 (provide 'fanyi-longman)
 ;;; fanyi-longman.el ends here

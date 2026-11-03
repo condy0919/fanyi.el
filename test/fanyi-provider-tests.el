@@ -27,17 +27,16 @@ Temporarily rename an existing result buffer so its text and mode survive."
   `(let* ((fanyi-use-glyphs nil)
           (existing (get-buffer fanyi-buffer-name))
           (original-name (and existing (buffer-name existing)))
-          (instance (clone ,provider))
-          result-buffer)
+          (request (fanyi-make-request ,provider "sample"))
+          result result-buffer)
      (unwind-protect
          (progn
            (when existing
              (with-current-buffer existing
                (rename-buffer (generate-new-buffer-name " *fanyi-saved-result*"))))
            (setq result-buffer (get-buffer-create fanyi-buffer-name))
-           (fanyi-set-query-word instance "sample")
-           (fanyi-parse-from instance ,response)
-           (fanyi-render instance)
+           (setq result (fanyi-parse-response request ,response))
+           (fanyi-render-result request result)
            (with-current-buffer result-buffer
              ,@body))
        (when (buffer-live-p result-buffer)
@@ -63,14 +62,14 @@ Temporarily rename an existing result buffer so its text and mode survive."
 
 (ert-deftest fanyi-provider-haici-fixture ()
   (fanyi-test--with-rendered-fixture fanyi-haici-provider "haici.html"
-    (should (equal (oref instance syllable) "sam·ple"))
-    (should (= (oref instance star) 3))
-    (should (equal (oref instance paraphrases)
+    (should (equal (fanyi-haici-result-syllable result) "sam·ple"))
+    (should (= (fanyi-haici-result-star result) 3))
+    (should (equal (fanyi-haici-result-paraphrases result)
                    '(("n." "样本；例子") ("vt." "取样；尝试"))))
     (dolist (text '("# 海词" "英 [sɑːmpəl]" "美 [sæmpəl]" "- n. 样本；例子" "- vt. 取样；尝试"))
       (should (string-match-p (regexp-quote text) (buffer-string))))
     (should (equal (fanyi-test--button-data #'fanyi-play-sound)
-                   (mapcar (lambda (id) (format (oref instance sound-url) id))
+                   (mapcar (lambda (id) (format (fanyi-request-sound-url request) id))
                            '("sample-uk-f" "sample-uk-m" "sample-us-f" "sample-us-m"))))
     (should (equal (fanyi-test--button-data #'fanyi-dwim) '("sampler")))
     (should (equal (fanyi-test--button-data #'eww) '("https://dict.cn/sample")))))
@@ -88,7 +87,7 @@ Temporarily rename an existing result buffer so its text and mode survive."
 
 (ert-deftest fanyi-provider-youdao-fixture ()
   (fanyi-test--with-rendered-fixture fanyi-youdao-thesaurus-provider "youdao.json"
-    (should (= (length (oref instance entries)) 2))
+    (should (= (length result) 2))
     (dolist (text '("# 有道同义词词典" "- sample" "(n.) 样本；(vt.) 取样"
                     "- specimen" "NO EXPLANATION"))
       (should (string-match-p (regexp-quote text) (buffer-string))))))

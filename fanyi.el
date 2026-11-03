@@ -99,25 +99,24 @@
                              fanyi-youdao-thesaurus-provider)
   "Dictionary provider symbols used by `fanyi-dwim'.
 Changes take effect on the next query, including changes made with `setq'.
-Providers are loaded and cloned when a query starts.  Service instances
-are also accepted for compatibility with existing configurations."
+Providers are loaded when a query starts, and each lookup gets a separate
+request and result.  `fanyi-provider' records are also accepted."
   :type '(repeat symbol)
   :group 'fanyi)
 
-(defun fanyi--make-provider (provider)
-  "Load PROVIDER if needed and return a fresh service instance."
-  (let ((service provider))
+(defun fanyi--resolve-provider (provider)
+  "Load PROVIDER if needed and return its configuration."
+  (let ((configuration provider))
     (when (symbolp provider)
       (unless (boundp provider)
         (let ((name (symbol-name provider)))
           (unless (and (string-suffix-p "-provider" name)
                        (require (intern (substring name 0 -9)) nil t))
             (user-error "Cannot load dictionary provider: %S" provider))))
-      (setq service (symbol-value provider)))
-    (unless (and (eieio-object-p service)
-                 (object-of-class-p service 'fanyi-base-service))
+      (setq configuration (symbol-value provider)))
+    (unless (fanyi-provider-p configuration)
       (user-error "Not a dictionary provider: %S" provider))
-    (clone service)))
+    configuration))
 
 (defcustom fanyi-headline-max-length 30
   "The maximum displayed length of `fanyi-current-word'."
@@ -152,7 +151,7 @@ Nil disables the timeout."
 (defvar fanyi-current-word nil)
 
 (cl-defstruct (fanyi--task (:constructor fanyi--make-task))
-  query-id instance buffer timer done)
+  query-id request result buffer timer done)
 
 (defun fanyi--task-active-p (task)
   "Return non-nil if TASK still belongs to the current pending query."
@@ -182,8 +181,8 @@ Nil disables the timeout."
 
 (defun fanyi--report-task-error (task description)
   "Display TASK's failure DESCRIPTION and a retry action."
-  (let* ((instance (fanyi--task-instance task))
-         (name (url-host (url-generic-parse-url (oref instance url))))
+  (let* ((request (fanyi--task-request task))
+         (name (url-host (url-generic-parse-url (fanyi-request-url request))))
          (word fanyi-current-word))
     (fanyi-log "%s: %s" name description)
     (when fanyi-verbose
@@ -225,13 +224,13 @@ Nil disables the timeout."
         (let ((inhibit-read-only t))
           ;; Do not leave half a dictionary section on failure.
           (atomic-change-group
-            (fanyi-render (fanyi--task-instance task))))))
+            (fanyi-render-result (fanyi--task-request task) (fanyi--task-result task))))))
     (fanyi--finish-task task)))
 
 (defun fanyi--handle-response (task url status)
   "Parse and render TASK's response from URL with retrieval STATUS."
   (let ((response-buffer (current-buffer))
-        (instance (fanyi--task-instance task)))
+        (request (fanyi--task-request task)))
     (unwind-protect
         (when (fanyi--task-active-p task)
           (condition-case err
@@ -246,12 +245,13 @@ Nil disables the timeout."
                              (< url-http-end-of-headers (point-max)))
                   (error "Invalid HTTP response"))
                 (goto-char (1+ url-http-end-of-headers))
-                (let ((result (pcase (oref instance api-type)
-                                ('xml (libxml-parse-html-region (point) (point-max) url))
-                                ('json (json-parse-buffer))
-                                (_ (error "Unsupported response format")))))
+                (let ((response (pcase (fanyi-request-api-type request)
+                                  ('xml (libxml-parse-html-region (point) (point-max) url))
+                                  ('json (json-parse-buffer))
+                                  (_ (error "Unsupported response format")))))
                   (unless (catch 'not-found
-                            (fanyi-parse-from instance result)
+                            (setf (fanyi--task-result task)
+                                  (fanyi-parse-response request response))
                             t)
                     (error "No results found")))
                 (fanyi--render-task task))
@@ -259,19 +259,19 @@ Nil disables the timeout."
       (fanyi--cleanup-response response-buffer)
       (fanyi--cleanup-response (fanyi--task-buffer task)))))
 
-(defun fanyi--spawn (instance)
-  "Start INSTANCE's lookup or render its browser link for the current query."
+(defun fanyi--spawn (request)
+  "Start REQUEST's lookup or render its browser link for the current query."
   (let ((task (fanyi--make-task :query-id fanyi--query-id
-                                :instance instance)))
+                                :request request)))
     ;; Register before starting the request: a callback may run immediately.
     (push task fanyi--tasks)
     (condition-case err
-        (if (eq (oref instance api-type) 'browser)
+        (if (eq (fanyi-request-api-type request) 'browser)
             (fanyi--render-task task)
-          (let ((url (format (oref instance url) (oref instance word)))
-                (url-request-method (oref instance method))
-                (url-request-extra-headers (oref instance headers))
-                (url-request-data (oref instance body)))
+          (let ((url (fanyi-request-url request))
+                (url-request-method (fanyi-request-method request))
+                (url-request-extra-headers (fanyi-request-headers request))
+                (url-request-data (fanyi-request-body request)))
             (setf (fanyi--task-buffer task)
                   (url-retrieve url
                                 (lambda (status)
@@ -406,12 +406,17 @@ crossing into HTML and consuming delimiters in a later dictionary."
                                   (format "Search Word (default \"%s\"): " default)
                                 "Search Word: ")))
                  (list (read-string prompt nil 'fanyi-history default))))
-  (let ((instances (mapcar #'fanyi--make-provider fanyi-providers)))
+  (let ((requests (mapcar (lambda (provider)
+                           (fanyi-make-request (fanyi--resolve-provider provider)
+                                               (downcase word)))
+                         fanyi-providers)))
     ;; Browser entries do not need either response parser.
-    (when (and (seq-some (lambda (i) (eq (oref i api-type) 'xml)) instances)
+    (when (and (seq-some (lambda (request) (eq (fanyi-request-api-type request) 'xml))
+                         requests)
                (not (fboundp 'libxml-parse-html-region)))
       (error "This function requires Emacs to be compiled with libxml2"))
-    (when (and (seq-some (lambda (i) (eq (oref i api-type) 'json)) instances)
+    (when (and (seq-some (lambda (request) (eq (fanyi-request-api-type request) 'json))
+                         requests)
                (not (fboundp 'json-parse-buffer)))
       (error "This function requires Emacs to be compiled with libjson"))
     ;; Save current query word.
@@ -433,12 +438,7 @@ crossing into HTML and consuming delimiters in a later dictionary."
           (erase-buffer)
           (fanyi-mode)))
 
-      (seq-do (lambda (i)
-                ;; Set the query word.
-                (fanyi-set-query-word i (downcase word))
-                ;; Do search.
-                (fanyi--spawn i))
-              instances)
+      (mapc #'fanyi--spawn requests)
       (if fanyi-auto-select
           (pop-to-buffer buf)
         (display-buffer buf)))))

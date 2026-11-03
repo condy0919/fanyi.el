@@ -29,16 +29,12 @@
 
 (require 'fanyi-base)
 
-(require 'cl-lib)
 (require 'button)
 (require 'browse-url)
 
-(defclass fanyi-etymon-service (fanyi-base-service) ()
-  "An Etymonline entry opened in an external browser.")
-
-(cl-defmethod fanyi-render ((this fanyi-etymon-service))
-  "Insert a browser link for THIS without fetching dictionary content."
-  (let ((url (format (oref this url) (oref this word))))
+(defun fanyi-etymon-render (_result request)
+  "Insert a browser link for REQUEST without fetching dictionary content."
+  (let ((url (fanyi-request-url request)))
     (fanyi-with-fanyi-buffer
       (insert "# Etymonline\n\n")
       (insert-button "Open in browser"
@@ -48,10 +44,10 @@
       (insert "\n\n"))))
 
 (defconst fanyi-etymon-provider
-  (fanyi-etymon-service :word "dummy"
-                        :url "https://www.etymonline.com/word/%s"
-                        :api-type 'browser)
-  "Etymonline browser entry service instance.")
+  (fanyi-provider-create :url "https://www.etymonline.com/word/%s"
+                          :api-type 'browser
+                          :render #'fanyi-etymon-render)
+  "Etymonline browser entry configuration.")
 
 (provide 'fanyi-etymon)
 ;;; fanyi-etymon.el ends here

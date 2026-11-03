@@ -43,32 +43,22 @@
   :type 'integer
   :group 'fanyi)
 
-(defclass fanyi-youdao-thesaurus-service (fanyi-base-service)
-  ((entries :initarg :entries
-            :type list
-            :documentation "Thesaurus entries of the word."))
-  "The Youdao thesaurus service.")
-
-;; Silence unknown slots warning.
-(eieio-declare-slots :entries)
-
-(cl-defmethod fanyi-set-query-word ((this fanyi-youdao-thesaurus-service) query)
-  "Set QUERY on THIS using the current result limit."
-  (cl-call-next-method this query)
-  (let* ((url (url-generic-parse-url (oref this url)))
+(defun fanyi-youdao-thesaurus-prepare-request (request)
+  "Set the current result limit on REQUEST."
+  (let* ((url (url-generic-parse-url (fanyi-request-url request)))
          (path (url-filename url))
          (limit (format "num=%d" fanyi-youdao-thesaurus-max-count)))
-    ;; Preserve custom endpoints and other parameters on service instances.
+    ;; Preserve custom endpoints and other parameters on this request.
     (setf (url-filename url)
           (if (string-match-p "[?&]num=" path)
               (replace-regexp-in-string
                "[?&]num=[^&]*"
                (lambda (match) (concat (substring match 0 1) limit)) path t t)
             (concat path (if (string-match-p "?" path) "&" "?") limit)))
-    (oset this url (url-recreate-url url))))
+    (setf (fanyi-request-url request) (url-recreate-url url))))
 
-(cl-defmethod fanyi-parse-from ((this fanyi-youdao-thesaurus-service) js)
-  "Complete THIS from JS, distinguishing empty results from invalid data."
+(defun fanyi-youdao-thesaurus-parse (js _request)
+  "Parse JS into entries, distinguishing empty results from invalid data."
   (unless (hash-table-p js)
     (signal 'fanyi-parse-error '("Youdao: expected a response object")))
   (let ((result (gethash "result" js))
@@ -79,29 +69,28 @@
     (let ((entries (gethash "entries" data)))
       (when (= (length entries) 0)
         (throw 'not-found nil))
-      (oset this entries
-            (cl-loop for entry across entries
-                     collect
-                     (progn
-                       (unless (and (hash-table-p entry)
-                                    (stringp (gethash "entry" entry))
-                                    (not (string-empty-p (string-trim (gethash "entry" entry)))))
-                         (signal 'fanyi-parse-error '("Youdao: invalid entry text")))
-                       (let ((explain (gethash "explain" entry)))
-                         (cons (gethash "entry" entry)
-                               (if (and (stringp explain)
-                                        (not (string-empty-p (string-trim explain))))
-                                   explain
-                                 "NO EXPLANATION")))))))))
+      (cl-loop for entry across entries
+               collect
+               (progn
+                 (unless (and (hash-table-p entry)
+                              (stringp (gethash "entry" entry))
+                              (not (string-empty-p (string-trim (gethash "entry" entry)))))
+                   (signal 'fanyi-parse-error '("Youdao: invalid entry text")))
+                 (let ((explain (gethash "explain" entry)))
+                   (cons (gethash "entry" entry)
+                         (if (and (stringp explain)
+                                  (not (string-empty-p (string-trim explain))))
+                             explain
+                           "NO EXPLANATION"))))))))
 
-(cl-defmethod fanyi-render ((this fanyi-youdao-thesaurus-service))
-  "Render THIS page into a buffer named `fanyi-buffer-name'.
+(defun fanyi-youdao-thesaurus-render (result _request)
+  "Render RESULT in the buffer named `fanyi-buffer-name'.
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
-before calling this method."
+before calling this function."
   (fanyi-with-fanyi-buffer
     ;; The headline about Youdao thesaurus service.
     (insert "# 有道同义词词典 \n\n")
-    (cl-loop for (ent . explain) in (oref this entries)
+    (cl-loop for (ent . explain) in result
              do (insert "- " ent "\n")
              ;; Prettify POS, order matters. See `fanyi-mode-font-lock-keywords'.
              do (insert (propertize
@@ -124,11 +113,12 @@ before calling this method."
     (insert "\n")))
 
 (defconst fanyi-youdao-thesaurus-provider
-  (fanyi-youdao-thesaurus-service :word "dummy"
-                                  :url "https://dict.youdao.com/suggest?q=%s&doctype=json"
-                                  :sound-url "unused"
-                                  :api-type 'json)
-  "Youdao thesaurus service instance.")
+  (fanyi-provider-create :url "https://dict.youdao.com/suggest?q=%s&doctype=json"
+                         :api-type 'json
+                         :prepare #'fanyi-youdao-thesaurus-prepare-request
+                         :parse #'fanyi-youdao-thesaurus-parse
+                         :render #'fanyi-youdao-thesaurus-render)
+  "Youdao thesaurus provider.")
 
 (provide 'fanyi-youdao-thesaurus)
 ;;; fanyi-youdao-thesaurus.el ends here
