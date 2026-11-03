@@ -28,9 +28,33 @@
 ;;; Code:
 
 (require 'fanyi-base)
+(require 'fanyi-shr)
 
 (require 'subr-x)
 (require 'cl-lib)
+(require 'button)
+(require 'dom)
+
+(declare-function fanyi-dwim "fanyi")
+
+(defface fanyi-youdao-thesaurus-word-face
+  '((t :inherit link :weight bold))
+  "Face used for queryable Youdao entries."
+  :group 'fanyi)
+
+(define-button-type 'fanyi-youdao-thesaurus-button
+  'face nil
+  'follow-link t
+  'action #'fanyi-dwim)
+
+(defcustom fanyi-youdao-thesaurus-layout 'columns
+  "Preferred layout for Youdao entries.
+`columns' aligns words with explanations, switching to stacked entries
+when there is too little room for the explanation.  `stacked' always
+places explanations below their words."
+  :type '(choice (const :tag "Columns when space permits" columns)
+                 (const :tag "Stacked entries" stacked))
+  :group 'fanyi)
 
 (defcustom fanyi-youdao-thesaurus-max-count 10
   "Max count of entries displayed."
@@ -38,8 +62,8 @@
   :group 'fanyi)
 
 (defcustom fanyi-youdao-thesaurus-indent 2
-  "Default indent for explanation."
-  :type 'integer
+  "Indentation of explanations in stacked entries."
+  :type 'natnum
   :group 'fanyi)
 
 (defun fanyi-youdao-thesaurus-prepare-request (request)
@@ -87,6 +111,11 @@
                                "adv." "art." "vt." "vi." "n." "v.")))
   "Part-of-speech labels starting at a word boundary.")
 
+(defun fanyi-youdao-thesaurus--pos-end-p (text end)
+  "Whether a label ending at END in TEXT is separate from an ASCII word."
+  (not (and (< end (length text))
+            (string-match-p "[A-Za-z0-9_]" (substring text end (1+ end))))))
+
 (defun fanyi-youdao-thesaurus--propertize-pos (explanation)
   "Return EXPLANATION with faces on independent part-of-speech labels."
   (let ((text (copy-sequence explanation))
@@ -97,24 +126,87 @@
             (end (match-end 0)))
         ;; Permit Chinese definitions immediately after the label, while
         ;; excluding labels that continue into an ASCII word or identifier.
-        (unless (and (< end (length text))
-                     (string-match-p "[A-Za-z0-9_]" (substring text end (1+ end))))
+        (when (fanyi-youdao-thesaurus--pos-end-p text end)
           (add-text-properties
            begin end '(face fanyi-pos-face font-lock-face fanyi-pos-face) text))
         (setq start end)))
     text))
 
+(defun fanyi-youdao-thesaurus--explanation-parts (explanation)
+  "Split EXPLANATION at explicit part-of-speech changes after separators.
+Keep semicolons within one meaning and unfamiliar labels as ordinary text."
+  (let ((explanation (string-trim explanation))
+        (regexp (concat "[；;\n][ \t\r\n]*\\((?" fanyi-youdao-thesaurus--pos-regexp "\\)"))
+        (case-fold-search nil)
+        (start 0) (position 0) parts)
+    (while (string-match regexp explanation position)
+      (setq position (match-end 0))
+      (when (fanyi-youdao-thesaurus--pos-end-p explanation position)
+        (push (string-trim (substring explanation start (match-beginning 0))) parts)
+        (setq start (match-beginning 1))))
+    (push (string-trim (substring explanation start)) parts)
+    (nreverse parts)))
+
+(defun fanyi-youdao-thesaurus--fill-explanation (text width)
+  "Fill TEXT to WIDTH columns, keeping persistent part-of-speech faces."
+  (with-temp-buffer
+    (insert (if (equal text "NO EXPLANATION")
+                (propertize "暂无释义" 'face 'shadow)
+              (fanyi-youdao-thesaurus--propertize-pos text)))
+    (let ((fill-column (max 1 width))
+          (fill-prefix nil)
+          (adaptive-fill-mode nil)
+          (sentence-end-double-space nil))
+      (fill-region (point-min) (point-max)))
+    (buffer-string)))
+
+(defun fanyi-youdao-thesaurus--shr-entries (dom)
+  "Render DOM's entries as aligned columns or stacked word blocks."
+  (let* ((entries (dom-children dom))
+         (width (min shr-internal-width
+                     (/ (window-body-width nil t) (max 1 (window-font-width)))))
+         (column (+ 2 (apply #'max 0
+                             (mapcar (lambda (entry) (string-width (dom-attr entry 'word))) entries))))
+         (columns (and (eq fanyi-youdao-thesaurus-layout 'columns)
+                       (>= width (+ column 32))))
+         (indent (if columns column fanyi-youdao-thesaurus-indent))
+         (padding (make-string indent ?\s)))
+    (dolist (entry entries)
+      (let ((word (dom-attr entry 'word))
+            (start (point)))
+        (insert word)
+        (make-text-button start (point) :type 'fanyi-youdao-thesaurus-button
+                          'button-data word
+                          'help-echo (concat "Query " word))
+        (put-text-property start (point) 'face 'fanyi-youdao-thesaurus-word-face)
+        (if columns
+            (insert (make-string (- column (string-width word)) ?\s))
+          (insert "\n" padding))
+        (cl-loop for part in (dom-children entry)
+                 for first = t then nil
+                 do (unless first (insert "\n" padding))
+                 do (insert (replace-regexp-in-string
+                             "\n" (concat "\n" padding)
+                             (fanyi-youdao-thesaurus--fill-explanation part (- width indent))
+                             t t)))
+        (insert "\n\n")))))
+
+(defun fanyi-youdao-thesaurus--render-style (window)
+  "Return layout settings affecting Youdao content in WINDOW."
+  (list fanyi-youdao-thesaurus-layout fanyi-youdao-thesaurus-indent
+        (window-font-width window)))
+
 (defun fanyi-youdao-thesaurus-render (result _request)
   "Insert RESULT at point in the current buffer."
-  ;; The headline about Youdao thesaurus service.
-  (insert "# 有道同义词词典 \n\n")
-  (cl-loop for (ent . explain) in result
-           do (insert "- " ent "\n")
-           do (insert (propertize
-                       (fanyi-youdao-thesaurus--propertize-pos explain)
-                       'line-prefix (make-string fanyi-youdao-thesaurus-indent ?\s)
-                       'wrap-prefix (make-string fanyi-youdao-thesaurus-indent ?\s)))
-           do (insert "\n"))
+  (insert "# 有道同义词词典\n\n")
+  (fanyi-shr-insert
+   `(fanyi-youdao-entries nil
+                          ,@(mapcar (lambda (entry)
+                                      `(entry ((word . ,(string-trim (car entry))))
+                                              ,@(fanyi-youdao-thesaurus--explanation-parts (cdr entry))))
+                                    result))
+   '((fanyi-youdao-entries . fanyi-youdao-thesaurus--shr-entries))
+   #'fanyi-youdao-thesaurus--render-style)
   (insert "\n"))
 
 (defconst fanyi-youdao-thesaurus-provider

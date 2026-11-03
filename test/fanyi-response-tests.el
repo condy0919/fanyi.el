@@ -27,7 +27,7 @@
            (entry (aref (gethash "entries" (gethash "data" data)) 0)))
       (puthash "explain" explain entry)
       (fanyi-test--with-rendered-response fanyi-youdao-thesaurus-provider data
-        (should (string-match-p "- sample" (buffer-string)))
+        (should (equal (fanyi-test--button-data #'fanyi-dwim) '("sample" "specimen")))
         (should (equal (cdar result) "NO EXPLANATION"))))))
 
 (ert-deftest fanyi-invalid-html-is-failed-not-completed ()

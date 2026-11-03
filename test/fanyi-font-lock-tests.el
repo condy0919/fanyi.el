@@ -78,8 +78,9 @@
     (fanyi-test--with-result-buffer
       (let ((inhibit-read-only t))
         (fanyi-youdao-thesaurus-render result nil))
-      (should (equal (buffer-substring-no-properties (point-min) (point-max))
-                     (concat "# 有道同义词词典 \n\n- sample\n" explanation "\n\n")))
+      (should (equal (fanyi-test--button-data #'fanyi-dwim) '("sample")))
+      (should (string-match-p "n\\. 名词\n[ ]+v\\. 动词" (buffer-string)))
+      (should (string-match-p "已有；abbreviation\\. Rev\\. n\\.example" (buffer-string)))
       ;; Styling a rendered result must not add properties to its source text.
       (should-not (text-property-not-all 0 (length explanation) 'face nil explanation))
       (should-not (text-property-not-all 0 (length explanation) 'font-lock-face nil explanation))

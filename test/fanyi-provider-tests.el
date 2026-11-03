@@ -64,8 +64,8 @@
 (ert-deftest fanyi-provider-youdao-fixture ()
   (fanyi-test--with-rendered-fixture fanyi-youdao-thesaurus-provider "youdao.json"
     (should (= (length result) 2))
-    (dolist (text '("# 有道同义词词典" "- sample" "n. 样本；vt. 取样"
-                    "- specimen" "NO EXPLANATION"))
+    (dolist (text '("# 有道同义词词典" "sample" "n. 样本" "vt. 取样"
+                    "specimen" "暂无释义"))
       (should (string-match-p (regexp-quote text) (buffer-string))))))
 
 (provide 'fanyi-provider-tests)

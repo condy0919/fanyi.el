@@ -12,6 +12,7 @@ test:
 	-l test/fanyi-retry-tests.el \
 	-l test/fanyi-config-tests.el \
 	-l test/fanyi-provider-tests.el \
+	-l test/fanyi-youdao-ui-tests.el \
 	-l test/fanyi-haici-tests.el -l test/fanyi-longman-tests.el \
 	-l test/fanyi-response-tests.el \
 	-l test/fanyi-etymon-tests.el \

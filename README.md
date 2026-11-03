@@ -111,6 +111,19 @@ Missing pronunciation or audio does not hide available definitions. Responses
 without usable dictionary content are reported as parsing failures; an explicit
 empty result from Youdao is reported as no results found.
 
+Youdao entries use a borderless layout with clickable, bold words on the left
+and explanations on the right. Parts of speech start separate lines and retain
+their highlighting. Long explanations wrap within their column. Narrow windows
+automatically place each explanation below its word, and missing explanations
+appear as subdued `暂无释义` text. Layout changes reuse cached content without
+another request. To always use the stacked layout:
+
+``` emacs-lisp
+(setq fanyi-youdao-thesaurus-layout 'stacked)
+```
+
+`fanyi-youdao-thesaurus-indent` controls indentation in the stacked layout.
+
 Longman uses Emacs's built-in `shr` renderer for dictionary HTML. Definitions,
 lists, and inline formatting follow the document structure. A small set of
 Longman class rules supplies headword sizes, colors, headings and example
