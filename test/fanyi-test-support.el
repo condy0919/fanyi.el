@@ -17,11 +17,8 @@
   (gethash "definition" response))
 
 (defun fanyi-test--render (result request)
-  "Render the test RESULT for REQUEST."
-  (with-current-buffer (get-buffer-create fanyi-buffer-name)
-    (let ((inhibit-read-only t))
-      (goto-char (point-max))
-      (insert (fanyi-request-word request) ": " result "\n"))))
+  "Insert the test RESULT for REQUEST at point in the current buffer."
+  (insert (fanyi-request-word request) ": " result "\n"))
 
 (defun fanyi-test--provider (&optional url)
   "Return a test provider descriptor using URL."
@@ -167,7 +164,7 @@ including one delivered by a redirected request."
           result)
      (fanyi-test--with-result-buffer
        (setq result (fanyi-parse-response request ,response))
-       (fanyi-render-result request result)
+       (let ((inhibit-read-only t)) (fanyi-render-result request result))
        ,@body)))
 
 (defun fanyi-test--fontify ()

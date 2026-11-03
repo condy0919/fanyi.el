@@ -55,7 +55,7 @@
          (result (fanyi-parse-response request (fanyi-test--read-fixture "longman-explode-saved.html")))
          opened)
     (fanyi-test--with-result-buffer
-      (fanyi-render-result request result)
+      (let ((inhibit-read-only t)) (fanyi-render-result request result))
       (cl-letf (((symbol-function 'eww) (lambda (url &rest _) (setq opened url)))
                 ((symbol-function 'fanyi-dwim) (lambda (&rest _) (ert-fail "No duplicate query"))))
         (button-activate (fanyi-test--longman-style-button "Verb table")))
@@ -200,11 +200,11 @@
             (fanyi-mode)
             (save-window-excursion
               (set-window-buffer nil (current-buffer))
-              (fanyi-render-result request result)
+              (let ((inhibit-read-only t)) (fanyi-render-result request result))
               (let ((first (buffer-string))
                     (inhibit-read-only t))
                 (erase-buffer)
-                (fanyi-render-result request result)
+                (let ((inhibit-read-only t)) (fanyi-render-result request result))
                 (should (equal first (buffer-string))))
               (let ((lines (count-lines (point-min) (point-max)))
                     (shr-width 44))

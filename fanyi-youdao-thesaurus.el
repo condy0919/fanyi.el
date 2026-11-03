@@ -105,20 +105,17 @@
     text))
 
 (defun fanyi-youdao-thesaurus-render (result _request)
-  "Render RESULT in the buffer named `fanyi-buffer-name'.
-It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
-before calling this function."
-  (fanyi-with-fanyi-buffer
-    ;; The headline about Youdao thesaurus service.
-    (insert "# 有道同义词词典 \n\n")
-    (cl-loop for (ent . explain) in result
-             do (insert "- " ent "\n")
-             do (insert (propertize
-                         (fanyi-youdao-thesaurus--propertize-pos explain)
-                         'line-prefix (make-string fanyi-youdao-thesaurus-indent ?\s)
-                         'wrap-prefix (make-string fanyi-youdao-thesaurus-indent ?\s)))
-             do (insert "\n"))
-    (insert "\n")))
+  "Insert RESULT at point in the current buffer."
+  ;; The headline about Youdao thesaurus service.
+  (insert "# 有道同义词词典 \n\n")
+  (cl-loop for (ent . explain) in result
+           do (insert "- " ent "\n")
+           do (insert (propertize
+                       (fanyi-youdao-thesaurus--propertize-pos explain)
+                       'line-prefix (make-string fanyi-youdao-thesaurus-indent ?\s)
+                       'wrap-prefix (make-string fanyi-youdao-thesaurus-indent ?\s)))
+           do (insert "\n"))
+  (insert "\n"))
 
 (defconst fanyi-youdao-thesaurus-provider
   (fanyi-provider-create :url "https://dict.youdao.com/suggest?q=%s&doctype=json"

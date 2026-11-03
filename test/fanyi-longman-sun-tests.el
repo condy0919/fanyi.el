@@ -209,7 +209,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
         (let ((inhibit-read-only t)) (erase-buffer))
         (save-window-excursion
           (set-window-buffer nil (current-buffer))
-          (fanyi-render-result request result)
+          (let ((inhibit-read-only t)) (fanyi-render-result request result))
           (let ((noninteractive nil)) (font-lock-mode 1))
           (font-lock-ensure)
           (let ((indents (fanyi-test--sun-example-indents))
@@ -298,7 +298,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
           (let ((inhibit-read-only t)) (erase-buffer))
           (save-window-excursion
             (set-window-buffer nil (current-buffer))
-            (fanyi-render-result request result)
+            (let ((inhibit-read-only t)) (fanyi-render-result request result))
             (fanyi-test--sun-check-frequency-display t)
             (let ((noninteractive nil)) (font-lock-mode 1))
             (font-lock-ensure)
@@ -343,7 +343,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
           ;; default binding, before rendering the response under test.
           (let ((fanyi-use-glyphs (car settings)))
             (let ((inhibit-read-only t)) (erase-buffer))
-            (fanyi-render-result request result)
+            (let ((inhibit-read-only t)) (fanyi-render-result request result))
             (fanyi-test--fontify)
             (fanyi-test--sun-check-frequency-display nil)
             (should (face-attribute 'fanyi-longman-frequency-face :box nil t))
@@ -387,7 +387,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
               (let ((inhibit-read-only t)) (erase-buffer))
               (save-window-excursion
                 (set-window-buffer nil (current-buffer))
-                (fanyi-render-result request result)
+                (let ((inhibit-read-only t)) (fanyi-render-result request result))
                 (let ((render (symbol-function 'fanyi-shr--render))
                       (renders 0))
                   (cl-letf (((symbol-function 'fanyi-shr--render)

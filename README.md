@@ -212,8 +212,12 @@ separately from both the provider and the request:
   response DOM is left unchanged. Youdao returns word/explanation pairs, and
   Haici returns a `fanyi-haici-result` record. Empty results still use `(throw 'not-found nil)`;
   malformed responses signal `fanyi-parse-error`.
-- `render(result, request)` displays the result. Browser providers skip parsing
-  and receive a nil result. Rendering still runs inside an atomic change group.
+- `render(result, request)` inserts the result at point in the current buffer.
+  It does not select a buffer or move to the end of it. The dispatcher supplies
+  a writable region for that dictionary, preserves the reader's position, and
+  rolls back partial text on failure. Browser providers skip parsing and receive
+  a nil result. Direct callers of `fanyi-render-result` supply their own writable
+  destination and insertion point.
 
 The former EIEIO service classes and generic methods have been removed.
 New providers use `fanyi-provider-create` with `:parse` and `:render` callbacks,

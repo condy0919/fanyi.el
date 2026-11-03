@@ -4,6 +4,37 @@
 (require 'fanyi-haici)
 (require 'fanyi-longman)
 (require 'fanyi-youdao-thesaurus)
+(require 'fanyi-etymon)
+
+(ert-deftest fanyi-provider-renderers-insert-at-point-without-selecting-a-buffer ()
+  (let ((fanyi-buffer-name (generate-new-buffer-name " *fanyi-wrong-destination*"))
+        (fanyi-use-glyphs nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer (get-buffer-create fanyi-buffer-name)
+            (insert "Untouched destination")
+            (setq buffer-read-only t))
+          (dolist (entry `((,fanyi-haici-provider . "haici.html")
+                           (,fanyi-longman-provider . "longman.html")
+                           (,fanyi-youdao-thesaurus-provider . "youdao.json")
+                           (,fanyi-etymon-provider)))
+            (let* ((request (fanyi-make-request (car entry) "sample"))
+                   (result (when (cdr entry)
+                             (fanyi-parse-response request (fanyi-test--read-fixture (cdr entry))))))
+              (with-temp-buffer
+                (insert "Prefix\nSuffix")
+                (goto-char 8)
+                ;; Each callback must insert here, even with unrelated text
+                ;; after point and a different buffer named by fanyi-buffer-name.
+                (fanyi-render-result request result)
+                (should (looking-at-p "Suffix"))
+                (should (> (point) 8))
+                (should (string-prefix-p "Prefix\n# " (buffer-string)))
+                (should (string-suffix-p "Suffix" (buffer-string)))))
+            (with-current-buffer fanyi-buffer-name
+              (should buffer-read-only)
+              (should (equal (buffer-string) "Untouched destination")))))
+      (when (get-buffer fanyi-buffer-name) (kill-buffer fanyi-buffer-name)))))
 
 (ert-deftest fanyi-provider-haici-fixture ()
   (fanyi-test--with-rendered-fixture fanyi-haici-provider "haici.html"

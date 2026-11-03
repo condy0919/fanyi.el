@@ -130,7 +130,7 @@
            (prefix (propertize "# Other dictionary\n\nKeep this text.\n\n"
                                'face 'bold 'help-echo "original")))
       (insert prefix)
-      (fanyi-render-result request result)
+      (let ((inhibit-read-only t)) (fanyi-render-result request result))
       (should (equal-including-properties
                (buffer-substring (point-min) (+ (point-min) (length prefix))) prefix))
       (should (string-match-p "# Longman" (buffer-string))))))

@@ -188,9 +188,6 @@ See `fanyi-sound-player'."
 (defvar fanyi-log-buffer-mtx (make-mutex)
   "The mutex for \"*fanyi-log*\" buffer.")
 
-(defvar fanyi-buffer-mtx (make-mutex)
-  "The mutex for \"*fanyi*\" buffer.")
-
 (defvar fanyi-mode-font-lock-keywords-extra nil
   "Dicts can define their own font-lock keywords.")
 
@@ -199,7 +196,8 @@ See `fanyi-sound-player'."
 URL is a format string accepting an encoded query word.  API-TYPE is
 `xml', `json', or `browser'.  PREPARE, if present, receives a fresh request
 and may adjust it.  PARSE receives (response request) and returns a result;
-RENDER receives (result request).  Browser providers do not need PARSE."
+RENDER receives (result request) and inserts at point in the current buffer.
+Browser providers do not need PARSE."
   url sound-url (method "GET") headers body api-type prepare parse render)
 
 (cl-defstruct (fanyi-request (:constructor fanyi-request-create))
@@ -251,18 +249,9 @@ Subsequent provider configuration changes apply only to future requests."
   (funcall (fanyi-request-parse request) response request))
 
 (defun fanyi-render-result (request result)
-  "Render RESULT for REQUEST into the Fanyi buffer."
+  "Insert RESULT for REQUEST at point in the current buffer.
+The caller supplies the writable destination, insertion point and transaction."
   (funcall (fanyi-request-render request) result request))
-
-(defmacro fanyi-with-fanyi-buffer (&rest body)
-  "Evaluate BODY with `*fanyi*' buffer temporarily current."
-  (declare (indent 0))
-  `(with-current-buffer (get-buffer-create fanyi-buffer-name)
-     (save-excursion
-       ;; Go to the end of buffer.
-       (goto-char (point-max))
-       (let ((inhibit-read-only t))
-         ,@body))))
 
 (defun fanyi-log (fmt &rest args)
   "Collect the messages into *fanyi-log* with non-nil `fanyi-log'.

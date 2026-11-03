@@ -169,7 +169,7 @@
         (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-explode-saved.html"
           (let ((fanyi-use-glyphs (car settings)))
             (let ((inhibit-read-only t)) (erase-buffer))
-            (fanyi-render-result request result)
+            (let ((inhibit-read-only t)) (fanyi-render-result request result))
             (fanyi-test--fontify)
             (fanyi-test--explode-check-badges (cl-every #'identity settings))))))))
 
@@ -180,7 +180,7 @@
       (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-explode-saved.html"
         (let ((fanyi-use-glyphs t))
           (let ((inhibit-read-only t)) (erase-buffer))
-          (fanyi-render-result request result)
+          (let ((inhibit-read-only t)) (fanyi-render-result request result))
           (fanyi-test--fontify)
           (should (= (how-many "\\bSYN\\b" (point-min) (point-max)) 2))
           (dolist (target '("rocket" "blow up"))
@@ -256,7 +256,7 @@
               (let ((inhibit-read-only t)) (erase-buffer))
               (save-window-excursion
                 (set-window-buffer nil (current-buffer))
-                (fanyi-render-result request result)
+                (let ((inhibit-read-only t)) (fanyi-render-result request result))
                 (let ((noninteractive nil)) (font-lock-mode 1))
                 (font-lock-ensure)
                 (cl-letf (((symbol-function 'fanyi-longman--prepare-node)

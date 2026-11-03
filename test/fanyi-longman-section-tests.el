@@ -17,7 +17,7 @@
        (fanyi-mode)
        (save-window-excursion
          (set-window-buffer nil (current-buffer))
-         (fanyi-render-result request result)
+         (let ((inhibit-read-only t)) (fanyi-render-result request result))
          (let ((noninteractive nil)) (font-lock-mode 1))
          (font-lock-ensure)
          ,@body))))

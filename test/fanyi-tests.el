@@ -372,7 +372,7 @@
           (should (equal (buffer-string) "word: second result\nword: first result\n")))
         (with-temp-buffer
           (let ((fanyi-buffer-name (buffer-name)))
-            (fanyi-render-result (fanyi--task-request second) (fanyi--task-result second)))
+            (let ((inhibit-read-only t)) (fanyi-render-result (fanyi--task-request second) (fanyi--task-result second))))
           (should (equal (buffer-string) "word: second result\n")))))))
 
 (ert-deftest fanyi-query-isolates-failures-and-cleans-response ()

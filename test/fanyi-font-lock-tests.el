@@ -76,7 +76,7 @@
                   "n.中文；(n.) 已有；abbreviation. Rev. n.example n._suffix N. 大写"))
          (result (list (cons "sample" explanation))))
     (fanyi-test--with-result-buffer
-      (let ((fanyi-buffer-name (buffer-name)))
+      (let ((inhibit-read-only t))
         (fanyi-youdao-thesaurus-render result nil))
       (should (equal (buffer-substring-no-properties (point-min) (point-max))
                      (concat "# 有道同义词词典 \n\n- sample\n" explanation "\n\n")))

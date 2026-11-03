@@ -152,7 +152,7 @@ Nil disables the timeout."
   "Result buffer whose query supersedes the previous pending query.")
 
 (defvar fanyi--query-id 0
-  "Identifier of the current query.")
+  "Counter assigning query generations to result buffers.")
 
 (defvar-local fanyi-current-word nil
   "Original query text displayed in this result buffer.")
@@ -233,8 +233,7 @@ Nil disables the timeout."
                         (marker-position (fanyi--task-end task)) start))
                (inhibit-read-only t)
                (deactivate-mark deactivate-mark)
-               (mark-active mark-active)
-               (fanyi-buffer-name (buffer-name)))
+               (mark-active mark-active))
           (narrow-to-region start end)
           (condition-case err
               (atomic-change-group
@@ -310,9 +309,8 @@ Nil disables the timeout."
 (defun fanyi--render-task (task)
   "Render TASK's result atomically and mark it complete."
   (when (fanyi--task-active-p task)
-    (with-mutex fanyi-buffer-mtx
-      (fanyi--write-task
-       task (lambda () (fanyi-render-result (fanyi--task-request task) (fanyi--task-result task)))))
+    (fanyi--write-task
+     task (lambda () (fanyi-render-result (fanyi--task-request task) (fanyi--task-result task))))
     (fanyi--finish-task task)))
 
 (defun fanyi--handle-response (task url status)
