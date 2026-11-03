@@ -174,6 +174,116 @@ including one delivered by a redirected request."
       (should (= fanyi--tasks-completed 0))
       (should (= fanyi--tasks-failed 0)))))
 
+(ert-deftest fanyi-query-killing-result-buffer-cancels-pending-resources ()
+  (fanyi-test--with-query
+    (setq fanyi-providers (list (car fanyi-providers) (car fanyi-providers)))
+    (fanyi-dwim "word")
+    (let ((tasks (copy-sequence fanyi--tasks))
+          (timers (mapcar #'fanyi--task-timer fanyi--tasks))
+          buffers processes)
+      (dolist (request fanyi-test--requests)
+        (let ((original (fanyi-test-request-buffer request))
+              (redirected (fanyi-test--response-buffer)))
+          (with-current-buffer original
+            (setq-local url-redirect-buffer redirected))
+          (dolist (buffer (list original redirected))
+            (push buffer buffers)
+            (push (make-pipe-process :name "fanyi-test-close-pending"
+                                     :buffer buffer :noquery t)
+                  processes))))
+      (should (cl-every #'timerp timers))
+      (should (cl-every #'process-live-p processes))
+      (kill-buffer fanyi-buffer-name)
+      (should (cl-every #'fanyi--task-done tasks))
+      (dolist (task tasks) (should-not (fanyi--task-timer task)))
+      (dolist (timer timers) (should-not (memq timer timer-list)))
+      (dolist (process processes) (should-not (process-live-p process)))
+      (dolist (buffer buffers) (should-not (buffer-live-p buffer))))))
+
+(ert-deftest fanyi-query-killed-results-ignore-late-callbacks-and-timeout ()
+  (dolist (replacement '(nil t))
+    (ert-info ((format "Create another buffer with the old name: %S" replacement))
+      (fanyi-test--with-query
+        (fanyi-dwim "word")
+        (let ((request (car fanyi-test--requests))
+              (task (car fanyi--tasks))
+              replacement-buffer)
+          (kill-buffer fanyi-buffer-name)
+          (when replacement
+            (setq replacement-buffer (get-buffer-create fanyi-buffer-name))
+            (with-current-buffer replacement-buffer
+              (insert "Unrelated result buffer")
+              (fanyi-mode)))
+          (dolist (status '(nil (:error (error http 500))))
+            (should-not (buffer-live-p (fanyi-test--respond request status "too late"))))
+          ;; A timeout callback may already have been queued when cancelled.
+          (fanyi--timeout task)
+          (should (= fanyi--tasks-completed 0))
+          (should (= fanyi--tasks-failed 0))
+          (if replacement
+              (with-current-buffer replacement-buffer
+                (should (eq (get-buffer fanyi-buffer-name) replacement-buffer))
+                (should (equal (buffer-string) "Unrelated result buffer"))
+                (should (eq major-mode 'fanyi-mode)))
+            (should-not (get-buffer fanyi-buffer-name))))))))
+
+(ert-deftest fanyi-query-changing-result-mode-cancels-pending-work ()
+  (fanyi-test--with-query
+    (fanyi-dwim "word")
+    (let ((request (car fanyi-test--requests))
+          (task (car fanyi--tasks))
+          (timer (fanyi--task-timer (car fanyi--tasks))))
+      (with-current-buffer fanyi-buffer-name
+        (fundamental-mode)
+        (let ((inhibit-read-only t)) (insert "Reused for editing")))
+      (should (fanyi--task-done task))
+      (should-not (memq timer timer-list))
+      (should-not (buffer-live-p (fanyi-test-request-buffer request)))
+      (dolist (status '(nil (:error (error http 500))))
+        (should-not (buffer-live-p (fanyi-test--respond request status "too late"))))
+      (with-current-buffer fanyi-buffer-name
+        (should (eq major-mode 'fundamental-mode))
+        (should (equal (buffer-string) "Reused for editing"))))))
+
+(ert-deftest fanyi-query-quit-hides-results-without-cancelling-them ()
+  (fanyi-test--with-query
+    (fanyi-dwim "word")
+    (let ((target (get-buffer fanyi-buffer-name))
+          (task (car fanyi--tasks)))
+      (save-window-excursion
+        (set-window-buffer nil target)
+        (with-current-buffer target
+          (call-interactively (key-binding (kbd "q"))))
+        (should (buffer-live-p target))
+        (should-not (eq (window-buffer) target))
+        (should-not (fanyi--task-done task))
+        (should (memq (fanyi--task-timer task) timer-list))
+        (fanyi-test--respond (car fanyi-test--requests) nil "ready when reopened")
+        (should (= fanyi--tasks-completed 1))
+        (with-current-buffer target
+          (should (eq major-mode 'fanyi-mode))
+          (should buffer-read-only)
+          (should (equal (buffer-string) "word: ready when reopened\n")))))))
+
+(ert-deftest fanyi-query-renamed-results-retain-their-buffer-identity ()
+  (fanyi-test--with-query
+    (fanyi-dwim "word")
+    (let ((target (get-buffer fanyi-buffer-name)))
+      (unwind-protect
+          (progn
+            (with-current-buffer target
+              (rename-buffer (generate-new-buffer-name " *fanyi-test-renamed*")))
+            (with-current-buffer (get-buffer-create fanyi-buffer-name)
+              (insert "Different buffer with the original name")
+              (fanyi-mode))
+            (fanyi-test--respond (car fanyi-test--requests) nil "original lookup")
+            (with-current-buffer target
+              (should (equal (buffer-string) "word: original lookup\n")))
+            (with-current-buffer fanyi-buffer-name
+              (should (equal (buffer-string) "Different buffer with the original name")))
+            (should (= fanyi--tasks-completed 1)))
+        (when (buffer-live-p target) (kill-buffer target))))))
+
 (ert-deftest fanyi-query-accepts-success-status-and-cleans-response ()
   (fanyi-test--with-query
     (dolist (status '(nil (:redirect "https://example.invalid/canonical")))
