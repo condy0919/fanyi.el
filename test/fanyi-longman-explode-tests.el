@@ -30,6 +30,76 @@
             (should (string-match-p text (plist-get (cdr display) :data))))
         (should-not display)))))
 
+(defun fanyi-test--explode-check-register-and-thesaurus ()
+  "Check section boundaries, indentation and semantic faces at the current width."
+  (goto-char (point-min))
+  (re-search-forward "^[ \t]*Register[ \t]*$")
+  (let ((indent (current-indentation)))
+    (back-to-indentation)
+    (should (fanyi-test--longman-style-has-face-p
+             (get-char-property (point) 'face) 'fanyi-longman-box-heading-face))
+    (forward-line 1)
+    (back-to-indentation)
+    (should (= (current-indentation) indent))
+    (should (looking-at-p "In everyday English"))
+    (dolist (text '("goes off" "explodes:"))
+      (search-forward text)
+      (should (fanyi-test--longman-style-has-face-p
+               (get-char-property (match-beginning 0) 'face) 'bold)))
+    (re-search-forward "^[ \t]*\\(A bomb went off\\)")
+    (should (> (current-indentation) indent))
+    (should (fanyi-test--longman-style-has-face-p
+             (get-char-property (match-beginning 1) 'face) 'fanyi-longman-example-face))
+    (search-backward "went off")
+    (should (fanyi-test--longman-style-has-face-p (get-char-property (point) 'face) 'bold)))
+  (dolist (heading '(("THESAURUS" . fanyi-longman-box-heading-face)
+                     ("TO EXPLODE" . fanyi-longman-group-heading-face)
+                     ("TO MAKE SOMETHING EXPLODE" . fanyi-longman-group-heading-face)))
+    (goto-char (point-min))
+    (re-search-forward (concat "^[ \t]*" (regexp-quote (car heading)) "[ \t]*$"))
+    (back-to-indentation)
+    (should (fanyi-test--longman-style-has-face-p
+             (get-char-property (point) 'face) (cdr heading))))
+  ;; DEFBOLD emphasizes a term inside its definition, independently of EXP.
+  (should (fanyi-test--longman-style-has-face-p
+           (get-char-property (fanyi-test--explode-label "Detonate") 'face) 'bold))
+  (goto-char (fanyi-test--explode-label "THESAURUS"))
+  (dolist (entry '(("explode" . "A bomb exploded")
+                   ("go off" . "Luckily the station")
+                   ("blow up" . "The plane blew up")
+                   ("erupt" . "The volcano has erupted")
+                   ("burst" . "One of the water pipes")
+                   ("explode" . "The terrorists planned")
+                   ("set off" . "The group set off")
+                   ("detonate" . "Army experts detonated")
+                   ("let off" . "Terrorists let off")
+                   ("blow up" . "He was involved")))
+    (re-search-forward
+     (concat "^[ \t]*\\(" (regexp-quote (car entry)) "\\)"
+             "\\(?: /[^/\n]+/\\)?[ \t]+\\(?:phrasal \\)?verb\\b"))
+    (let ((indent (current-indentation))
+          (position (match-beginning 1)))
+      (should (fanyi-test--longman-style-has-face-p
+               (get-char-property position 'face) 'bold))
+      (save-excursion
+        (beginning-of-line)
+        (forward-line -1)
+        (should (looking-at-p "[ \t]*$")))
+      (search-backward "verb")
+      (should (fanyi-test--longman-style-has-face-p
+               (get-char-property (point) 'face) 'fanyi-longman-pos-face))
+      (re-search-forward (concat "^[ \t]*" (regexp-quote (cdr entry))))
+      (should (> (current-indentation) indent))
+      (back-to-indentation)
+      (should (fanyi-test--longman-style-has-face-p
+               (get-char-property (point) 'face) 'fanyi-longman-example-face)))))
+
+(defun fanyi-test--explode-thesaurus-button ()
+  "Return the bomb definition link in the first thesaurus entry."
+  (goto-char (fanyi-test--explode-label "THESAURUS"))
+  (search-forward "bomb")
+  (button-at (match-beginning 0)))
+
 (ert-deftest fanyi-longman-explode-family-label-and-query-actions ()
   (let ((shr-width 1000) queries)
     (cl-letf (((symbol-function 'fanyi-dwim) (lambda (word) (push word queries))))
@@ -85,6 +155,20 @@
             (fanyi-test--longman-style-fontify)
             (fanyi-test--explode-check-badges (cl-every #'identity settings))))))))
 
+(ert-deftest fanyi-longman-explode-register-and-thesaurus-layout-and-actions ()
+  (let ((shr-width 1000) queries)
+    (cl-letf (((symbol-function 'fanyi-dwim) (lambda (word) (push word queries))))
+      (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-explode-saved.html"
+        (fanyi-test--longman-style-fontify)
+        (fanyi-test--explode-check-register-and-thesaurus)
+        (should-not queries)
+        (let ((button (fanyi-test--explode-thesaurus-button)))
+          (should button)
+          (should (eq (button-get button 'action) #'fanyi-dwim))
+          (should (equal (button-get button 'button-data) "bomb"))
+          (button-activate button))
+        (should (equal queries '("bomb")))))))
+
 (ert-deftest fanyi-longman-explode-inline-badges-refresh-with-reflow-and-face-changes ()
   (let ((background (face-attribute 'fanyi-longman-svg-asset-face :background))
         (signpost-background (face-attribute 'fanyi-longman-signpost-face :background))
@@ -118,6 +202,7 @@
                     (font-lock-ensure)
                     (should (> (count-lines (point-min) (point-max)) lines))
                     (fanyi-test--explode-check-badges t)
+                    (fanyi-test--explode-check-register-and-thesaurus)
                     (let* ((position (fanyi-test--explode-label "Word family"))
                            (before (plist-get (cdr (get-char-property position 'display)) :data)))
                       (should (string-match-p "Word family" before))
@@ -142,7 +227,8 @@
                         (should (string-match-p "#2468ac" svg))))
                     (should-not queries)
                     (button-activate (fanyi-test--longman-style-button "explosion"))
-                    (should (equal queries '("explosion"))))))
+                    (button-activate (fanyi-test--explode-thesaurus-button))
+                    (should (equal queries '("bomb" "explosion"))))))
               (should (equal result prepared)))))
       (set-face-attribute 'fanyi-longman-svg-asset-face nil :background background)
       (set-face-attribute 'fanyi-longman-signpost-face nil :background signpost-background))))
