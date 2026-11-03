@@ -100,6 +100,13 @@ Missing pronunciation or audio does not hide available definitions. Responses
 without usable dictionary content are reported as parsing failures; an explicit
 empty result from Youdao is reported as no results found.
 
+Longman uses Emacs's built-in `shr` renderer for dictionary HTML. Definitions,
+examples, lists, and inline formatting follow the document structure; audio
+buttons and dictionary links still play pronunciations and start Fanyi queries.
+Only dictionary content is selected, and rendering does not download images or
+other page resources. This replaces the previous SVG badges and hand-written
+layout; `fanyi-longman-svg-border-radius` is no longer used.
+
 Etymonline displays an `Open in browser` button immediately, without making an
 HTTP request or parsing its pages. Click it to read the current entry and
 complete any browser verification there.
@@ -143,7 +150,6 @@ if your sound player can be launched with `your-sound-player url`. Otherwise it 
 ![status indicator](https://user-images.githubusercontent.com/4024656/136776219-0ffd6d27-ce36-48ca-979c-87f163cd79fc.png)
 ![海词](https://user-images.githubusercontent.com/4024656/128582690-2af2bb4a-46aa-4241-bdc0-6a5bb5e2db38.png)
 ![分布](https://user-images.githubusercontent.com/4024656/128582703-3e62cd17-a778-4982-9872-98e8697e333e.png)
-![Longman](https://user-images.githubusercontent.com/4024656/131615163-7b52a0eb-77a4-481f-b093-8f9c7fa91216.png)
 ![有道同义词英文](https://user-images.githubusercontent.com/4024656/132447780-1bbd9a6e-805e-4a4c-9e0a-03f499864c6f.png)
 ![有道同义词中文](https://user-images.githubusercontent.com/4024656/132447809-af3785bd-fe6d-4e52-a107-71c89fb8a26b.png)
 

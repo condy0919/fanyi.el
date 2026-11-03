@@ -77,7 +77,6 @@ Temporarily rename an existing result buffer so its text and mode survive."
 
 (ert-deftest fanyi-provider-longman-fixture ()
   (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman.html"
-    (should (= (length (oref instance dicts)) 1))
     (dolist (text '("# Longman" "From the test dictionary" "sam‧ple" "(noun)"
                     "a small" "used for testing" "Take a sample." "From Latin exemplum."))
       (should (string-match-p (regexp-quote text) (buffer-string))))

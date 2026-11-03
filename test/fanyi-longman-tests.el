@@ -81,8 +81,8 @@
       (dom-append-child (car (dom-by-class dom "^dictionary$"))
                         (car (dom-by-class family "wordfams")))
       (fanyi-test--with-rendered-response fanyi-longman-provider dom
-        (should (equal (oref instance word-family)
-                       '(("(noun)" "sampler" "sample") ("(verb)" "sample"))))
+        (dolist (text '("Word family" "(noun)" "sampler" "(verb)"))
+          (should (string-match-p (regexp-quote text) (buffer-string))))
         (should (string-match-p "used for testing" (buffer-string)))
         (should (member "sampler" (fanyi-test--button-data #'fanyi-dwim)))))))
 
@@ -91,7 +91,7 @@
     (dom-append-child (car (dom-by-class dom "^dictionary$"))
                       '(div ((class . "wordfams")) (span nil "Different layout")))
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
-      (should-not (oref instance word-family))
+      (should (string-match-p "Different layout" (buffer-string)))
       (should (string-match-p "used for testing" (buffer-string))))))
 
 (provide 'fanyi-longman-tests)

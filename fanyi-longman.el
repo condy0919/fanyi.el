@@ -6,7 +6,7 @@
 ;; Keywords: convenience, tools
 ;; URL: https://github.com/condy0919/fanyi.el
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "27.1") (s "1.12.0"))
+;; Package-Requires: ((emacs "27.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -23,532 +23,219 @@
 
 ;;; Commentary:
 ;;
-;; Longman dictionary service with beautiful SVG icons.
+;; Render Longman dictionary content with shr.
 
 ;;; Code:
 
 (require 'fanyi-base)
 
-(require 's)
+(require 'subr-x)
 (require 'dom)
 (require 'seq)
-(require 'svg)
 (require 'cl-lib)
 (require 'button)
-
-(defcustom fanyi-longman-svg-border-radius 7
-  "Default border radius in pixels."
-  :type 'integer
-  :group 'fanyi)
+(require 'browse-url)
+(require 'shr)
 
 (defcustom fanyi-longman-example-indent 2
-  "Default indent for examples."
-  :type 'integer
-  :group 'fanyi)
-
-(defface fanyi-longman-svg-asset-face
-  '((((background light))
-     :foreground "white"
-     :background "#f1d600")
-    (((background dark))
-     :foreground "black"
-     :background "#a6a7bd"))
-  "Face used for asset intro."
-  :group 'fanyi)
-
-(defface fanyi-longman-svg-signpost-face
-  '((((background light))
-     :foreground "white"
-     :background "#f18500")
-    (((background dark))
-     :foreground "black"
-     :background "#ef932d"))
-  "Face used for signpost."
-  :group 'fanyi)
-
-(defface fanyi-longman-registerlab-face
-  '((t :foreground "purple" :slant italic))
-  "Face used for register label."
-  :group 'fanyi)
-
-(defface fanyi-longman-dot-face
-  '((t :foreground "red"))
-  "Face used for level dot."
-  :group 'fanyi)
-
-(defface fanyi-longman-grammar-face
-  '((t :foreground "green" :weight bold))
-  "Face used for grammar."
-  :group 'fanyi)
-
-(defface fanyi-longman-geo-face
-  '((t :foreground "#364395" :slant italic))
-  "Face used for geography."
+  "Indentation of Longman examples rendered by shr."
+  :type 'natnum
   :group 'fanyi)
 
 (defface fanyi-longman-example-face
-  '((t :foreground "gray"))
+  '((t :inherit font-lock-doc-face))
   "Face used for examples."
   :group 'fanyi)
 
 (defclass fanyi-longman-service (fanyi-base-service)
-  ((word-family :initarg :word-family
-                :initform nil
-                :type list
-                :documentation "Word family of the word.")
-   (dicts :initarg :dicts
-          :initform nil
-          :type list
-          :documentation "Dictionary entry.")
-   (etymon :initarg :etymon
-           :type string
-           :documentation "Etymon of the word."))
+  ((content :initform nil :type list
+            :documentation "Selected dictionary DOM, prepared for shr."))
   "The Longman dictionary service.")
 
-(defclass fanyi-longman-dict ()
-  ((name :initarg :name
-         :type string
-         :documentation "Name of the dictionary.")
-   (hyphenation :initarg :hyphenation
-                :initform nil
-                :documentation "Hyphenation form.")
-   (pronunciation :initarg :pronunciation
-                  :initform nil
-                  :documentation "Pronunciation of the word.")
-   (level :initarg :level
-          :initform nil
-          :documentation "Level of the word.")
-   (freqs :initarg :freqs
-          :initform nil
-          :documentation "Frequency of the word.")
-   (academy :initarg :academy
-            :initform nil
-            :documentation "Academic usage.")
-   (pos :initarg :pos
-        :initform nil
-        :documentation "Part of speech.")
-   (inflection :initarg :inflection
-               :initform nil
-               :documentation "Inflection.")
-   (grammar :initarg :grammar
-            :initform nil
-            :documentation "Grammar.")
-   (british :initarg :british
-            :documentation "British voice.")
-   (american :initarg :american
-             :documentation "American voice.")
-   (senses :initarg :senses
-           :type list
-           :documentation "List of `fanyi-longman-dict-sense's."))
-  "The Longman dictionary entry.")
-
-(defclass fanyi-longman-dict-sense ()
-  ((signpost :initarg :signpost
-             :initform nil
-             :documentation "Signpost.")
-   (grammar :initarg :grammar
-            :initform nil
-            :documentation "Grammar.")
-   (registerlab :initarg :registerlab
-                :initform nil
-                :documentation "Register Label.")
-   (lexunit :initarg :lexunit
-            :initform nil
-            :documentation "Lexical unit.")
-   (geo :initarg :geo
-        :initform nil
-        :documentation "Geography.")
-   (def :initarg :def
-        :type list
-        :documentation "The definition.
-Typically it can be a list of strings or \"riched\" strings.")
-   (crossref :initarg :crossref
-             :initform nil
-             :documentation "Crossref.")
-   (syn :initarg :syn
-        :initform nil
-        :documentation "Synonym.")
-   (examples :initarg :examples
-             :type list
-             :documentation "List of examples.")
-   (footnote-expl :initarg :footnote-expl
-                  :type string
-                  :documentation "Footnote explanation.
-Typically it can be a list of strings or \"riched\" strings.")
-   (footnote-example :initarg :footnote-example
-                     :type string
-                     :documentation "Footnote example.
-Typically it can be a list of strings or \"riched\" strings."))
-  "The Longman dictionary entry sense.")
-
-;; Silence unknown slots warning.
-(eieio-declare-slots :word-family :dicts :etymon)
-(eieio-declare-slots :name :hyphenation :pronunciation :level :freqs :academy :pos :inflection :grammar :british :american :senses)
-(eieio-declare-slots :signpost :grammar :registerlab :lexunit :geo :def :crossref :syn :examples :footnote-expl :footnote-example)
-
-;; Silence compile warning.
+(eieio-declare-slots :content)
 (declare-function fanyi-dwim "fanyi")
 
-;; e.g.
-;;
-;; ```
-;; .-------------.
-;; | Word family |
-;; '-------------'
-;; ```
-;;
-;; From https://np.reddit.com/r/emacs/comments/r6ljmh/drop_shadowed_text_using_svg/
-(defun fanyi-longman-svg-tag-make (text face)
-  "Create a SVG image displaying TEXT with FACE in a rounded box."
-  (let* ((font       (query-font (face-attribute 'default :font)))
-         (font-size  (elt font 2))
-         (family     (face-attribute 'default :family))
-         (descent    (elt font 4))
-         (ascent     (elt font 5))
-         (char-width (elt font 7))
-         (svg-height (+ ascent descent))
-         (svg-width  (* char-width (+ (length text) 2)))
-         (svg        (svg-create svg-width svg-height)))
-    (svg-rectangle svg 0 0 svg-width svg-height
-                   :rx fanyi-longman-svg-border-radius
-                   :fill (face-attribute face :background))
-    (svg-text svg text
-              :fill (face-attribute face :foreground)
-              :stroke-width 0
-              :font-family family
-              :font-weight "300"
-              :font-size font-size
-              :x char-width
-              :y descent)
-    (svg-image svg :scale 1 :ascent 'center)))
+(defun fanyi-longman--class-p (node class)
+  "Return non-nil when NODE has the exact CSS CLASS."
+  (member class (split-string (or (dom-attr node 'class) ""))))
 
-(defun fanyi-longman--word-family (dom)
-  "Extract optional word-family groups from DOM without layout assumptions."
-  (let (pos groups)
-    (dolist (node (dom-children (dom-by-class dom "wordfams")))
-      (cond
-       ((and (consp node) (dom-by-class node "asset_intro")))
-       ((and (consp node) (dom-by-class node "pos"))
-        (setq pos (s-trim (dom-texts node ""))))
-       (pos
-        (let ((word (s-trim (if (stringp node) node (dom-texts node "")))))
-          (unless (s-blank-str? word)
-            (cl-pushnew word (alist-get pos groups nil nil #'equal)
-                        :test #'equal))))))
-    (mapcar (lambda (group) (cons (car group) (nreverse (cdr group))))
-            (nreverse groups))))
+(defun fanyi-longman--nodes (dom class)
+  "Return nodes in DOM with CSS CLASS."
+  (dom-search dom (lambda (node) (fanyi-longman--class-p node class))))
+
+(defun fanyi-longman--http-url (value base)
+  "Resolve a nonblank HTTP(S) VALUE against BASE, or return nil."
+  (when (and (stringp value) (not (string-empty-p (string-trim value))))
+    (let ((url (url-expand-file-name (string-trim value) base)))
+      (when (member (url-type (url-generic-parse-url url)) '("http" "https"))
+        url))))
 
 (defun fanyi-longman--crossref-target (href)
-  "Return a dictionary lookup target for HREF, or nil for unknown links."
+  "Return the decoded dictionary word for HREF, or nil for other links."
   (when (and (stringp href)
              (string-match
               "\\`\\(?:https?://\\(?:www\\.\\)?ldoceonline\\.com\\)?/dictionary/\\([^?#]+\\)"
               href))
-    (match-string 1 href)))
+    (decode-coding-string (url-unhex-string (match-string 1 href)) 'utf-8)))
 
-(defun fanyi-longman--sense-content-p (sense)
-  "Return non-nil if SENSE has a definition or a usable cross-reference."
-  (or (oref sense crossref)
-      (seq-some (lambda (part)
-                  (let ((text (if (stringp part) part (car-safe part))))
-                    (and (stringp text) (not (s-blank-str? text)))))
-                (oref sense def))))
+(defun fanyi-longman--entry-p (entry base)
+  "Return non-nil if ENTRY has a definition or usable cross-reference."
+  (or (seq-some (lambda (node) (not (string-empty-p (string-trim (dom-texts node "")))))
+                (fanyi-longman--nodes entry "DEF"))
+      (seq-some
+       (lambda (node)
+         (seq-some (lambda (link)
+                     (and (not (string-empty-p (string-trim (dom-texts link ""))))
+                          (fanyi-longman--crossref-target
+                           (fanyi-longman--http-url (dom-attr link 'href) base))))
+                   (dom-by-tag node 'a)))
+       (fanyi-longman--nodes entry "Crossref"))))
+
+(defun fanyi-longman--prepare-node (node base &optional family)
+  "Copy NODE for shr, adapting CSS layout and resolving URLs against BASE.
+FAMILY marks word-family links that use text instead of an href.
+Keep ordinary HTML and unfamiliar inline markup for shr to render."
+  (if (stringp node)
+      node
+    (let* ((tag (dom-tag node))
+           (classes (split-string (or (dom-attr node 'class) "")))
+           (family (or family (member "wordfams" classes))))
+      (unless (or (memq tag '(script style iframe form input img svg
+                                     object embed audio video source link meta base))
+                  (and (eq tag 'button) (not (dom-attr node 'data-src-mp3)))
+                  (dom-attr node 'hidden)
+                  (equal (dom-attr node 'aria-hidden) "true")
+                  (string-match-p "display[ \t]*:[ \t]*none"
+                                  (or (dom-attr node 'style) "")))
+        (let* ((attributes (copy-tree (dom-attributes node)))
+               (children (delq nil (mapcar (lambda (child)
+                                             (fanyi-longman--prepare-node child base family))
+                                           (dom-children node))))
+               (audio (fanyi-longman--http-url (dom-attr node 'data-src-mp3) base)))
+          ;; URL normalization avoids relying on shr's document-local base URL.
+          (when (eq tag 'a)
+            (setf (alist-get 'href attributes)
+                  (fanyi-longman--http-url (dom-attr node 'href) base))
+            (when (and family (not (dom-attr node 'href)))
+              (setq tag 'fanyi-query)
+              (setf (alist-get 'word attributes) (string-trim (dom-texts node "")))))
+          (cond
+           (audio
+            (setq tag 'fanyi-audio)
+            (setf (alist-get 'src attributes) audio))
+           ((member "dictionary_intro" classes) (setq tag 'fanyi-heading))
+           ((member "EXAMPLE" classes) (setq tag 'fanyi-example))
+           ((member "Head" classes) (setq tag 'p))
+           ((member "Sense" classes) (setq tag 'div))
+           ((member "POS" classes)
+            (setq tag 'i children (append '(" (") children '(") "))))
+           ((or (member "HYPHENATION" classes) (member "LEXUNIT" classes)
+                (member "SIGNPOST" classes))
+            (setq tag 'b))
+           ((member "etym" classes)
+            (setq children (cons '(fanyi-heading nil "Etymon") children))))
+          (when (cl-intersection classes '("PronCodes" "LEVEL" "FREQ" "AC" "GRAM"
+                                           "REGISTERLAB" "GEO" "pos" "SIGNPOST"
+                                           "LEXUNIT" "DEF" "Crossref") :test #'equal)
+            (setq children (append '(" ") children '(" "))))
+          (when (member "SYN" classes)
+            (setq children
+                  (append (if (string-match-p "\\`SYN\\(?:[[:space:]]\\|\\'\\)"
+                                              (string-trim (dom-texts node "")))
+                              '(" ") '(" SYN "))
+                          children '(" "))))
+          (cons tag (cons attributes children)))))))
+
+(defun fanyi-longman--sections (node)
+  "Select nonoverlapping dictionary sections under NODE in document order."
+  (if (seq-some (lambda (class) (fanyi-longman--class-p node class))
+                '("wordfams" "dictentry" "etym"))
+      (list node)
+    (cl-mapcan #'fanyi-longman--sections (dom-non-text-children node))))
 
 (cl-defmethod fanyi-parse-from ((this fanyi-longman-service) dom)
-  "Complete the fields of THIS from DOM tree.
-Signal `fanyi-parse-error' when the page contains no usable dictionary entry."
-  (let ((dict (dom-by-class dom "^\\(dictionary\\)$")))
-    (unless (and dict (dom-by-class dict "^\\(dictentry\\)$"))
-      (signal 'fanyi-parse-error '("Longman dictionary entries are missing")))
-    (oset this word-family (fanyi-longman--word-family dict))
-    ;; Dicts
-    (let ((dict-entries (dom-by-class dict "^\\(dictentry\\)$")))
-      (oset this dicts
-            (cl-loop for entry in dict-entries
-                     collect (let ((name (dom-text (dom-by-class entry "dictionary_intro")))
-                                   (head (dom-by-class entry "Head"))
-                                   (senses (dom-by-class entry "^\\(Sense\\)$"))
-                                   (dict (fanyi-longman-dict)))
-                               (oset dict name name)
-                               ;; Hyphenation.
-                               (when-let ((hyph (dom-by-class head "HYPHENATION")))
-                                 (oset dict hyphenation (dom-text hyph)))
-                               ;; Pronunciation.
-                               (when-let ((codes (dom-by-class head "PronCodes")))
-                                 (oset dict pronunciation (s-trim (dom-texts codes ""))))
-                               ;; Level.
-                               (when-let ((level (dom-by-class head "LEVEL")))
-                                 (oset dict level (cons (s-trim (dom-text level)) (dom-attr level 'title))))
-                               ;; Frequency.
-                               (when-let ((freqs (dom-by-class head "FREQ")))
-                                 (oset dict freqs (cl-loop for f in freqs
-                                                           collect (cons (s-trim (dom-text f)) (dom-attr f 'title)))))
-                               ;; Academic.
-                               (when-let ((ac (dom-by-class head "AC")))
-                                 (oset dict academy (cons (dom-text ac) (dom-attr ac 'title))))
-                               ;; Part of speech.
-                               (when-let ((pos (dom-by-class head "POS")))
-                                 (oset dict pos (s-trim (dom-text pos))))
-                               ;; Inflection.
-                               (when-let ((inflect (dom-by-class head "Inflections")))
-                                 (oset dict inflection (s-trim (dom-texts inflect ""))))
-                               ;; Grammar.
-                               (when-let ((gram (dom-by-class head "^\\(GRAM\\)$")))
-                                 (oset dict grammar (s-trim (dom-texts gram ""))))
-                               ;; Voice
-                               (oset dict british (dom-attr (dom-by-class head "brefile") 'data-src-mp3))
-                               (oset dict american (dom-attr (dom-by-class head "amefile") 'data-src-mp3))
-                               ;; Senses.
-                               (oset dict senses (cl-loop for sense in senses
-                                                          collect (let ((dict-sense (fanyi-longman-dict-sense)))
-                                                                    ;; Signpost.
-                                                                    (when-let ((signpost (dom-by-class sense "SIGNPOST")))
-                                                                      (oset dict-sense signpost (dom-text signpost)))
-                                                                    ;; Grammar.
-                                                                    (when-let ((grammar (dom-by-class sense "^\\(GRAM\\)$")))
-                                                                      (oset dict-sense grammar (s-trim (dom-texts grammar ""))))
-                                                                    ;; Register label.
-                                                                    (when-let ((label (dom-by-class sense "REGISTERLAB")))
-                                                                      (oset dict-sense registerlab (s-trim (dom-text label))))
-                                                                    ;; LEXUNIT.
-                                                                    (when-let ((unit (dom-by-class sense "LEXUNIT")))
-                                                                      (oset dict-sense lexunit (s-trim (dom-text unit))))
-                                                                    ;; Geography.
-                                                                    (when-let ((geo (dom-by-class sense "GEO")))
-                                                                      (oset dict-sense geo (s-trim (dom-text geo))))
-                                                                    ;; Definition.
-                                                                    (oset dict-sense def
-                                                                          (seq-map (lambda (node)
-                                                                                     (pcase (type-of node)
-                                                                                       ('string (s-trim node))
-                                                                                       ('cons (cond ((dom-by-class node "defRef")
-                                                                                                     (list (dom-texts node "") 'button (dom-texts node "")))
-                                                                                                    ((dom-by-class node "REFHWD")
-                                                                                                     (list (dom-texts node "") 'face 'italic))
-                                                                                                    ;; XXX pitfall here, see #33
-                                                                                                    (t (dom-texts node ""))))
-                                                                                       (_ (user-error "Unimplemented. %s" (pp-to-string node)))))
-                                                                                   (dom-children (dom-by-class sense "^\\(DEF\\)$"))))
-                                                                    ;; Crossref.
-                                                                    (when-let* ((crossref (dom-by-class sense "Crossref"))
-                                                                                (href (dom-attr (dom-by-tag crossref 'a) 'href))
-                                                                                (target (fanyi-longman--crossref-target href))
-                                                                                (text (s-trim (dom-texts crossref "")))
-                                                                                ((not (s-blank-str? text))))
-                                                                      (oset dict-sense crossref (cons text target)))
-                                                                    ;; Synonym.
-                                                                    (when-let ((syn (dom-by-class sense "^\\(SYN\\)$")))
-                                                                      (oset dict-sense syn (s-trim (dom-text syn))))
-                                                                    ;; Examples
-                                                                    (oset dict-sense examples
-                                                                          (cl-loop for example in (dom-by-class sense "EXAMPLE")
-                                                                                   collect (cons (dom-attr (dom-by-class example "speaker") 'data-src-mp3)
-                                                                                                 (s-trim (s-replace-all '(("\u00a0" . "")
-                                                                                                                          ("\u0009" . ""))
-                                                                                                                        (dom-texts example ""))))))
-                                                                    ;; Footnote.
-                                                                    (let ((footnote (dom-by-class sense "F2NBox")))
-                                                                      (oset dict-sense footnote-expl
-                                                                            (cl-loop for child in (dom-children (dom-by-class footnote "EXPL"))
-                                                                                     concat (cl-etypecase child
-                                                                                              (string child)
-                                                                                              (list (concat "*" (dom-text child) "*")))))
-                                                                      (oset dict-sense footnote-example
-                                                                            (cl-loop for child in (dom-children (dom-by-class footnote "EXAMPLE"))
-                                                                                     concat (cl-etypecase child
-                                                                                              (string child)
-                                                                                              (list (concat "*" (dom-text child) "*"))))))
-                                                                    dict-sense)))
-                               (oset dict senses
-                                     (seq-filter #'fanyi-longman--sense-content-p
-                                                 (oref dict senses)))
-                               dict))))
-    (oset this dicts (seq-filter (lambda (entry) (oref entry senses))
-                                 (oref this dicts)))
-    (unless (oref this dicts)
-      (signal 'fanyi-parse-error '("Longman definitions are missing")))
-    ;; Etymon
-    (let ((etymon (dom-by-class (dom-by-class dict "etym") "Sense")))
-      (oset this etymon (dom-texts etymon "")))))
+  "Select usable dictionary content from DOM for THIS."
+  (let* ((base (format (oref this url) (oref this word)))
+         (dictionary (car (fanyi-longman--nodes dom "dictionary")))
+         (content (and dictionary (fanyi-longman--prepare-node dictionary base)))
+         (sections (seq-filter
+                    (lambda (node)
+                      (or (not (fanyi-longman--class-p node "dictentry"))
+                          (fanyi-longman--entry-p node base)))
+                    (fanyi-longman--sections content))))
+    (unless (seq-some (lambda (node) (fanyi-longman--class-p node "dictentry")) sections)
+      (signal 'fanyi-parse-error '("Longman response contains no usable dictionary entries")))
+    (oset this content `(div nil ,@sections))))
+
+(defun fanyi-longman--shr-heading (dom)
+  "Render DOM as a Fanyi outline heading."
+  (shr-ensure-paragraph)
+  (insert "## ")
+  (shr-generic dom)
+  (shr-ensure-paragraph))
+
+(defun fanyi-longman--shr-audio (dom)
+  "Insert a pronunciation button for DOM without starting playback."
+  (shr-insert " ")
+  (insert-button "🔊"
+                 'action #'fanyi-play-sound
+                 'button-data (dom-attr dom 'src)
+                 'help-echo (cond ((fanyi-longman--class-p dom "brefile") "Play British pronunciation")
+                                  ((fanyi-longman--class-p dom "amefile") "Play American pronunciation")
+                                  (t "Play example"))
+                 'follow-link t)
+  (shr-insert " ")
+  (shr-generic dom))
+
+(defun fanyi-longman--shr-link (dom)
+  "Render DOM as a dictionary query or an ordinary browser link."
+  (let* ((word (or (dom-attr dom 'word)
+                   (fanyi-longman--crossref-target (dom-attr dom 'href))))
+         (url (or (dom-attr dom 'href)
+                  (and word (concat "https://www.ldoceonline.com/dictionary/"
+                                    (url-hexify-string word)))))
+         (start (point)))
+    (shr-generic dom)
+    (when (and url (> (point) start))
+      (shr-urlify start url)
+      (make-text-button start (point)
+                        'action (if word #'fanyi-dwim #'browse-url)
+                        'button-data (or word url)
+                        'keymap button-map
+                        'follow-link t))))
+
+(defun fanyi-longman--shr-example (dom)
+  "Render DOM as an indented example."
+  (shr-ensure-paragraph)
+  (let ((shr-indentation (+ shr-indentation fanyi-longman-example-indent))
+        (start (point)))
+    (shr-generic dom)
+    (add-face-text-property start (point) 'fanyi-longman-example-face t)
+    (shr-ensure-paragraph)))
 
 (cl-defmethod fanyi-render ((this fanyi-longman-service))
-  "Render THIS page into a buffer named `fanyi-buffer-name'.
-It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
-before calling this method."
+  "Render THIS with shr, adapting only Fanyi headings and actions."
   (fanyi-with-fanyi-buffer
-    ;; The headline about Longman dictionary service.
-    (insert "# Longman\n\n")
-    ;; Word family section.
-    (when-let (word-family (oref this word-family))
-      (insert (propertize "Word family"
-                          'display (when (fanyi-display-glyphs-p)
-                                     (fanyi-longman-svg-tag-make "Word family" 'fanyi-longman-svg-asset-face))))
-      (cl-loop for wf in word-family
-               for pos = (car wf)
-               for words = (cdr wf)
-               do (insert " " pos)
-               do (cl-loop for w in words
-                           do (insert " ")
-                           do (insert-button w
-                                             'action #'fanyi-dwim
-                                             'button-data w
-                                             'follow-link t)))
-      (insert "\n\n"))
-    ;; Dicts.
-    (cl-loop for dict in (oref this dicts)
-             do (insert "## " (oref dict name) "\n\n")
-             ;; job /dʒɒb $ dʒɑːb/ ●●● S1 W1 AWL (noun) 🔊 🔊
-             ;; ^            ^       ^               ^
-             ;; hyphenation  pron    level           pos
-             do (when-let ((hyph (oref dict hyphenation)))
-                  (insert hyph))
-             do (when-let ((pron (oref dict pronunciation)))
-                  (insert " " pron))
-             do (when-let ((level (oref dict level)))
-                  (insert " "
-                          (propertize (car level) 'help-echo (cdr level))))
-             do (insert
-                 (s-join " "
-                         (seq-map (pcase-lambda (`(,freq . ,desc))
-                                    (propertize freq
-                                                'help-echo desc
-                                                'display (when (fanyi-display-glyphs-p)
-                                                           (fanyi-longman-svg-tag-make freq 'fanyi-longman-svg-asset-face))))
-                                  (oref dict freqs))))
-             do (when-let ((ac (oref dict academy)))
-                  (insert " "
-                          (propertize (car ac)
-                                      'help-echo (cdr ac)
-                                      'display (when (fanyi-display-glyphs-p)
-                                                 (fanyi-longman-svg-tag-make (car ac) 'fanyi-longman-svg-asset-face)))))
-             do (when-let ((pos (oref dict pos)))
-                  (insert " (" pos ")"))
-             do (when-let ((inflect (oref dict inflection)))
-                  (insert " " inflect))
-             do (when-let ((gram (oref dict grammar)))
-                  (insert " " gram))
-             do (cl-loop for (url face help) in
-                         (list (list (oref dict british) 'fanyi-female-speaker-face
-                                     "Play British pronunciation")
-                               (list (oref dict american) 'fanyi-male-speaker-face
-                                     "Play American pronunciation"))
-                         when (and (stringp url) (not (s-blank-str? url)))
-                         do (progn
-                              (insert " ")
-                              (insert-button "🔊"
-                                             'action #'fanyi-play-sound
-                                             'button-data (s-trim url)
-                                             'face face
-                                             'help-echo help
-                                             'follow-link t)))
-             do (insert "\n\n")
-             ;; - work [countable] informal unit   GEO   the regular paid work SYN *foo* link
-             ;;   ^             ^         ^    ^     ^       ^                 ^           ^
-             ;;   signpost      grammar  lbl lexut  geo      button          synonym     crossref
-             ;;
-             ;; For easy implementation, crossref is put at the end of
-             ;; definition.
-             do (cl-loop for sense in (oref dict senses)
-                         do (insert "- ")
-                         do (when-let ((signpost (oref sense signpost)))
-                              (insert (propertize signpost
-                                                  'display (when (fanyi-display-glyphs-p)
-                                                             (fanyi-longman-svg-tag-make signpost 'fanyi-longman-svg-signpost-face)))
-                                      " "))
-                         do (when-let ((grammar (oref sense grammar)))
-                              (insert grammar " "))
-                         do (when-let ((geo (oref sense geo)))
-                              (insert (propertize geo
-                                                  'font-lock-face 'fanyi-longman-geo-face)
-                                      " "))
-                         do (when-let ((label (oref sense registerlab)))
-                              (insert (propertize label
-                                                  'font-lock-face 'fanyi-longman-registerlab-face)
-                                      " "))
-                         do (when-let ((unit (oref sense lexunit)))
-                              (insert "*" unit "*"
-                                      " "))
-                         do (seq-do (lambda (s)
-                                      (pcase s
-                                        ((pred stringp)
-                                         (insert s " "))
-                                        (`(,text face italic)
-                                         (insert "/" text "/"))
-                                        (`(,text button ,data)
-                                         (insert-button text
-                                                        'action #'fanyi-dwim
-                                                        'button-data data
-                                                        'follow-link t)
-                                         (insert " "))))
-                                    (oref sense def))
-                         do (when-let ((synonym (oref sense syn)))
-                              (insert (propertize "SYN"
-                                                  'display (when (fanyi-display-glyphs-p)
-                                                             (fanyi-longman-svg-tag-make "SYN" 'fanyi-longman-svg-asset-face)))
-                                      " "
-                                      "*" synonym "*"
-                                      " "))
-                         do (when-let ((crossref (oref sense crossref)))
-                              (insert-button (car crossref)
-                                             'action #'fanyi-dwim
-                                             'button-data (cdr crossref)
-                                             'follow-link t))
-                         do (insert "\n")
-                         ;; Examples.
-                         do (cl-loop for example in (oref sense examples)
-                                     for mp3 = (car example)
-                                     for expl = (cdr example)
-                                     do (when (and (stringp mp3) (not (s-blank-str? mp3)))
-                                          (insert-button "🔊"
-                                                         'action #'fanyi-play-sound
-                                                         'button-data (s-trim mp3)
-                                                         'face 'fanyi-longman-example-face
-                                                         'line-prefix (s-repeat fanyi-longman-example-indent " ")
-                                                         'help-echo "Play Example"
-                                                         'follow-link t)
-                                          (insert " "))
-                                     do (insert (propertize expl
-                                                            'font-lock-face 'fanyi-longman-example-face
-                                                            'line-prefix (s-repeat fanyi-longman-example-indent " ")
-                                                            'wrap-prefix (s-repeat fanyi-longman-example-indent " "))
-                                                "\n"))
-                         ;; Footnote.
-                         do (when-let* ((expl (oref sense footnote-expl))
-                                        ((s-present? expl)))
-                              (insert (propertize "> "
-                                                  'line-prefix (s-repeat fanyi-longman-example-indent " "))
-                                      (propertize expl
-                                                  'wrap-prefix (s-repeat fanyi-longman-example-indent " "))
-                                      "\n"))
-                         do (when-let* ((ex (oref sense footnote-example))
-                                        ((s-present? ex)))
-                              (insert (propertize ">> "
-                                                  'line-prefix (s-repeat (* 2 fanyi-longman-example-indent) " "))
-                                      (propertize ex
-                                                  'font-lock-face 'fanyi-longman-example-face
-                                                  'wrap-prefix (s-repeat (* 2 fanyi-longman-example-indent) " "))
-                                      "\n")))
-             do (insert "\n"))
-    ;; Etymon.
-    (when (s-present? (oref this etymon))
-      (insert "## Etymon\n\n")
-      (insert (propertize "Origin"
-                          'display (when (fanyi-display-glyphs-p)
-                                     (fanyi-longman-svg-tag-make "Origin" 'fanyi-longman-svg-asset-face))))
-      (insert " ")
-      (insert "*" (oref this word) "*")
-      (insert " ")
-      (insert (oref this etymon)))
-    ;; The end.
-    (while (equal (char-before) ?\n)
-      (delete-char -1))
-    (insert "\n\n")))
-
-;; The Longman dict specific font-lock keywords
-(add-to-list 'fanyi-mode-font-lock-keywords-extra '("●" . 'fanyi-longman-dot-face))
-(add-to-list 'fanyi-mode-font-lock-keywords-extra '("○" . 'fanyi-longman-dot-face))
-(add-to-list 'fanyi-mode-font-lock-keywords-extra '("\\[\\([a-zA-Z, ]+?\\)\\]" . 'fanyi-longman-grammar-face))
-(add-to-list 'fanyi-mode-font-lock-keywords-extra '("\u201c\\([a-zA-Z ]+?\\)\u201d" . 'font-lock-string-face))
+   (insert "# Longman\n\n")
+   (let ((shr-use-fonts nil)
+         (shr-use-colors nil)
+         (shr-inhibit-images t)
+         (shr-external-rendering-functions
+          '((a . fanyi-longman--shr-link)
+            (fanyi-query . fanyi-longman--shr-link)
+            (fanyi-audio . fanyi-longman--shr-audio)
+            (fanyi-heading . fanyi-longman--shr-heading)
+            (fanyi-example . fanyi-longman--shr-example)))
+         (hscroll (window-hscroll)))
+     (unwind-protect
+         (save-restriction
+           ;; shr's filling and text properties must not affect earlier sources.
+           (narrow-to-region (point) (point))
+           (shr-insert-document (oref this content)))
+       (set-window-hscroll nil hscroll)))
+   (goto-char (point-max))
+   (unless (bolp) (insert "\n"))
+   (insert "\n")))
 
 (defconst fanyi-longman-provider
   (fanyi-longman-service :word "dummy"

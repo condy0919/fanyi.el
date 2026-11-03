@@ -10,6 +10,9 @@ identifiers are test data; `example.invalid` URLs must never be fetched.
   structure expected by the original parser.
 - `longman.html`: a headword, British and American audio, a definition link,
   a cross-reference, an example with audio, and an origin section.
+- `longman-rich.html`: nested and unfamiliar markup, lists, paragraphs, a table,
+  relative audio and help links, an encoded cross-reference, and unrelated page
+  content that must not be rendered.
 - `youdao.json`: two entries, including one without an explanation.
 - `youdao-empty.json`: a successful API response explicitly containing no entries.
 - `error-page.html`: a generic service error page with no dictionary structure.
