@@ -1,6 +1,8 @@
 ;;; fanyi-shr-section-tests.el --- Local HTML section tests -*- lexical-binding: t -*-
 
-(require 'fanyi-shr-reflow-tests)
+(require 'fanyi-test-support)
+(require 'outline)
+(require 'fanyi-shr)
 
 (defun fanyi-shr-section-test--render (dom)
   "Render the title and body of test section DOM."

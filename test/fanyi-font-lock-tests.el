@@ -1,28 +1,14 @@
 ;;; fanyi-font-lock-tests.el --- Text and HTML highlighting -*- lexical-binding: t; -*-
 
-(require 'ert)
-(require 'fanyi)
-
-(defun fanyi-test--fontify-mixed-result ()
-  "Fontify and refontify the current Fanyi result buffer."
-  ;; Font Lock intentionally stays disabled in buffers whose names start
-  ;; with a space, including the usual `with-temp-buffer' name.
-  (rename-buffer (generate-new-buffer-name "fanyi-font-lock-test"))
-  (let ((noninteractive nil))
-    (font-lock-mode 1))
-  (should font-lock-mode)
-  (font-lock-ensure)
-  (font-lock-flush)
-  (font-lock-ensure))
+(require 'fanyi-test-support)
 
 (ert-deftest fanyi-font-lock-keeps-html-literals-and-text-formatting-separate ()
-  (with-temp-buffer
-    (fanyi-mode)
+  (fanyi-test--with-result-buffer
     (let ((inhibit-read-only t)
           (sample "> quote\n- list\n(noun) /slash/ *asterisk* _under_score_\n"))
       (insert "# HTML\n\n" (propertize sample 'fanyi-html t)
               "\n# Text\n\n" sample))
-    (fanyi-test--fontify-mixed-result)
+    (fanyi-test--fontify)
     (dolist (field '(("> quote" . fanyi-quote-face)
                      ("-" . fanyi-list-face)
                      ("(noun)" . fanyi-pos-face)
@@ -38,8 +24,7 @@
       (should (eq (get-text-property (match-beginning 0) 'face) (cdr field))))))
 
 (ert-deftest fanyi-font-lock-preserves-html-semantic-styles-and-heading-actions ()
-  (with-temp-buffer
-    (fanyi-mode)
+  (fanyi-test--with-result-buffer
     (let ((inhibit-read-only t))
       (insert "# Longman\n\n"
               (propertize "## Corpus\n" 'fanyi-html t
@@ -47,7 +32,7 @@
               (propertize "/literal/ *literal* _literal_ (noun)\n"
                           'fanyi-html t 'font-lock-face 'font-lock-string-face)
               "\n# Other dictionary\n\n## Text heading\n"))
-    (fanyi-test--fontify-mixed-result)
+    (fanyi-test--fontify)
     (goto-char (point-min))
     (search-forward "## Corpus")
     (let ((position (match-beginning 0)))
@@ -72,11 +57,10 @@
     (should (eq (get-text-property (point) 'keymap) fanyi-mode-cycle-map))))
 
 (ert-deftest fanyi-font-lock-does-not-style-matches-crossing-html-boundaries ()
-  (with-temp-buffer
-    (fanyi-mode)
+  (fanyi-test--with-result-buffer
     (let ((inhibit-read-only t))
       (insert "/plain " (propertize "HTML" 'fanyi-html t) " plain/\n/italic/\n"))
-    (fanyi-test--fontify-mixed-result)
+    (fanyi-test--fontify)
     (goto-char (point-min))
     (should-not (get-text-property (point) 'face))
     (search-forward "HTML")
@@ -91,8 +75,7 @@
                   "conj. 连词；abbr. 缩写；det. 限定词；adj. 形容词；adv. 副词；art. 冠词；"
                   "n.中文；(n.) 已有；abbreviation. Rev. n.example n._suffix N. 大写"))
          (result (list (cons "sample" explanation))))
-    (with-temp-buffer
-      (fanyi-mode)
+    (fanyi-test--with-result-buffer
       (let ((fanyi-buffer-name (buffer-name)))
         (fanyi-youdao-thesaurus-render result nil))
       (should (equal (buffer-substring-no-properties (point-min) (point-max))
@@ -115,7 +98,7 @@
                         do (should-not (eq (get-char-property position 'face) 'fanyi-pos-face))
                         do (should-not (get-text-property position 'font-lock-face))))))
         (check-faces)
-        (fanyi-test--fontify-mixed-result)
+        (fanyi-test--fontify)
         (check-faces)))))
 
 (provide 'fanyi-font-lock-tests)

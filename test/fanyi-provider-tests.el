@@ -1,64 +1,9 @@
 ;;; fanyi-provider-tests.el --- Offline dictionary fixtures -*- lexical-binding: t; -*-
 
-(require 'ert)
-(require 'cl-lib)
-(require 'json)
-(require 'fanyi)
+(require 'fanyi-test-support)
 (require 'fanyi-haici)
 (require 'fanyi-longman)
 (require 'fanyi-youdao-thesaurus)
-
-(defconst fanyi-test--fixture-directory
-  (expand-file-name "fixtures"
-                    (file-name-directory (or load-file-name buffer-file-name))))
-
-(defun fanyi-test--read-fixture (file)
-  "Parse the HTML or JSON fixture FILE using the real response parser."
-  (with-temp-buffer
-    (insert-file-contents (expand-file-name file fanyi-test--fixture-directory))
-    (if (string-suffix-p ".json" file)
-        (progn (goto-char (point-min)) (json-parse-buffer))
-      (libxml-parse-html-region (point-min) (point-max)))))
-
-(defmacro fanyi-test--with-rendered-response (provider response &rest body)
-  "Parse RESPONSE with PROVIDER and evaluate BODY in its result buffer.
-Temporarily rename an existing result buffer so its text and mode survive."
-  (declare (indent 2) (debug (form form body)))
-  `(let* ((fanyi-use-glyphs nil)
-          (existing (get-buffer fanyi-buffer-name))
-          (original-name (and existing (buffer-name existing)))
-          (request (fanyi-make-request ,provider "sample"))
-          result result-buffer)
-     (unwind-protect
-         (progn
-           (when existing
-             (with-current-buffer existing
-               (rename-buffer (generate-new-buffer-name " *fanyi-saved-result*"))))
-           (setq result-buffer (get-buffer-create fanyi-buffer-name))
-           (setq result (fanyi-parse-response request ,response))
-           (fanyi-render-result request result)
-           (with-current-buffer result-buffer
-             ,@body))
-       (when (buffer-live-p result-buffer)
-         (kill-buffer result-buffer))
-       (when (buffer-live-p existing)
-         (with-current-buffer existing
-           (rename-buffer original-name))))))
-
-(defmacro fanyi-test--with-rendered-fixture (provider file &rest body)
-  "Parse FILE with PROVIDER and evaluate BODY in its rendered result buffer."
-  (declare (indent 2) (debug (form form body)))
-  `(fanyi-test--with-rendered-response ,provider (fanyi-test--read-fixture ,file)
-     ,@body))
-
-(defun fanyi-test--button-data (action)
-  "Return button data for buttons invoking ACTION in the current buffer."
-  (let ((position (point-min)) data button)
-    (while (setq button (next-button position t))
-      (when (eq (button-get button 'action) action)
-        (push (button-get button 'button-data) data))
-      (setq position (button-end button)))
-    (nreverse data)))
 
 (ert-deftest fanyi-provider-haici-fixture ()
   (fanyi-test--with-rendered-fixture fanyi-haici-provider "haici.html"

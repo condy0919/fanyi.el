@@ -1,35 +1,7 @@
 ;;; fanyi-longman-style-tests.el --- Saved Longman page presentation -*- lexical-binding: t; -*-
 
-(require 'fanyi-provider-tests)
-
-(defun fanyi-test--longman-style-fontify ()
-  "Refresh font-lock with the same face aliases as an interactive result."
-  (fanyi-mode)
-  (let ((noninteractive nil))
-    (font-lock-mode 1))
-  (should font-lock-mode)
-  (font-lock-ensure)
-  (font-lock-flush)
-  (font-lock-ensure))
-
-(defun fanyi-test--longman-style-has-face-p (value face)
-  "Whether displayed face VALUE contains FACE, including combined faces."
-  (or (eq value face)
-      (and (consp value)
-           (cl-some (lambda (part) (fanyi-test--longman-style-has-face-p part face))
-                    value))))
-
-(defun fanyi-test--longman-style-face (text)
-  "Return the effective display face at the first occurrence of TEXT."
-  (goto-char (point-min))
-  (search-forward text)
-  (get-char-property (match-beginning 0) 'face))
-
-(defun fanyi-test--longman-style-button (text)
-  "Return the button at the first occurrence of TEXT."
-  (goto-char (point-min))
-  (search-forward text)
-  (button-at (match-beginning 0)))
+(require 'fanyi-test-support)
+(require 'fanyi-longman)
 
 (ert-deftest fanyi-longman-saved-page-keeps-source-and-renders-real-structure ()
   (let* ((dom (fanyi-test--read-fixture "longman-dragon-saved.html"))
@@ -58,7 +30,7 @@
 
 (ert-deftest fanyi-longman-saved-page-styles-survive-real-font-lock ()
   (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-dragon-saved.html"
-    (fanyi-test--longman-style-fontify)
+    (fanyi-test--fontify)
     (dolist (field '(("drag‧on" . fanyi-longman-headword-face)
                      ("noun" . fanyi-longman-pos-face)
                      ("noun" . fanyi-pos-face)
@@ -78,7 +50,7 @@
     (cl-letf (((symbol-function 'fanyi-dwim) (lambda (word) (push word queries)))
               ((symbol-function 'eww) (lambda (url &rest _) (push url topics))))
       (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-dragon-saved.html"
-        (fanyi-test--longman-style-fontify)
+        (fanyi-test--fontify)
         (should (fanyi-test--longman-style-has-face-p
                  (fanyi-test--longman-style-face "dragon had been") 'bold))
         (let ((face (fanyi-test--longman-style-face "imaginary")))
@@ -102,7 +74,7 @@
     (setcdr (cdr link) '((strong nil "imaginary")))
     (cl-letf (((symbol-function 'fanyi-dwim) (lambda (query) (push query queries))))
       (fanyi-test--with-rendered-response fanyi-longman-provider dom
-        (fanyi-test--longman-style-fontify)
+        (fanyi-test--fontify)
         (let ((face (fanyi-test--longman-style-face "drag‧on")))
           (should (fanyi-test--longman-style-has-face-p face 'italic))
           (should (fanyi-test--longman-style-has-face-p face 'fanyi-longman-headword-face)))
@@ -126,7 +98,7 @@
                                  (span ((class . ,classes)) "label") "after"))))
            (original (copy-tree dom)))
       (fanyi-test--with-rendered-response fanyi-longman-provider dom
-        (fanyi-test--longman-style-fontify)
+        (fanyi-test--fontify)
         ;; The first rule supplies the tag and face; the second still supplies
         ;; its independent indentation, regardless of the HTML class order.
         (should (string-match-p "^  label$" (buffer-string)))
@@ -146,7 +118,7 @@
                          (span ((class . "DEF")) "before"
                                (em ((class . "second first")) "label") "after")))))
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
-      (fanyi-test--longman-style-fontify)
+      (fanyi-test--fontify)
       (should (string-match-p "beforelabelafter" (buffer-string)))
       (let ((face (fanyi-test--longman-style-face "label")))
         (should (fanyi-test--longman-style-has-face-p face 'italic))
@@ -165,7 +137,7 @@
                         (span ((class . "Sense")) "root phrase") " "
                         (div ((class . "EXAMPLE")) "origin example")))))
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
-      (fanyi-test--longman-style-fontify)
+      (fanyi-test--fontify)
       ;; Context intentionally bypasses class tags here: origin flattens the
       ;; original HTML and note headings change only the semantic face.
       (should (string-match-p "^Origin term root phrase origin example$" (buffer-string)))

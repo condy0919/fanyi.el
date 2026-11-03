@@ -2,7 +2,7 @@
 
 (require 'ert)
 (require 'cl-lib)
-(require 'fanyi-tests)
+(require 'fanyi-test-support)
 
 (defvar fanyi-youdao-thesaurus-max-count)
 

@@ -1,40 +1,9 @@
 ;;; fanyi-shr-reflow-tests.el --- HTML layout lifecycle tests -*- lexical-binding: t -*-
 
-(require 'ert)
-(require 'cl-lib)
+(require 'fanyi-test-support)
 (require 'button)
 (require 'outline)
 (require 'fanyi-shr)
-
-(defconst fanyi-shr-test--text
-  (mapconcat (lambda (number) (format "word%02d" number))
-             (number-sequence 1 45) " "))
-
-(defmacro fanyi-shr-test--with-window (&rest body)
-  "Evaluate BODY in a temporary buffer displayed in the selected window."
-  (declare (indent 0) (debug t))
-  `(with-temp-buffer
-     (save-window-excursion
-       (delete-other-windows)
-       (set-window-buffer nil (current-buffer))
-       (let ((shr-width nil)
-             (shr-use-fonts nil))
-         ,@body))))
-
-(defun fanyi-shr-test--text ()
-  "Return rendered content with layout whitespace normalized."
-  (replace-regexp-in-string "[ \t\r\n]+" " " (string-trim (buffer-string))))
-
-(defun fanyi-shr-test--max-line-width ()
-  "Return the largest line width in the current buffer."
-  (save-excursion
-    (goto-char (point-min))
-    (let ((width 0))
-      (while (not (eobp))
-        (end-of-line)
-        (setq width (max width (current-column)))
-        (forward-line))
-      width)))
 
 (ert-deftest fanyi-shr-reflow-preserves-other-providers-and-reading-position ()
   (fanyi-shr-test--with-window

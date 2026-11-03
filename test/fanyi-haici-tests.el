@@ -1,6 +1,7 @@
 ;;; fanyi-haici-tests.el --- Haici response edge cases -*- lexical-binding: t; -*-
 
-(require 'fanyi-provider-tests)
+(require 'fanyi-test-support)
+(require 'fanyi-haici)
 
 (ert-deftest fanyi-haici-preserves-definitions-without-phonetics ()
   (let ((response (fanyi-test--read-fixture "haici.html")))

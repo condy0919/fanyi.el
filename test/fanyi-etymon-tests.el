@@ -1,6 +1,6 @@
 ;;; fanyi-etymon-tests.el --- Etymonline browser entry tests -*- lexical-binding: t; -*-
 
-(require 'fanyi-tests)
+(require 'fanyi-test-support)
 (require 'fanyi-etymon)
 
 (defun fanyi-test--etymon-button ()

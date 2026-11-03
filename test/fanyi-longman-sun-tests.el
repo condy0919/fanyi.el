@@ -1,6 +1,7 @@
 ;;; fanyi-longman-sun-tests.el --- Saved sun page layout regressions -*- lexical-binding: t; -*-
 
-(require 'fanyi-longman-style-tests)
+(require 'fanyi-test-support)
+(require 'fanyi-longman)
 
 (defun fanyi-test--sun-line (text &optional prefix)
   "Find a line containing TEXT and return its beginning.
@@ -76,7 +77,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
 
 (ert-deftest fanyi-longman-sun-collocations-have-readable-groups-and-examples ()
   (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-sun-saved.html"
-    (fanyi-test--longman-style-fontify)
+    (fanyi-test--fontify)
     (should (fanyi-test--sun-blank-before-p
              (fanyi-test--sun-line "COLLOCATIONS – Meanings 1 & 2")))
     (dolist (text '("COLLOCATIONS" "– Meanings 1 & 2"))
@@ -148,7 +149,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
 
 (ert-deftest fanyi-longman-sun-grammar-and-secondary-corpus-titles-have-context ()
   (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-sun-saved.html"
-    (fanyi-test--longman-style-fontify)
+    (fanyi-test--fontify)
     (let* ((grammar-title (fanyi-test--sun-line "in the sun"))
            (grammar-indent (current-indentation)))
       (should (fanyi-test--longman-style-has-face-p
@@ -171,7 +172,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
 
 (ert-deftest fanyi-longman-sun-homonyms-and-frequency-labels-survive-font-lock ()
   (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-sun-saved.html"
-    (fanyi-test--longman-style-fontify)
+    (fanyi-test--fontify)
     (goto-char (point-min))
     (let ((count 0))
       ;; Include the origin's homonym number as well as noun and verb heads.
@@ -205,7 +206,6 @@ Allow subsequent text on the line when PREFIX is non-nil."
       (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-sun-saved.html"
         ;; Initialize the major mode before rendering, as an actual query does,
         ;; so its cached DOM and font-lock state have the normal lifecycle.
-        (fanyi-mode)
         (let ((inhibit-read-only t)) (erase-buffer))
         (save-window-excursion
           (set-window-buffer nil (current-buffer))
@@ -293,9 +293,8 @@ Allow subsequent text on the line when PREFIX is non-nil."
                                   text)))))
       (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-sun-saved.html"
         ;; Fixture rendering normally disables glyphs.  Enable them inside
-        ;; that binding and initialize the mode before populating its cache.
+        ;; that binding before populating its cache again.
         (let ((fanyi-use-glyphs t))
-          (fanyi-mode)
           (let ((inhibit-read-only t)) (erase-buffer))
           (save-window-excursion
             (set-window-buffer nil (current-buffer))
@@ -345,7 +344,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
           (let ((fanyi-use-glyphs (car settings)))
             (let ((inhibit-read-only t)) (erase-buffer))
             (fanyi-render-result request result)
-            (fanyi-test--longman-style-fontify)
+            (fanyi-test--fontify)
             (fanyi-test--sun-check-frequency-display nil)
             (should (face-attribute 'fanyi-longman-frequency-face :box nil t))
             (goto-char (point-min))
@@ -385,7 +384,6 @@ Allow subsequent text on the line when PREFIX is non-nil."
                   ((symbol-function 'image-type-available-p) (lambda (type) (eq type 'svg))))
           (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-sun-saved.html"
             (let ((fanyi-use-glyphs t))
-              (fanyi-mode)
               (let ((inhibit-read-only t)) (erase-buffer))
               (save-window-excursion
                 (set-window-buffer nil (current-buffer))

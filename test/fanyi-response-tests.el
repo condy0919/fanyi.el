@@ -1,7 +1,9 @@
 ;;; fanyi-response-tests.el --- Invalid and partial response tests -*- lexical-binding: t; -*-
 
-(require 'fanyi-tests)
-(require 'fanyi-provider-tests)
+(require 'fanyi-test-support)
+(require 'fanyi-haici)
+(require 'fanyi-longman)
+(require 'fanyi-youdao-thesaurus)
 
 (ert-deftest fanyi-youdao-distinguishes-empty-results-from-invalid-data ()
   (should-not
@@ -25,8 +27,8 @@
            (entry (aref (gethash "entries" (gethash "data" data)) 0)))
       (puthash "explain" explain entry)
       (fanyi-test--with-rendered-response fanyi-youdao-thesaurus-provider data
-                                          (should (string-match-p "- sample" (buffer-string)))
-                                          (should (equal (cdar result) "NO EXPLANATION"))))))
+        (should (string-match-p "- sample" (buffer-string)))
+        (should (equal (cdar result) "NO EXPLANATION"))))))
 
 (ert-deftest fanyi-invalid-html-is-failed-not-completed ()
   (fanyi-test--with-query

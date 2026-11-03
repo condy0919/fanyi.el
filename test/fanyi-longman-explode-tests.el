@@ -1,6 +1,7 @@
 ;;; fanyi-longman-explode-tests.el --- Saved explode page presentation -*- lexical-binding: t; -*-
 
-(require 'fanyi-longman-style-tests)
+(require 'fanyi-test-support)
+(require 'fanyi-longman)
 
 (defconst fanyi-test--explode-signposts
   '((1 . "BURST") (2 . "INCREASE SUDDENLY") (3 . "STRONG FEELINGS")
@@ -128,7 +129,7 @@
                           "explosive exploded unexploded (verb) explode (adverb) explosively"))
                  (buffer-string)))
         (should-not (string-match-p "^## Word family" (buffer-string)))
-        (fanyi-test--longman-style-fontify)
+        (fanyi-test--fontify)
         (should (fanyi-test--longman-style-has-face-p
                  (get-char-property (fanyi-test--explode-label "Word family") 'face)
                  'fanyi-longman-svg-asset-face))
@@ -152,7 +153,7 @@
         (should (string-match-p
                  (format "^[ \t]*%d %s \\[intransitive" (car entry) (regexp-quote (cdr entry)))
                  (buffer-string))))
-      (fanyi-test--longman-style-fontify)
+      (fanyi-test--fontify)
       (fanyi-test--explode-check-badges nil)
       (should (equal (face-attribute 'fanyi-longman-signpost-face :foreground) "white"))
       (should (equal (face-attribute 'fanyi-longman-signpost-face :background) "#f18500"))
@@ -169,7 +170,7 @@
           (let ((fanyi-use-glyphs (car settings)))
             (let ((inhibit-read-only t)) (erase-buffer))
             (fanyi-render-result request result)
-            (fanyi-test--longman-style-fontify)
+            (fanyi-test--fontify)
             (fanyi-test--explode-check-badges (cl-every #'identity settings))))))))
 
 (ert-deftest fanyi-longman-explode-synonym-badges-keep-targets-as-text ()
@@ -180,7 +181,7 @@
         (let ((fanyi-use-glyphs t))
           (let ((inhibit-read-only t)) (erase-buffer))
           (fanyi-render-result request result)
-          (fanyi-test--longman-style-fontify)
+          (fanyi-test--fontify)
           (should (= (how-many "\\bSYN\\b" (point-min) (point-max)) 2))
           (dolist (target '("rocket" "blow up"))
             (goto-char (point-min))
@@ -223,7 +224,7 @@
   (let ((shr-width 1000) queries)
     (cl-letf (((symbol-function 'fanyi-dwim) (lambda (word) (push word queries))))
       (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-explode-saved.html"
-        (fanyi-test--longman-style-fontify)
+        (fanyi-test--fontify)
         (fanyi-test--explode-check-register-and-thesaurus)
         (should-not queries)
         (let ((button (fanyi-test--explode-thesaurus-button)))
@@ -252,7 +253,6 @@
           (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-explode-saved.html"
             (let ((fanyi-use-glyphs t)
                   (prepared (copy-tree result)))
-              (fanyi-mode)
               (let ((inhibit-read-only t)) (erase-buffer))
               (save-window-excursion
                 (set-window-buffer nil (current-buffer))

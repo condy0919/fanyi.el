@@ -1,6 +1,7 @@
 ;;; fanyi-shr-tests.el --- Longman HTML rendering tests -*- lexical-binding: t; -*-
 
-(require 'fanyi-provider-tests)
+(require 'fanyi-test-support)
+(require 'fanyi-longman)
 (require 'shr)
 
 (defun fanyi-test--rendered-text ()
@@ -12,15 +13,6 @@
   (with-temp-buffer
     (insert html)
     (libxml-parse-html-region (point-min) (point-max))))
-
-(defun fanyi-test--refresh-font-lock ()
-  "Fontify and refontify the result as an interactive Fanyi buffer would."
-  (fanyi-mode)
-  (let ((noninteractive nil))
-    (font-lock-mode 1))
-  (font-lock-ensure)
-  (font-lock-flush)
-  (font-lock-ensure))
 
 (defun fanyi-test--has-face-p (position expected)
   "Return whether POSITION has EXPECTED face before or after fontification."
@@ -57,7 +49,7 @@
 
 (ert-deftest fanyi-shr-keeps-formatting-properties ()
   (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-rich.html"
-    (fanyi-test--refresh-font-lock)
+    (fanyi-test--fontify)
     (goto-char (point-min))
     (search-forward "bold")
     (let ((face (or (get-text-property (match-beginning 0) 'face)
@@ -210,7 +202,7 @@
                 ((symbol-function 'fanyi-dwim)
                  (lambda (word) (push word queries))))
         (fanyi-test--with-rendered-response fanyi-longman-provider dom
-          (fanyi-test--refresh-font-lock)
+          (fanyi-test--fontify)
           (should-not topics)
           (should-not queries)
           (let ((topic (fanyi-test--find-action-button #'eww url))
@@ -225,7 +217,7 @@
 
 (ert-deftest fanyi-shr-dragon-highlighting-survives-font-lock ()
   (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-dragon.html"
-    (fanyi-test--refresh-font-lock)
+    (fanyi-test--fontify)
     (dolist (field '(("## From Longman" . fanyi-sub-headline-face)
                      ("noun" . fanyi-pos-face)
                      ("[countable]" . fanyi-longman-grammar-face)
@@ -264,7 +256,7 @@
     (setcar (car (dom-by-class dom "Etymon")) 'em)
     (setcar (cadr (dom-by-class dom "LANG")) 'strong)
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
-      (fanyi-test--refresh-font-lock)
+      (fanyi-test--fontify)
       (goto-char (point-min))
       (re-search-forward "^Origin dragon (1200-1300) Old French Greek drakon “large snake”[ \t]*$")
       (dolist (field '(("Greek" . bold) ("drakon" . italic)))

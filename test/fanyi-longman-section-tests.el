@@ -1,6 +1,7 @@
 ;;; fanyi-longman-section-tests.el --- Local dictionary section folding -*- lexical-binding: t; -*-
 
-(require 'fanyi-longman-style-tests)
+(require 'fanyi-test-support)
+(require 'fanyi-longman)
 
 (defmacro fanyi-section-test--with-response (response &rest body)
   "Render RESPONSE in a displayed Fanyi buffer, then evaluate BODY."
@@ -190,6 +191,44 @@
             (button-activate button))
           (should (equal queries '("bomb")))
           (should (equal played '("https://example.invalid/combined.mp3"))))))))
+
+(ert-deftest fanyi-longman-fontification-preserves-cached-sections-and-actions ()
+  (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-explode-saved.html"
+    (should (derived-mode-p 'fanyi-mode))
+    (setq-local fanyi-current-word "explode")
+    (let* ((regions fanyi-shr--regions)
+           (region (car regions))
+           (dom (fanyi-shr--region-dom region))
+           (sections (fanyi-shr--region-sections region))
+           (heading (fanyi-test--longman-style-button "THESAURUS"))
+           (section (button-get heading 'fanyi-shr-section))
+           (overlay (fanyi-shr--section-overlay section))
+           (buffer-name (buffer-name))
+           query)
+      (goto-char (fanyi-section-test--position "TO EXPLODE"))
+      (search-forward "bomb")
+      (let ((link (button-at (match-beginning 0))))
+        (should link)
+        (button-activate heading)
+        (should (fanyi-shr--section-closed section))
+        (fanyi-test--fontify)
+        ;; Fontification must not silently recreate the mode, erase the DOM
+        ;; cache, replace section state, or change the result buffer's identity.
+        (should (eq fanyi-shr--regions regions))
+        (should (eq (fanyi-shr--region-dom region) dom))
+        (should (eq (fanyi-shr--region-sections region) sections))
+        (should (eq (fanyi-shr--section-overlay section) overlay))
+        (should (eq (overlay-buffer overlay) (current-buffer)))
+        (should (equal (buffer-name) buffer-name))
+        (should (equal fanyi-current-word "explode"))
+        (should (fanyi-shr--section-closed section))
+        (fanyi-section-test--visible '("TO EXPLODE" "TO MAKE SOMETHING EXPLODE") nil)
+        (fanyi-section-test--visible '("Register" "INCREASE SUDDENLY" "THESAURUS") t)
+        (button-activate heading)
+        (fanyi-section-test--visible '("TO EXPLODE" "TO MAKE SOMETHING EXPLODE") t)
+        (cl-letf (((symbol-function 'fanyi-dwim) (lambda (word) (setq query word))))
+          (button-activate link))
+        (should (equal query "bomb"))))))
 
 (provide 'fanyi-longman-section-tests)
 ;;; fanyi-longman-section-tests.el ends here

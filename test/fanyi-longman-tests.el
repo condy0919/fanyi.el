@@ -1,6 +1,7 @@
 ;;; fanyi-longman-tests.el --- Longman response robustness -*- lexical-binding: t; -*-
 
-(require 'fanyi-provider-tests)
+(require 'fanyi-test-support)
+(require 'fanyi-longman)
 
 (defun fanyi-test--longman-html (html)
   "Parse a minimal Longman HTML response."
