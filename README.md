@@ -112,6 +112,8 @@ indentation, based on a saved page and its CSS. This preserves native HTML
 emphasis and persistent highlighting for parts of speech and grammar; it does
 not implement a general CSS engine. Duplicate headwords and hidden field labels
 are omitted. Visible signpost labels use the site's uppercase orange badges.
+Synonym and antonym labels (`synopp`, such as SYN) use yellow SVG badges with
+a styled text fallback; their following words retain their text and links.
 Register and thesaurus sections keep separate headings, explanations, entries,
 and examples, including the site's emphasis within those paragraphs.
 Supplementary sections use headings, whitespace and indentation instead of

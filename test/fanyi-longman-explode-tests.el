@@ -16,7 +16,8 @@
 (defun fanyi-test--explode-check-badges (svg)
   "Check the saved page's inline labels, expecting SVG images when SVG is non-nil."
   (dolist (label (append '(("Word family" . fanyi-longman-svg-asset-face)
-                           ("Origin" . fanyi-longman-svg-asset-face))
+                           ("Origin" . fanyi-longman-svg-asset-face)
+                           ("SYN" . fanyi-longman-synopp-face))
                          (mapcar (lambda (entry) (cons (cdr entry) 'fanyi-longman-signpost-face))
                                  fanyi-test--explode-signposts)))
     (let* ((text (car label))
@@ -170,6 +171,29 @@
             (fanyi-render-result request result)
             (fanyi-test--longman-style-fontify)
             (fanyi-test--explode-check-badges (cl-every #'identity settings))))))))
+
+(ert-deftest fanyi-longman-explode-synonym-badges-keep-targets-as-text ()
+  (let ((shr-width 1000))
+    (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) t))
+              ((symbol-function 'image-type-available-p) (lambda (type) (eq type 'svg))))
+      (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-explode-saved.html"
+        (let ((fanyi-use-glyphs t))
+          (let ((inhibit-read-only t)) (erase-buffer))
+          (fanyi-render-result request result)
+          (fanyi-test--longman-style-fontify)
+          (should (= (how-many "\\bSYN\\b" (point-min) (point-max)) 2))
+          (dolist (target '("rocket" "blow up"))
+            (goto-char (point-min))
+            (search-forward (concat "SYN " target))
+            (let* ((start (match-beginning 0))
+                   (display (get-char-property start 'display)))
+              (should (eq (car-safe display) 'image))
+              (should (string-match-p "SYN" (plist-get (cdr display) :data)))
+              (should (fanyi-test--longman-style-has-face-p
+                       (get-char-property start 'face) 'fanyi-longman-synopp-face))
+              (should-not (get-char-property (1- start) 'display))
+              (should-not (get-char-property (+ start 3) 'display))
+              (should-not (get-char-property (+ start 4) 'display)))))))))
 
 (ert-deftest fanyi-longman-explode-register-and-thesaurus-layout-and-actions ()
   ;; Relative heights in inherited faces multiply; a note must remain body-sized.

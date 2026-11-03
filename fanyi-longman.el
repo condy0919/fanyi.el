@@ -142,6 +142,11 @@
   "Face used for the site's orange sense labels and their SVG badges."
   :group 'fanyi)
 
+(defface fanyi-longman-synopp-face
+  '((t :foreground "white" :background "#f1d600" :weight bold))
+  "Face used for synonym and antonym labels and their SVG badges."
+  :group 'fanyi)
+
 (defface fanyi-longman-homonym-face
   '((t :foreground "red" :weight bold :height 1.0))
   "Face used for superscript homonym numbers in dictionary entries."
@@ -153,6 +158,7 @@
     ("Head" :tag fanyi-line :space t)
     ("Sense" :tag fanyi-sense)
     ("SIGNPOST" :tag fanyi-signpost)
+    ("synopp" :tag fanyi-synopp)
     ("Crossref" :tag fanyi-line :space t)
     ("topics_container" :tag div)
     ("EXAMPLE" :tag fanyi-example)
@@ -514,7 +520,8 @@ The returned DOM is ready for SHR; DOM itself is not modified."
     (shr-generic dom)
     (when uppercase (upcase-region start (point)))
     (if (or (fanyi-longman--class-p dom "FREQ")
-            (fanyi-longman--class-p dom "SIGNPOST"))
+            (fanyi-longman--class-p dom "SIGNPOST")
+            (fanyi-longman--class-p dom "synopp"))
         (fanyi-longman--badge start (point) face)
       (add-face-text-property start (point) face))
     (when (dom-attr dom 'title)
@@ -524,6 +531,10 @@ The returned DOM is ready for SHR; DOM itself is not modified."
 (defun fanyi-longman--shr-signpost (dom)
   "Render DOM as the site's uppercase orange sense badge."
   (fanyi-longman--shr-label dom 'fanyi-longman-signpost-face t))
+
+(defun fanyi-longman--shr-synopp (dom)
+  "Render DOM as an uppercase synonym or antonym badge."
+  (fanyi-longman--shr-label dom 'fanyi-longman-synopp-face t))
 
 (defun fanyi-longman--shr-group-heading (dom)
   "Render DOM as a separate collocation group label."
@@ -656,7 +667,8 @@ Keep the underlying text available for searching and copying."
                     (mapcar (lambda (attribute) (face-attribute face attribute frame t))
                             '(:foreground :background :weight :box)))
                   '(fanyi-longman-frequency-face fanyi-longman-svg-asset-face
-                                                 fanyi-longman-signpost-face)))))
+                                                 fanyi-longman-signpost-face
+                                                 fanyi-longman-synopp-face)))))
 
 (defun fanyi-longman-render (content _request)
   "Render prepared CONTENT with Fanyi headings and actions."
@@ -674,6 +686,7 @@ Keep the underlying text available for searching and copying."
        (fanyi-section . fanyi-longman--shr-section)
        (fanyi-label . fanyi-longman--shr-label)
        (fanyi-signpost . fanyi-longman--shr-signpost)
+       (fanyi-synopp . fanyi-longman--shr-synopp)
        (fanyi-group-heading . fanyi-longman--shr-group-heading)
        (fanyi-homonym . fanyi-longman--shr-homonym)
        (fanyi-sense . fanyi-longman--shr-sense)
