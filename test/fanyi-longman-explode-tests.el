@@ -172,6 +172,9 @@
             (fanyi-test--explode-check-badges (cl-every #'identity settings))))))))
 
 (ert-deftest fanyi-longman-explode-register-and-thesaurus-layout-and-actions ()
+  ;; Relative heights in inherited faces multiply; a note must remain body-sized.
+  (should (= (face-attribute 'fanyi-longman-note-heading-face :height nil t) 1.0))
+  (should (= (face-attribute 'fanyi-longman-box-heading-face :height nil t) 1.2))
   (let ((shr-width 1000) queries)
     (cl-letf (((symbol-function 'fanyi-dwim) (lambda (word) (push word queries))))
       (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-explode-saved.html"

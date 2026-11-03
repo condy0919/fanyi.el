@@ -117,6 +117,11 @@ and examples, including the site's emphasis within those paragraphs.
 Supplementary sections use headings, whitespace and indentation instead of
 outer borders. Group headings follow the theme's keyword face; short Register
 notes use a body-sized bold heading and remain expanded.
+Thesaurus and collocation sections start expanded. Their headings are buttons:
+use `TAB` to reach one, then `RET` or a mouse click to toggle its contents. Each
+button folds only its own section, including when it appears inside a sense;
+following definitions and other dictionaries remain visible. These local folds
+are independent of outline headings and survive window and style changes.
 Audio buttons play pronunciations, dictionary links start Fanyi queries, and
 related-topic links open in Emacs's EWW browser. Word family, Origin, and frequency
 labels such as S2 and W1 use SVG badges when supported (controlled by `fanyi-use-glyphs` and

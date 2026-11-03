@@ -118,12 +118,12 @@
   :group 'fanyi)
 
 (defface fanyi-longman-box-heading-face
-  '((t :inherit fanyi-longman-heading-face :height 1.2))
+  '((t :inherit fanyi-longman-body-face :weight bold :height 1.2))
   "Face used for thesaurus and collocation section headings."
   :group 'fanyi)
 
 (defface fanyi-longman-note-heading-face
-  '((t :inherit fanyi-longman-heading-face :height 1.0))
+  '((t :inherit fanyi-longman-body-face :weight bold :height 1.0))
   "Face used for short usage-note headings such as Register."
   :group 'fanyi)
 
@@ -158,9 +158,9 @@
     ("EXAMPLE" :tag fanyi-example)
     ("exa" :tag fanyi-example)
     ("exaEntry" :tag fanyi-block)
-    ("ColloBox" :tag fanyi-block :indent 2)
+    ("ColloBox" :tag fanyi-section :indent 2)
     ("F2NBox" :tag fanyi-block :indent 2)
-    ("ThesBox" :tag fanyi-block :indent 2)
+    ("ThesBox" :tag fanyi-section :indent 2)
     ("Section" :tag fanyi-block)
     ("heading" :face fanyi-longman-box-heading-face)
     ("HEADING" :face fanyi-longman-box-heading-face)
@@ -484,6 +484,28 @@ The returned DOM is ready for SHR; DOM itself is not modified."
   (fanyi-longman--shr-line dom)
   (shr-ensure-paragraph))
 
+(defun fanyi-longman--shr-section (dom)
+  "Render DOM as a supplementary section with a locally folding heading."
+  (let ((children (dom-children dom)) heading)
+    ;; Some headings have a sibling qualifier, such as "Meanings 1 & 2".
+    ;; Keep that complete heading visible when the section is closed.
+    (while (and children
+                (let ((child (car children)))
+                  (if (stringp child)
+                      (string-empty-p (string-trim child))
+                    (let ((node (if (eq (dom-tag child) 'fanyi-face)
+                                    (car (dom-children child)) child)))
+                      (or (fanyi-longman--class-p node "heading")
+                          (fanyi-longman--class-p node "HEADING"))))))
+      (push (pop children) heading))
+    (if (not (seq-some #'consp heading))
+        (fanyi-longman--shr-block dom)
+      (shr-ensure-paragraph)
+      (let ((shr-indentation (+ shr-indentation (or (dom-attr dom 'fanyi-indent) 0))))
+        (fanyi-shr-insert-section dom `(span nil ,@(nreverse heading))
+                                  `(div nil ,@children)))
+      (shr-ensure-paragraph))))
+
 (defun fanyi-longman--shr-label (dom &optional face uppercase)
   "Render DOM as an inline label using FACE, optionally in UPPERCASE."
   (shr-insert " ")
@@ -649,6 +671,7 @@ Keep the underlying text available for searching and copying."
        (fanyi-face . fanyi-longman--shr-face)
        (fanyi-line . fanyi-longman--shr-line)
        (fanyi-block . fanyi-longman--shr-block)
+       (fanyi-section . fanyi-longman--shr-section)
        (fanyi-label . fanyi-longman--shr-label)
        (fanyi-signpost . fanyi-longman--shr-signpost)
        (fanyi-group-heading . fanyi-longman--shr-group-heading)

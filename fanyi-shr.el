@@ -11,10 +11,125 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'button)
 (require 'shr)
 
 (cl-defstruct (fanyi-shr--region (:constructor fanyi-shr--region-create))
-  start end dom renderers style-function layout)
+  start end dom renderers style-function layout sections)
+
+(cl-defstruct (fanyi-shr--section (:constructor fanyi-shr--section-create))
+  identity heading-start heading-end body-start body-end overlay closed)
+
+(defvar fanyi-shr--sections 'inactive
+  "Sections collected during the current HTML render.")
+
+(defvar-local fanyi-shr--section-invisibility-added nil
+  "Whether Fanyi added its section symbol to `buffer-invisibility-spec'.")
+
+(define-button-type 'fanyi-shr-section-button
+  'face nil
+  'follow-link t
+  'action #'fanyi-shr-toggle-section)
+
+(defun fanyi-shr-insert-section (identity heading-dom body-dom)
+  "Render HEADING-DOM and BODY-DOM as one initially expanded section.
+Call from a renderer used by `fanyi-shr-insert'.  IDENTITY must be the same
+object on each render, normally the cached DOM node containing the section.
+Outside `fanyi-shr-insert', simply render the expanded content."
+  (shr-ensure-newline)
+  (let ((section (unless (eq fanyi-shr--sections 'inactive)
+                   (fanyi-shr--section-create :identity identity))))
+    (when section
+      (push section fanyi-shr--sections)
+      (setf (fanyi-shr--section-heading-start section) (copy-marker (point))))
+    (shr-descend heading-dom)
+    (when section
+      (setf (fanyi-shr--section-heading-end section) (copy-marker (point))))
+    (shr-ensure-newline)
+    (when section
+      (setf (fanyi-shr--section-body-start section) (copy-marker (point))))
+    (shr-descend body-dom)
+    (shr-ensure-newline)
+    (when section
+      (setf (fanyi-shr--section-body-end section) (copy-marker (point))))))
+
+(defun fanyi-shr--section-forget (section)
+  "Release SECTION's markers and overlay."
+  (let ((start (fanyi-shr--section-heading-start section))
+        (end (fanyi-shr--section-heading-end section)))
+    ;; During replacement old markers may point at the new title.  Only
+    ;; remove properties that still belong to this particular section.
+    (when (and (markerp start) (eq (marker-buffer start) (current-buffer))
+               (markerp end) (eq (marker-buffer end) (current-buffer))
+               (< start end) (eq (get-text-property start 'fanyi-shr-section) section))
+      (with-silent-modifications
+        (remove-text-properties start (1+ start) '(display nil))
+        (remove-text-properties start end
+                                '(button nil category nil help-echo nil fanyi-shr-section nil)))))
+  (when (overlayp (fanyi-shr--section-overlay section))
+    (delete-overlay (fanyi-shr--section-overlay section)))
+  (dolist (marker (list (fanyi-shr--section-heading-start section)
+                        (fanyi-shr--section-heading-end section)
+                        (fanyi-shr--section-body-start section)
+                        (fanyi-shr--section-body-end section)))
+    (when (markerp marker) (set-marker marker nil))))
+
+(defun fanyi-shr--section-set-closed (section closed)
+  "Set SECTION to CLOSED and update its title without changing its text."
+  (when (and closed (not (eq buffer-invisibility-spec t))
+             (not (memq 'fanyi-shr-section buffer-invisibility-spec)))
+    (add-to-invisibility-spec 'fanyi-shr-section)
+    (setq fanyi-shr--section-invisibility-added t))
+  (setf (fanyi-shr--section-closed section) closed)
+  (overlay-put (fanyi-shr--section-overlay section)
+               'invisible (and closed 'fanyi-shr-section))
+  (let ((start (fanyi-shr--section-heading-start section))
+        (end (fanyi-shr--section-heading-end section)))
+    (with-silent-modifications
+      (put-text-property start (1+ start) 'display
+                         (concat (if closed "▸ " "▾ ")
+                                 (char-to-string (char-after start))))
+      (put-text-property start end 'help-echo
+                         (if closed "Expand section" "Collapse section")))))
+
+(defun fanyi-shr-toggle-section (&optional button)
+  "Toggle the local section at BUTTON or point."
+  (interactive)
+  (when-let* ((button (or button (button-at (point))))
+              (section (button-get button 'fanyi-shr-section))
+              (_ (eq (marker-buffer (fanyi-shr--section-heading-start section))
+                     (current-buffer))))
+    (fanyi-shr--section-set-closed section (not (fanyi-shr--section-closed section)))
+    (when (and (fanyi-shr--section-closed section)
+               (<= (fanyi-shr--section-body-start section) (point))
+               (< (point) (fanyi-shr--section-body-end section)))
+      (goto-char (fanyi-shr--section-heading-start section)))))
+
+(defun fanyi-shr--section-open (overlay)
+  "Open the section represented by OVERLAY for an isearch match."
+  (fanyi-shr--section-set-closed (overlay-get overlay 'fanyi-shr-section) nil))
+
+(defun fanyi-shr--section-install (section)
+  "Install SECTION's title button and body overlay after SHR has filled lines."
+  (let ((start (fanyi-shr--section-heading-start section))
+        (end (fanyi-shr--section-heading-end section)))
+    (save-excursion
+      (goto-char start)
+      (skip-chars-forward " \t\n\r" end)
+      (set-marker start (point))
+      (goto-char end)
+      (skip-chars-backward " \t\n\r" start)
+      (set-marker end (point)))
+    (when (< start end)
+      (make-text-button start end :type 'fanyi-shr-section-button
+                        'fanyi-shr-section section)
+      (let ((overlay (make-overlay (fanyi-shr--section-body-start section)
+                                   (fanyi-shr--section-body-end section))))
+        (setf (fanyi-shr--section-overlay section) overlay)
+        (overlay-put overlay 'fanyi-shr-section section)
+        (overlay-put overlay 'isearch-open-invisible #'fanyi-shr--section-open))
+      (fanyi-shr--section-set-closed section nil)
+      section)))
 
 (defvar fanyi-shr--buffers nil
   "Buffers with saved HTML regions checked after interactive commands.")
@@ -44,7 +159,8 @@ Copy the style signature so later list mutations cannot change this snapshot."
 
 (defun fanyi-shr--render (dom renderers window)
   "Insert DOM with RENDERERS, using WINDOW when it is displayed."
-  (let ((start (point)) end
+  (let ((start (point)) end complete
+        (fanyi-shr--sections nil)
         (shr-use-fonts nil)
         (shr-external-rendering-functions renderers)
         (shr-inhibit-images t)
@@ -71,20 +187,34 @@ Copy the style signature so later list mutations cannot change this snapshot."
                  (setq position next)))
              (put-text-property (point-min) (point-max) 'fanyi-html t)
              (setq end (point-max)))))
-      (if window
-          (with-selected-window window
-            (save-excursion (render)))
-        (render)))
-    (goto-char end)))
+      (unwind-protect
+          (progn
+            (if window
+                (with-selected-window window
+                  (save-excursion (render)))
+              (render))
+            (dolist (section fanyi-shr--sections)
+              (unless (fanyi-shr--section-install section)
+                (fanyi-shr--section-forget section)))
+            (setq fanyi-shr--sections
+                  (cl-remove-if-not #'fanyi-shr--section-overlay fanyi-shr--sections))
+            (goto-char end)
+            (setq complete t)
+            fanyi-shr--sections)
+        (unless complete (mapc #'fanyi-shr--section-forget fanyi-shr--sections))))))
 
 (defun fanyi-shr--forget (region)
   "Detach REGION's markers."
+  (mapc #'fanyi-shr--section-forget (fanyi-shr--region-sections region))
   (set-marker (fanyi-shr--region-start region) nil)
   (set-marker (fanyi-shr--region-end region) nil))
 
 (defun fanyi-shr--clear ()
   "Release saved DOMs and hooks when the buffer is cleared or killed."
   (mapc #'fanyi-shr--forget fanyi-shr--regions)
+  (when fanyi-shr--section-invisibility-added
+    (remove-from-invisibility-spec 'fanyi-shr-section)
+    (setq fanyi-shr--section-invisibility-added nil))
   (setq fanyi-shr--regions nil fanyi-shr--window nil
         fanyi-shr--buffers (delq (current-buffer) fanyi-shr--buffers))
   (unless fanyi-shr--buffers
@@ -117,16 +247,21 @@ signature of provider settings that should trigger rendering when changed.
 The current buffer may already contain other dictionary results.  HTML text
 is marked with `fanyi-html', and its styling survives font-lock refreshes.
 Use the buffer's default font and character-based layout, with SHR's colors."
-  (let ((start (point))
+  (let ((start (point)) sections layout complete
         (window (fanyi-shr--window))
         (inhibit-read-only t)
         (fanyi-shr--updating t))
-    (fanyi-shr--render dom renderers window)
+    (unwind-protect
+        (atomic-change-group
+          (setq sections (fanyi-shr--render dom renderers window)
+                layout (and window (fanyi-shr--layout window style-function))
+                complete t))
+      (unless complete (mapc #'fanyi-shr--section-forget sections)))
     (when (> (point) start)
       (push (fanyi-shr--region-create
              :start (copy-marker start t) :end (copy-marker (point))
              :dom dom :renderers renderers :style-function style-function
-             :layout (and window (fanyi-shr--layout window style-function)))
+             :layout layout :sections sections)
             fanyi-shr--regions)
       (setq fanyi-shr--window window)
       (cl-pushnew (current-buffer) fanyi-shr--buffers)
@@ -170,21 +305,45 @@ Use the buffer's default font and character-based layout, with SHR's colors."
 (defun fanyi-shr--replace (region window layout)
   "Re-render REGION for WINDOW and remember LAYOUT."
   (let ((start (marker-position (fanyi-shr--region-start region)))
-        (end (marker-position (fanyi-shr--region-end region))))
+        (end (marker-position (fanyi-shr--region-end region)))
+        (sections (fanyi-shr--region-sections region))
+        (saved (mapcar
+                (lambda (section)
+                  (mapcar (lambda (marker) (cons marker (marker-position marker)))
+                          (list (fanyi-shr--section-heading-start section)
+                                (fanyi-shr--section-heading-end section)
+                                (fanyi-shr--section-body-start section)
+                                (fanyi-shr--section-body-end section))))
+                (fanyi-shr--region-sections region)))
+        replacement)
+    (dolist (section sections) (delete-overlay (fanyi-shr--section-overlay section)))
     (condition-case error-data
         (atomic-change-group
           (delete-region start end)
           (goto-char start)
-          (fanyi-shr--render (fanyi-shr--region-dom region)
-                             (fanyi-shr--region-renderers region) window))
+          (setq replacement (fanyi-shr--render (fanyi-shr--region-dom region)
+                                               (fanyi-shr--region-renderers region) window))
+          (dolist (section replacement)
+            (when-let* ((old (cl-find (fanyi-shr--section-identity section) sections
+                                      :key #'fanyi-shr--section-identity :test #'eq)))
+              (fanyi-shr--section-set-closed section (fanyi-shr--section-closed old)))))
       (error
        ;; Text is restored by the change group; restore its boundary markers.
        (set-marker (fanyi-shr--region-start region) start)
        (set-marker (fanyi-shr--region-end region) end)
+       (mapc #'fanyi-shr--section-forget replacement)
+       (dolist (markers saved)
+         (dolist (state markers) (set-marker (car state) (cdr state))))
+       (dolist (section sections)
+         (move-overlay (fanyi-shr--section-overlay section)
+                       (fanyi-shr--section-body-start section)
+                       (fanyi-shr--section-body-end section) (current-buffer)))
        (signal (car error-data) (cdr error-data))))
+    (mapc #'fanyi-shr--section-forget sections)
     (set-marker (fanyi-shr--region-start region) start)
     (set-marker (fanyi-shr--region-end region) (point))
-    (setf (fanyi-shr--region-layout region) layout)))
+    (setf (fanyi-shr--region-layout region) layout
+          (fanyi-shr--region-sections region) replacement)))
 
 (defun fanyi-shr--outline-folds (regions)
   "Remember outline folds overlapping REGIONS before replacing their text."
