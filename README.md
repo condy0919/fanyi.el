@@ -131,6 +131,14 @@ if your sound player can be launched with `your-sound-player url`. Otherwise it 
 ![有道同义词英文](https://user-images.githubusercontent.com/4024656/132447780-1bbd9a6e-805e-4a4c-9e0a-03f499864c6f.png)
 ![有道同义词中文](https://user-images.githubusercontent.com/4024656/132447809-af3785bd-fe6d-4e52-a107-71c89fb8a26b.png)
 
+## Development
+
+Install development dependencies with `cask install`, then run `make test`
+for the ERT suite and `make compile` for byte compilation. CI runs both.
+Tests use mocked requests and the small HTML/JSON samples in `test/fixtures/`;
+they do not contact dictionary websites. The fixtures exercise parsing and
+rendering, but are not a check of the websites' current availability.
+
 ## Similar projects
 
 - [youdao-dictionary](https://github.com/xuchunyang/youdao-dictionary.el)

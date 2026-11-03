@@ -1,0 +1,18 @@
+# Dictionary response fixtures
+
+These are hand-written, reduced examples of the HTML and JSON structures
+consumed by the providers. They are synthetic regression data, not downloaded
+pages or snapshots of the current dictionary websites. Definitions and audio
+identifiers are test data; `example.invalid` URLs must never be fetched.
+
+- `haici.html`: two pronunciations, four audio identifiers, two definitions,
+  and a related word. Whitespace and the final placeholder list item match the
+  structure expected by the original parser.
+- `longman.html`: a headword, British and American audio, a definition link,
+  a cross-reference, an example with audio, and an origin section.
+- `etymon.html`: a title, foreign-word formatting, a cross-reference, and a quote.
+- `youdao.json`: two entries, including one without an explanation.
+
+The provider tests parse these files with Emacs's HTML/JSON parsers and render
+results without network requests or image rendering. When extending coverage,
+keep each example small enough that its purpose is clear.

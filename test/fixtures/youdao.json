@@ -1,0 +1,9 @@
+{
+  "result": {"code": 200},
+  "data": {
+    "entries": [
+      {"entry": "sample", "explain": "n. 样本；vt. 取样"},
+      {"entry": "specimen"}
+    ]
+  }
+}
