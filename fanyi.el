@@ -365,10 +365,49 @@ crossing into HTML and consuming delimiters in a later dictionary."
              ("_\\([^_]+?\\)_" . underline))))
   "Keywords to highlight in `fanyi-mode'.")
 
+(defun fanyi-forward-button (count)
+  "Move COUNT buttons forward, skipping hidden buttons and wrapping at the end.
+With a negative COUNT, move backward.  A zero COUNT moves to the start of
+the visible button at point."
+  (interactive "p")
+  (let ((button
+         (save-excursion
+           (let ((iterator (if (< count 0) #'previous-button #'next-button))
+                 (boundary (if (< count 0) (point-max) (point-min)))
+                 (button (button-at (point))))
+             (dotimes (_ (abs count))
+               (let (seen found)
+                 (while (not found)
+                   (setq button (or (funcall iterator (point))
+                                    (funcall iterator boundary t)))
+                   (unless (and button (not (memq (button-start button) seen)))
+                     (user-error "No visible buttons"))
+                   (goto-char (button-start button))
+                   (push (point) seen)
+                   (setq found (not (or (button-get button 'skip)
+                                        (invisible-p (point))))))))
+             (when (and button (not (invisible-p (button-start button)))) button)))))
+    (when button
+      (goto-char (button-start button))
+      (when-let* ((help (button-get button 'help-echo))
+                  (_ (stringp help)))
+        (message "%s" help)))
+    button))
+
+(defun fanyi-backward-button (count)
+  "Move COUNT visible buttons backward, wrapping at the beginning."
+  (interactive "p")
+  (fanyi-forward-button (- count)))
+
 (defvar fanyi-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [tab] #'forward-button)
-    (define-key map [backtab] #'backward-button)
+    (define-key map [tab] #'fanyi-forward-button)
+    (define-key map (kbd "TAB") #'fanyi-forward-button)
+    (define-key map [backtab] #'fanyi-backward-button)
+    ;; Button text and overlays have their own keymaps.  Remapping also
+    ;; covers those bindings without changing Emacs's global button map.
+    (define-key map [remap forward-button] #'fanyi-forward-button)
+    (define-key map [remap backward-button] #'fanyi-backward-button)
     (define-key map "q" #'quit-window)
     (define-key map "s" #'fanyi-dwim)
     (define-key map "w" #'fanyi-copy-query-word)
@@ -379,6 +418,7 @@ crossing into HTML and consuming delimiters in a later dictionary."
 (defvar fanyi-mode-cycle-map
   (let ((map (make-sparse-keymap)))
     (define-key map [tab] #'outline-cycle)
+    (define-key map (kbd "TAB") #'outline-cycle)
     (define-key map [backtab] #'outline-cycle-buffer)
     map)
   "Keymap used by headlines of `fanyi-mode'.")
