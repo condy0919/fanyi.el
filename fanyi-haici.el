@@ -221,7 +221,7 @@ before calling this function."
              do (insert "- " pos " " p "\n"))
     (insert "\n")
     ;; Make a button for distribution chart.
-    (when-let ((dist (fanyi-haici-result-distribution result)))
+    (when-let* ((dist (fanyi-haici-result-distribution result)))
       (insert-button "Click to view the distribution chart"
                      'action (lambda (dist)
                                ;; `switch-to-buffer' is used in `chart-bar-quickie' which means a new chart buffer will
@@ -260,7 +260,7 @@ before calling this function."
                      'follow-link t)
       (insert "\n\n"))
     ;; Make buttons for related words.
-    (when-let ((rs (fanyi-haici-result-related result)))
+    (when-let* ((rs (fanyi-haici-result-related result)))
       (cl-loop for r in rs
                for (k v) = r
                do (insert k " ")
@@ -271,7 +271,7 @@ before calling this function."
                do (insert " "))
       (insert "\n\n"))
     ;; The etymons.
-    (when-let ((etymons (fanyi-haici-result-etymons result)))
+    (when-let* ((etymons (fanyi-haici-result-etymons result)))
       (insert "## 起源\n\n")
       (cl-loop for i in etymons
                do (insert "- " i "\n"))
