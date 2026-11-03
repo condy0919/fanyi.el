@@ -6,7 +6,7 @@
 
 (defun fanyi-shr-section-test--render (dom)
   "Render the title and body of test section DOM."
-  (fanyi-shr-insert-section dom (nth 2 dom) (nth 3 dom)))
+  (fanyi-shr-insert-section dom (nth 2 dom) (nth 3 dom) (dom-attr dom 'initially-closed)))
 
 (defconst fanyi-shr-section-test--renderers
   '((section . fanyi-shr-section-test--render)))
@@ -86,6 +86,36 @@
     (should-not (invisible-p (fanyi-shr-section-test--position "Following definition")))
     (button-activate (fanyi-shr-section-test--button "Local title"))
     (should-not (invisible-p (fanyi-shr-section-test--position "Local body")))))
+
+(ert-deftest fanyi-shr-sections-initial-defaults-yield-to-reader-state-on-reflow ()
+  (fanyi-shr-test--with-window
+    (fanyi-shr-insert
+     '(div nil
+           (section ((initially-closed . t)) (span nil "Details") (p nil "Detailed body."))
+           (section nil (span nil "Examples") (p nil "Example body."))
+           (section ((initially-closed . t)) (span nil "Quotes") (p nil "Quoted body.")))
+     fanyi-shr-section-test--renderers)
+    (should (invisible-p (fanyi-shr-section-test--position "Detailed body")))
+    (should (invisible-p (fanyi-shr-section-test--position "Quoted body")))
+    (should-not (invisible-p (fanyi-shr-section-test--position "Example body")))
+    (should (equal "▸ D" (get-text-property (fanyi-shr-section-test--position "Details") 'display)))
+    (should (equal "Expand section" (button-get (fanyi-shr-section-test--button "Details") 'help-echo)))
+    (button-activate (fanyi-shr-section-test--button "Details"))
+    (button-activate (fanyi-shr-section-test--button "Examples"))
+    (dolist (width '(25 60))
+      (let ((shr-width width))
+        (fanyi-shr-reflow)
+        (should-not (invisible-p (fanyi-shr-section-test--position "Detailed body")))
+        (should (invisible-p (fanyi-shr-section-test--position "Example body")))
+        (should (invisible-p (fanyi-shr-section-test--position "Quoted body")))
+        (should (equal "▾ D" (get-text-property (fanyi-shr-section-test--position "Details") 'display)))
+        (should (equal "Collapse section" (button-get (fanyi-shr-section-test--button "Details") 'help-echo)))))
+    ;; Search also opens a section that was initially collapsed, and reflow
+    ;; retains that state without changing the cached provider preference.
+    (let ((overlay (fanyi-shr-section-test--overlay "Quoted body")))
+      (funcall (overlay-get overlay 'isearch-open-invisible) overlay))
+    (fanyi-shr-reflow t)
+    (should-not (invisible-p (fanyi-shr-section-test--position "Quoted body")))))
 
 (ert-deftest fanyi-shr-sections-keep-state-styling-and-actions-on-reflow ()
   (fanyi-shr-test--with-window
@@ -186,7 +216,7 @@
 (ert-deftest fanyi-shr-sections-without-a-cache-render-expanded-content ()
   (with-temp-buffer
     (let ((shr-external-rendering-functions fanyi-shr-section-test--renderers))
-      (shr-insert-document '(section nil (span nil "Title") (p nil "Body."))))
+      (shr-insert-document '(section ((initially-closed . t)) (span nil "Title") (p nil "Body."))))
     (should (equal "Title Body." (fanyi-shr-test--text)))
     (should-not (fanyi-shr-section-test--button "Title"))
     (should-not (overlays-in (point-min) (point-max)))

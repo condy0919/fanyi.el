@@ -84,7 +84,7 @@
             (data . "{\"1\":{\"sense\":\"noun\",\"percent\":75},\"2\":{\"percent\":25,\"sense\":\"verb\"}}"))))
     (fanyi-test--with-rendered-response fanyi-haici-provider response
       (should (equal (fanyi-haici-result-distribution result) '((75 "noun") (25 "verb"))))
-      (should (string-match-p "Click to view the distribution chart" (buffer-string))))))
+      (should (string-match-p "释义分布" (buffer-string))))))
 
 (defun fanyi-haici-test--position (text)
   "Return the first position of TEXT in the result buffer."
@@ -102,11 +102,11 @@
                                      'fanyi-haici-section)) 8))
       (dolist (heading '("详尽释义" "双解释义" "英英释义" "例句" "词汇搭配"
                          "经典引文" "近反义词" "临近单词"))
-        (let ((button (button-at (1+ (fanyi-haici-test--position (concat "\n" heading "\n"))))))
+        (let ((button (button-at (fanyi-haici-test--position heading))))
           (should button)
           (should (eq (button-get button 'action) #'fanyi-shr-toggle-section))))
-      (dolist (text '("## 释义" "## 用法与例句" "## 相关资料"
-                      "“飞龙”（美国研制的一种轰炸机）" "龙的，像龙的"
+      (should-not (string-match-p "## 释义\\|## 用法与例句\\|## 相关资料" (buffer-string)))
+      (dolist (text '("“飞龙”（美国研制的一种轰炸机）" "龙的，像龙的"
                       "[C]凶恶的人,悍妇" "a fiercely vigilant and unpleasant woman"
                       "The contour of that mountain looks like a dragon."
                       "like a dragon" "They..faced the dragon's breath of fire."
@@ -181,8 +181,8 @@
                 (i ((class . "extra fsound sound") (naudio . "example.mp3"))))))
     (fanyi-test--with-rendered-response fanyi-haici-provider response
       (should (equal (fanyi-test--button-data #'fanyi-dwim) '("sampler" "dragon boat race" "龙")))
-      (should (equal (fanyi-test--button-data #'eww)
-                     '("https://example.invalid/reference" "https://dict.cn/sample")))
+      (should (equal (sort (fanyi-test--button-data #'eww) #'string<)
+                     '("https://dict.cn/sample" "https://example.invalid/reference")))
       (dolist (text '("Script label" "File label" "Unlinked label"))
         (should-not (button-at (fanyi-haici-test--position text))))
       (cl-letf (((symbol-function 'fanyi-dwim) (lambda (word) (push word queries)))
@@ -204,6 +204,7 @@
       (let* ((request (fanyi-make-request fanyi-haici-provider "dragon"))
              (result (fanyi-parse-response request (fanyi-test--read-fixture "haici-dragon-saved.html")))
              (content (copy-tree (fanyi-haici-result-content result) t))
+             (fanyi-haici-expanded-sections t)
              (shr-width 80) (inhibit-read-only t))
         (insert "Earlier dictionary\n\n")
         (fanyi-haici-render result request)
@@ -238,18 +239,162 @@
                 (should (string-suffix-p "Later dictionary\n" (buffer-string)))
                 (dolist (field '(("Noun:" . fanyi-pos-face)
                                  ("这件玉龙是真正的古玩。" . shadow)
-                                 ("dragon boat race" . fanyi-haici-link-face)
-                                 ("## 释义" . fanyi-sub-headline-face)))
+                                 ("dragon boat race" . fanyi-haici-link-face)))
                   (let ((position (fanyi-haici-test--position (car field))))
                     (should (memq (cdr field) (ensure-list (get-char-property position 'face))))
                     (should (get-text-property position 'font-lock-face))))
                 (save-restriction
                   (narrow-to-region (fanyi-shr--region-start region) (fanyi-shr--region-end region))
-                  ;; SHR may carry a double-width CJK character over the edge
-                  ;; by one column when it chooses a legal line break.
-                  (should (<= (fanyi-shr-test--max-line-width) (1+ width)))))))
+                  ;; SHR may keep final CJK punctuation with the preceding
+                  ;; character, carrying it over the edge by two columns.
+                  (should (<= (fanyi-shr-test--max-line-width) (+ width 2)))))))
           (button-activate (button-at (fanyi-haici-test--position "详尽释义")))
           (should-not (invisible-p (fanyi-haici-test--position "龙骑枪"))))))))
+
+(ert-deftest fanyi-haici-layout-defaults-prioritize-definitions-and-usage ()
+  (let ((fanyi-haici-expanded-sections '(dual sort anno nfo)))
+    (fanyi-test--with-rendered-fixture fanyi-haici-provider "haici-dragon-saved.html"
+      (dolist (text '("[C]龙" "This jade dragon is a genuine antique."
+                      "dragon boat race" "firedrake"))
+        (should-not (invisible-p (fanyi-haici-test--position text))))
+      (dolist (text '("龙骑枪" "a fiercely vigilant and unpleasant woman"
+                      "Saint George, that swing'd the dragon." "Dragonair"))
+        (should (invisible-p (fanyi-haici-test--position text))))
+      (dolist (heading '("详尽释义 · 13" "双解释义 · 2" "英英释义 · 4"
+                         "例句 · 3" "词汇搭配 · 20" "经典引文 · 2"
+                         "近反义词 · 4" "临近单词 · 12"))
+        (let ((position (fanyi-haici-test--position heading)))
+          (should-not (invisible-p position))
+          (should (button-at position))))
+      (button-activate (button-at (fanyi-haici-test--position "详尽释义")))
+      (should-not (invisible-p (fanyi-haici-test--position "龙骑枪")))
+      (should (invisible-p (fanyi-haici-test--position "Dragonair")))
+      (should (string-match-p "\\[C\\]龙\n[ ]+a big dangerous animal" (buffer-string)))
+      (should (string-match-p "这件玉龙是真正的古玩。\n\n[ ]*[^\n]*Dragons are described"
+                              (buffer-string))))))
+
+(ert-deftest fanyi-haici-layout-honors-initial-section-configuration ()
+  (dolist (setting '(t (sort) nil))
+    (let ((fanyi-haici-expanded-sections setting))
+      (fanyi-test--with-rendered-fixture fanyi-haici-provider "haici-dragon-saved.html"
+        (dolist (entry '((detail . "龙骑枪") (dual . "[C]龙")
+                         (sort . "This jade dragon is a genuine antique.")
+                         (anno . "dragon boat race") (nwd . "Dragonair")))
+          (should (eq (not (invisible-p (fanyi-haici-test--position (cdr entry))))
+                      (and (or (eq setting t) (memq (car entry) setting)) t)))))))
+  (let ((response (fanyi-test--read-fixture "haici-dragon-saved.html"))
+        (fanyi-haici-expanded-sections '(dual sort anno nfo)))
+    (dom-remove-node response (car (dom-by-class response "layout dual")))
+    (fanyi-test--with-rendered-response fanyi-haici-provider response
+      (should-not (invisible-p (fanyi-haici-test--position "龙骑枪")))
+      (should-not (string-match-p "双解释义" (buffer-string))))))
+
+(ert-deftest fanyi-haici-layout-aligns-vocabulary-and-reflows-complete-header ()
+  (fanyi-test--with-result-buffer
+    (save-window-excursion
+      (set-window-buffer nil (current-buffer))
+      (let* ((request (fanyi-make-request fanyi-haici-provider "dragon"))
+             (result (fanyi-parse-response request (fanyi-test--read-fixture "haici-dragon-saved.html")))
+             (fanyi-use-glyphs nil)
+             (fanyi-haici-expanded-sections '(dual sort anno nfo))
+             (shr-width 80) (inhibit-read-only t))
+        (fanyi-haici-render result request)
+        (should (string-match-p "dragon boat race[ ]+龙舟竞赛" (buffer-string)))
+        (let ((columns (mapcar (lambda (text)
+                                 (goto-char (fanyi-haici-test--position text))
+                                 (current-column))
+                               '("龙舟竞赛" "服用鸦片" "龙血树"))))
+          (should (apply #'= columns)))
+        (let* ((region (car fanyi-shr--regions))
+               (dom (fanyi-shr--region-dom region))
+               (audio (fanyi-test--button-data #'fanyi-play-sound))
+               (words (fanyi-test--button-data #'fanyi-dwim))
+               (selected "龙舟竞赛"))
+          ;; The word header belongs to the same reflowable document as its tabs.
+          (should (<= (fanyi-shr--region-start region) (fanyi-haici-test--position "drag·on")))
+          (should (get-text-property (fanyi-haici-test--position "drag·on") 'fanyi-html))
+          (button-activate (button-at (fanyi-haici-test--position "详尽释义")))
+          (goto-char (fanyi-haici-test--position selected))
+          (set-mark (point))
+          (forward-char (length selected))
+          (let ((transient-mark-mode t) (mark-active t) (deactivate-mark nil))
+            (cl-letf (((symbol-function 'url-retrieve) (lambda (&rest _) (ert-fail "No network")))
+                      ((symbol-function 'url-queue-retrieve) (lambda (&rest _) (ert-fail "No network"))))
+              (dolist (width '(34 80))
+                (let ((shr-width width))
+                  (fanyi-shr-reflow)
+                  (fanyi-test--fontify)
+                  (should (eq dom (fanyi-shr--region-dom region)))
+                  (should (use-region-p))
+                  (should (equal selected (buffer-substring-no-properties (mark) (point))))
+                  (should-not (invisible-p (fanyi-haici-test--position "龙骑枪")))
+                  (should (invisible-p (fanyi-haici-test--position "Dragonair")))
+                  (should (equal audio (fanyi-test--button-data #'fanyi-play-sound)))
+                  (should (equal words (fanyi-test--button-data #'fanyi-dwim)))
+                  (should (<= (fanyi-shr-test--max-line-width) (1+ width)))
+                  (when (= width 34)
+                    (should (string-match-p "dragon boat race\n[ ]+龙舟竞赛" (buffer-string)))))))))))))
+
+(ert-deftest fanyi-haici-layout-level-tooltip-and-compact-nearby-words ()
+  (let ((fanyi-haici-expanded-sections t))
+    (fanyi-test--with-rendered-fixture fanyi-haici-provider "haici-dragon-saved.html"
+      (let ((label (fanyi-haici-test--position "核心词汇")))
+        (should (string-match-p "海词4星核心词汇，属常用3000词。"
+                                (get-text-property label 'help-echo)))
+        (should-not (get-text-property label 'display)))
+      (should-not (string-match-p "海词4星核心词汇，属常用3000词。" (buffer-string)))
+      (let ((line-a (line-number-at-pos (fanyi-haici-test--position "dragonfly")))
+            (line-b (line-number-at-pos (fanyi-haici-test--position "Dragone"))))
+        (should (= line-a line-b)))
+      (should (button-at (fanyi-haici-test--position "原网页"))))))
+
+(ert-deftest fanyi-haici-layout-aligns-numbered-meanings-and-hanging-explanations ()
+  (dolist (width '(80 36))
+    (let ((shr-width width)
+          (fanyi-haici-expanded-sections t))
+      (fanyi-test--with-rendered-fixture fanyi-haici-provider "haici-dragon-saved.html"
+        (goto-char (fanyi-haici-test--position "详尽释义"))
+        (re-search-forward "^ +1 +\\(龙\\)$")
+        (goto-char (match-beginning 1))
+        (let ((meaning-column (current-column)))
+          (re-search-forward "^ +10 +\\(【天】\\)")
+          (goto-char (match-beginning 1))
+          (should (= (current-column) meaning-column)))
+        (goto-char (fanyi-haici-test--position "[C]龙"))
+        (let ((meaning-column (current-column))
+              (lines 0))
+          (forward-line 1)
+          (should (looking-at-p " +a big dangerous animal"))
+          ;; Every line of the English explanation starts underneath the
+          ;; Chinese meaning, including continuations in a narrow window.
+          (while (not (looking-at-p "^ +2 "))
+            (should-not (eobp))
+            (should (= (current-indentation) meaning-column))
+            (end-of-line)
+            (should (<= (current-column) width))
+            (cl-incf lines)
+            (forward-line 1))
+          (when (= width 36) (should (> lines 1))))))))
+
+(ert-deftest fanyi-haici-layout-keeps-unusual-list-text-and-numbering ()
+  (let ((response (fanyi-test--read-fixture "haici.html"))
+        (fanyi-haici-expanded-sections t))
+    (dom-append-child
+     (dom-by-tag response 'body)
+     '(div ((class . "section sent"))
+           (h3 nil "词汇搭配")
+           (div ((class . "layout anno"))
+                (ul nil "Context outside the entry."
+                    (li nil (a ((href . "/sample")) "sample") " 样本")))
+           (h3 nil "额外释义")
+           (div ((class . "layout extra"))
+                (ol ((start . "-1")) (li nil "negative") (li nil "zero") (li nil "positive")))))
+    (fanyi-test--with-rendered-response fanyi-haici-provider response
+      (should (string-match-p "Context outside the entry\\." (buffer-string)))
+      (dolist (text '("-1 negative" " 0 zero" " 1 positive"))
+        (should (string-match-p (regexp-quote text) (buffer-string))))
+      (should (equal (get-text-property (fanyi-haici-test--position "★★★") 'help-echo)
+                     "3 常用词")))))
 
 (provide 'fanyi-haici-tests)
 ;;; fanyi-haici-tests.el ends here

@@ -31,14 +31,16 @@
   'follow-link t
   'action #'fanyi-shr-toggle-section)
 
-(defun fanyi-shr-insert-section (identity heading-dom body-dom)
-  "Render HEADING-DOM and BODY-DOM as one initially expanded section.
+(defun fanyi-shr-insert-section (identity heading-dom body-dom &optional initially-closed)
+  "Render HEADING-DOM and BODY-DOM as one folding section.
+INITIALLY-CLOSED, when non-nil, hides the body on the initial render.
+Reflow preserves the existing section state instead of reapplying this default.
 Call from a renderer used by `fanyi-shr-insert'.  IDENTITY must be the same
 object on each render, normally the cached DOM node containing the section.
 Outside `fanyi-shr-insert', simply render the expanded content."
   (shr-ensure-newline)
   (let ((section (unless (eq fanyi-shr--sections 'inactive)
-                   (fanyi-shr--section-create :identity identity))))
+                   (fanyi-shr--section-create :identity identity :closed initially-closed))))
     (when section
       (push section fanyi-shr--sections)
       (setf (fanyi-shr--section-heading-start section) (copy-marker (point))))
@@ -128,7 +130,7 @@ Outside `fanyi-shr-insert', simply render the expanded content."
         (setf (fanyi-shr--section-overlay section) overlay)
         (overlay-put overlay 'fanyi-shr-section section)
         (overlay-put overlay 'isearch-open-invisible #'fanyi-shr--section-open))
-      (fanyi-shr--section-set-closed section nil)
+      (fanyi-shr--section-set-closed section (fanyi-shr--section-closed section))
       section)))
 
 (defvar fanyi-shr--buffers nil

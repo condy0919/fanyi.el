@@ -125,14 +125,40 @@ another request. To always use the stacked layout:
 `fanyi-youdao-thesaurus-indent` controls indentation in the stacked layout.
 
 Haici includes detailed Chinese and English definitions, bilingual examples,
-collocations, quotations and related words when supplied by the page. Website
-tabs become independent, initially expanded sections: use `TAB` to reach a
-section heading and `RET` to fold it. Inactive website tabs are included too.
-Dictionary links query the full word or phrase inside Emacs; other references
-open in EWW. Pronunciation buttons, word forms and the distribution chart remain
-available. The rich sections use `shr` with `shr-use-fonts` disabled, retain
-semantic highlighting, and reflow from cached content while preserving folds
+collocations, quotations and related words when supplied by the page. Its compact
+header groups the headword, pronunciation and basic meanings; the vocabulary
+level uses an SVG badge with a text fallback and the full explanation in its
+tooltip. `释义分布` opens the distribution chart and `原网页` opens the page in EWW.
+
+Website tabs become independent folding headings with item counts. Use `TAB` to
+reach a heading and `RET` to toggle it. Bilingual definitions, examples,
+collocations and synonyms start expanded; detailed definitions, English
+definitions, quotations and nearby words start collapsed. With the default
+configuration, detailed definitions expand when bilingual definitions are
+unavailable. All available content, including inactive website tabs, remains
+searchable in the buffer.
+
+Chinese meanings and their English explanations occupy separate lines. Examples
+keep English above subdued Chinese translations, with space between pairs.
+Collocations and synonyms align words with their explanations in two columns;
+narrow windows stack them. Nearby words form a compact wrapping list. Dictionary
+links query the full word or phrase inside Emacs; other references open in EWW.
+The header and sections use `shr` with `shr-use-fonts` disabled, retain semantic
+highlighting, and reflow from cached content while preserving folds, selections
 and reading position. Rendering does not fetch page scripts or images.
+
+Customize the initially expanded tabs with `fanyi-haici-expanded-sections`:
+
+``` emacs-lisp
+(setq fanyi-haici-expanded-sections '(dual sort anno nfo)) ; Default
+;; Or expand every tab on a new lookup:
+(setq fanyi-haici-expanded-sections t)
+```
+
+The tab symbols are `detail` (detailed definitions), `dual` (bilingual definitions),
+`en` (English definitions), `sort` (examples), `anno` (collocations), `auth`
+(quotations), `nfo` (synonyms/antonyms), and `nwd` (nearby words). Manual folding
+choices survive window resizing.
 
 Longman uses Emacs's built-in `shr` renderer for dictionary HTML. Definitions,
 lists, and inline formatting follow the document structure. A small set of

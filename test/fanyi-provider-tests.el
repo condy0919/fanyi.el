@@ -42,7 +42,7 @@
     (should (= (fanyi-haici-result-star result) 3))
     (should (equal (fanyi-haici-result-paraphrases result)
                    '(("n." "样本；例子") ("vt." "取样；尝试"))))
-    (dolist (text '("# 海词" "英 [sɑːmpəl]" "美 [sæmpəl]" "- n. 样本；例子" "- vt. 取样；尝试"))
+    (dolist (text '("# 海词" "英 [sɑːmpəl]" "美 [sæmpəl]" "n. 样本；例子" "vt. 取样；尝试"))
       (should (string-match-p (regexp-quote text) (buffer-string))))
     (should (equal (fanyi-test--button-data #'fanyi-play-sound)
                    (mapcar (lambda (id) (format (fanyi-request-sound-url request) id))
