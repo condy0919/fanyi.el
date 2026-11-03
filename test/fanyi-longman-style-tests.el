@@ -60,7 +60,7 @@
           (let ((button (fanyi-test--longman-style-button text)))
             (should button)
             (button-activate button)))
-        (should (equal (nreverse queries) '("imaginary" "chase-the-dragon")))
+        (should (equal (nreverse queries) '("imaginary" "chase the dragon")))
         (should (equal topics '("https://www.ldoceonline.com/Folklore-topic/")))))))
 
 (ert-deftest fanyi-longman-class-styles-preserve-native-tags-and-links ()

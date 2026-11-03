@@ -127,8 +127,11 @@ use `TAB` to reach one, then `RET` or a mouse click to toggle its contents. Each
 button folds only its own section, including when it appears inside a sense;
 following definitions and other dictionaries remain visible. These local folds
 are independent of outline headings and survive window and style changes.
-Audio buttons play pronunciations, dictionary links start Fanyi queries, and
-related-topic links open in Emacs's EWW browser. Word family, Origin, and frequency
+Audio buttons play pronunciations. Dictionary links query the entry name while
+retaining the original Longman URL, so phrases keep their spaces in other
+dictionaries and query history. Links to the current page jump to a rendered
+anchor and open its folds; targets outside the rendered content open in EWW
+with their original URL. Related-topic links also open in EWW. Word family, Origin, and frequency
 labels such as S2 and W1 use SVG badges when supported (controlled by `fanyi-use-glyphs` and
 `fanyi-longman-svg-border-radius`), with a text fallback. Only dictionary content
 is selected; rendering does not download images or other page resources.

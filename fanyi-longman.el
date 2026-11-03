@@ -38,6 +38,7 @@
 (require 'browse-url)
 (require 'shr)
 (require 'svg)
+(require 'outline)
 
 (defcustom fanyi-longman-svg-border-radius 7
   "Border radius in pixels for Longman labels."
@@ -273,6 +274,42 @@ A boxed FACE produces a transparent badge with a one-pixel outline."
               href))
     (decode-coding-string (url-unhex-string (match-string 1 href)) 'utf-8)))
 
+(defvar fanyi-longman--query-link nil
+  "Word and original URL of the dictionary link currently being followed.")
+
+(defun fanyi-longman--prepare-request (request)
+  "Keep the original link URL when preparing its REQUEST."
+  (when (and fanyi-longman--query-link
+             (equal (fanyi-request-word request) (downcase (car fanyi-longman--query-link))))
+    (setf (fanyi-request-url request) (copy-sequence (cdr fanyi-longman--query-link)))))
+
+(defun fanyi-longman--query (link)
+  "Query LINK's word, retaining its original URL for Longman."
+  (let ((fanyi-longman--query-link link))
+    (fanyi-dwim (car link))))
+
+(defun fanyi-longman--follow-anchor (url)
+  "Jump to URL's anchor in the current result, or open URL in EWW."
+  (let ((target (decode-coding-string
+                 (url-unhex-string (url-target (url-generic-parse-url url))) 'utf-8))
+        position)
+    (save-restriction
+      (widen)
+      (let ((cursor (point-min)))
+        (while (and (< cursor (point-max)) (not position))
+          (when (member target (get-text-property cursor 'shr-target-id))
+            (setq position cursor))
+          (setq cursor (next-single-property-change cursor 'shr-target-id nil (point-max))))))
+    (if (not position)
+        (eww url)
+      (when (or (< position (point-min)) (>= position (point-max))) (widen))
+      (goto-char position)
+      (skip-chars-forward " \t\r\n")
+      (dolist (overlay (overlays-at (point)))
+        (when-let* ((open (overlay-get overlay 'isearch-open-invisible)))
+          (funcall open overlay)))
+      (when (outline-invisible-p) (outline-show-entry)))))
+
 (defun fanyi-longman--entry-p (entry base)
   "Return non-nil if ENTRY has a definition or usable cross-reference."
   (or (seq-some (lambda (node) (not (string-empty-p (string-trim (dom-texts node "")))))
@@ -348,6 +385,18 @@ A word-family anchor without a URL becomes a query link in CONTEXT."
     (when (eq tag 'a)
       (setf (alist-get 'href attributes)
             (fanyi-longman--http-url (dom-attr node 'href) base))
+      (when-let* ((href (alist-get 'href attributes))
+                  (word (fanyi-longman--crossref-target href)))
+        (let ((title (string-trim (or (dom-attr node 'title) "")))
+              (label (replace-regexp-in-string "[ \t\r\n]+" " "
+                                               (string-trim (dom-texts node "")))))
+          (setf (alist-get 'word attributes)
+                (cond ((not (string-empty-p title)) title)
+                      ((equal (replace-regexp-in-string " " "-" (downcase label)) word) label)
+                      (t word))))
+        (when (and (url-target (url-generic-parse-url href))
+                   (equal word (fanyi-longman--crossref-target base)))
+          (setf (alist-get 'fanyi-local-anchor attributes) t)))
       (when (and (memq 'family context) (not (dom-attr node 'href)))
         (setq tag 'fanyi-query)
         (setf (alist-get 'word attributes) (string-trim (dom-texts node "")))))
@@ -642,12 +691,15 @@ Keep the underlying text available for searching and copying."
           (setq position next)))
       (make-text-button start (point)
                         'type 'fanyi-longman-button
-                        'action (cond (word #'fanyi-dwim)
+                        'action (cond ((dom-attr dom 'fanyi-local-anchor)
+                                       #'fanyi-longman--follow-anchor)
+                                      (word #'fanyi-longman--query)
                                       ((member (url-host (url-generic-parse-url url))
                                                '("ldoceonline.com" "www.ldoceonline.com"))
                                        #'eww)
                                       (t #'browse-url))
-                        'button-data (or word url)
+                        'button-data (if (and word (not (dom-attr dom 'fanyi-local-anchor)))
+                                         (cons word url) url)
                         'keymap button-map
                         'follow-link t))))
 
@@ -713,6 +765,7 @@ Keep the underlying text available for searching and copying."
 (defconst fanyi-longman-provider
   (fanyi-provider-create :url "https://www.ldoceonline.com/dictionary/%s"
                          :api-type 'xml
+                         :prepare #'fanyi-longman--prepare-request
                          :parse #'fanyi-longman-parse
                          :render #'fanyi-longman-render)
   "Longman dictionary configuration.")

@@ -96,7 +96,7 @@
                (lambda (word) (push word queries))))
       (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-rich.html"
         (should-not queries)
-        (let ((button (fanyi-test--find-action-button #'fanyi-dwim "ice cream")))
+        (let ((button (fanyi-test--find-action-button #'fanyi-longman--query '("ice cream" . "https://www.ldoceonline.com/dictionary/ice%20cream#meaning"))))
           (should button)
           ;; Native button navigation and activation should remain usable.
           (should (keymapp (button-get button 'keymap)))
@@ -146,7 +146,7 @@
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
       (dolist (text '("A small amount." "Word family" "sampler" "From an older word."))
         (should (= (how-many (regexp-quote text) (point-min) (point-max)) 1)))
-      (should (equal (fanyi-test--button-data #'fanyi-dwim) '("sampler"))))))
+      (should (equal (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query)) '("sampler"))))))
 
 (ert-deftest fanyi-shr-separates-semantic-fields-without-splitting-words ()
   (let ((dom (fanyi-test--shr-html
@@ -206,14 +206,14 @@
           (should-not topics)
           (should-not queries)
           (let ((topic (fanyi-test--find-action-button #'eww url))
-                (crossref (fanyi-test--find-action-button #'fanyi-dwim "chase-the-dragon")))
+                (crossref (fanyi-test--find-action-button #'fanyi-longman--query '("chase the dragon" . "https://www.ldoceonline.com/dictionary/chase-the-dragon"))))
             (should topic)
             (should crossref)
             (should (string-match-p "→ chase the dragon" (buffer-string)))
             (button-activate topic)
             (button-activate crossref))
           (should (equal topics (list url)))
-          (should (equal queries '("chase-the-dragon"))))))))
+          (should (equal queries '("chase the dragon"))))))))
 
 (ert-deftest fanyi-shr-dragon-highlighting-survives-font-lock ()
   (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-dragon.html"

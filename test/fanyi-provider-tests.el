@@ -28,7 +28,7 @@
                    '("https://example.invalid/sample-uk.mp3"
                      "https://example.invalid/sample-us.mp3"
                      "https://example.invalid/sample-example.mp3")))
-    (should (equal (fanyi-test--button-data #'fanyi-dwim) '("part" "example")))))
+    (should (equal (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query)) '("part" "example")))))
 
 (ert-deftest fanyi-provider-youdao-fixture ()
   (fanyi-test--with-rendered-fixture fanyi-youdao-thesaurus-provider "youdao.json"

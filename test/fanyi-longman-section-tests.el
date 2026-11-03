@@ -162,7 +162,7 @@
               ((symbol-function 'fanyi-dwim) (lambda (word) (push word queries)))
               ((symbol-function 'fanyi-play-sound) (lambda (url) (push url played))))
       (fanyi-section-test--with-response (fanyi-section-test--combined-response)
-        (let ((links (fanyi-test--button-data #'fanyi-dwim))
+        (let ((links (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query)))
               (audio (fanyi-test--button-data #'fanyi-play-sound))
               (before (replace-regexp-in-string "[ \t\r\n]+" " " (buffer-string))))
           (fanyi-section-test--toggle "COLLOCATIONS")
@@ -177,7 +177,7 @@
           (fanyi-section-test--visible '("TO EXPLODE" "TO MAKE SOMETHING EXPLODE"
                                          "Definition between sections." "Definition after thesaurus."
                                          "Corpus stays visible." "Origin combined") t)
-          (should (equal (fanyi-test--button-data #'fanyi-dwim) links))
+          (should (equal (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query)) links))
           (should (equal (fanyi-test--button-data #'fanyi-play-sound) audio))
           (should (equal (replace-regexp-in-string "[ \t\r\n]+" " " (buffer-string)) before))
           (fanyi-section-test--toggle "COLLOCATIONS")

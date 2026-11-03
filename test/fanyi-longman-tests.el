@@ -9,6 +9,58 @@
     (insert html)
     (libxml-parse-html-region (point-min) (point-max))))
 
+(ert-deftest fanyi-longman-phrase-links-preserve-word-and-source-url ()
+  (fanyi-test--with-query
+    (let ((fanyi-providers (list fanyi-longman-provider (fanyi-test--provider))))
+      (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-dragon-saved.html"
+        (button-activate (fanyi-test--longman-style-button "chase the dragon"))
+        (should (equal fanyi-current-word "chase the dragon"))
+        (should (equal (car fanyi-history) "chase the dragon"))
+        (let ((requests (mapcar #'fanyi--task-request (reverse fanyi--tasks))))
+          (should (equal (mapcar #'fanyi-request-word requests)
+                         '("chase the dragon" "chase the dragon")))
+          (should (equal (mapcar #'fanyi-request-url requests)
+                         '("https://www.ldoceonline.com/dictionary/chase-the-dragon"
+                           "https://example.invalid/chase%20the%20dragon"))))
+        ;; The clicked URL is scoped to that lookup, not future queries.
+        (should (equal (fanyi-request-url (fanyi-make-request fanyi-longman-provider "next"))
+                       "https://www.ldoceonline.com/dictionary/next"))))))
+
+(ert-deftest fanyi-longman-local-anchor-opens-folds-after-reflow ()
+  (let ((dom (fanyi-test--longman-html
+              (concat "<div class='dictionary'><div class='dictentry'>"
+                      "<a href='#target'>Jump</a><div class='ThesBox'>"
+                      "<span class='heading'>THESAURUS</span>"
+                      "<span class='DEF' id='target'>Destination definition.</span>"
+                      "</div></div></div>"))))
+    (fanyi-test--with-rendered-response fanyi-longman-provider dom
+      (save-window-excursion
+        (set-window-buffer nil (current-buffer))
+        (button-activate (fanyi-test--longman-style-button "THESAURUS"))
+        (goto-char (point-min))
+        (outline-hide-subtree)
+        (let ((shr-width 30)) (fanyi-shr-reflow))
+        (fanyi-test--fontify)
+        (let ((button (fanyi-test--longman-style-button "Jump")))
+          (narrow-to-region (button-start button) (button-end button))
+          (cl-letf (((symbol-function 'eww) (lambda (&rest _) (ert-fail "Anchor is local")))
+                    ((symbol-function 'fanyi-dwim) (lambda (&rest _) (ert-fail "No new query"))))
+            (button-activate button)))
+        (should-not (buffer-narrowed-p))
+        (should (looking-at-p "Destination"))
+        (should-not (invisible-p (point)))))))
+
+(ert-deftest fanyi-longman-missing-verb-table-opens-complete-url-in-eww ()
+  (let* ((request (fanyi-make-request fanyi-longman-provider "explode"))
+         (result (fanyi-parse-response request (fanyi-test--read-fixture "longman-explode-saved.html")))
+         opened)
+    (fanyi-test--with-result-buffer
+      (fanyi-render-result request result)
+      (cl-letf (((symbol-function 'eww) (lambda (url &rest _) (setq opened url)))
+                ((symbol-function 'fanyi-dwim) (lambda (&rest _) (ert-fail "No duplicate query"))))
+        (button-activate (fanyi-test--longman-style-button "Verb table")))
+      (should (equal opened "https://www.ldoceonline.com/dictionary/explode#explode__10")))))
+
 (ert-deftest fanyi-longman-pronunciations-are-independent ()
   (dolist (missing '("brefile" "amefile"))
     (dolist (empty '(nil "" "  "))
@@ -50,7 +102,7 @@
       ;; There is no Head or DEF: a working cross-reference is useful content.
       (fanyi-test--with-rendered-response fanyi-longman-provider dom
         (should (string-match-p "See example" (buffer-string)))
-        (should (equal (fanyi-test--button-data #'fanyi-dwim) '("example")))
+        (should (equal (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query)) '("example")))
         (should-not (fanyi-test--button-data #'fanyi-play-sound))))))
 
 (ert-deftest fanyi-longman-unknown-crossref-does-not-discard-definition ()
@@ -60,14 +112,14 @@
      'href "https://example.invalid/help")
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
       (should (string-match-p "used for testing" (buffer-string)))
-      (should (equal (fanyi-test--button-data #'fanyi-dwim) '("part"))))))
+      (should (equal (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query)) '("part"))))))
 
 (ert-deftest fanyi-longman-preserves-nested-crossref-only-entries ()
   (let ((dom (fanyi-test--longman-html
               "<div class='dictionary'><div class='dictentry'><span class='Sense'><span class='Crossref'>See <span class='REFHWD'><a href='/dictionary/example#example__1'>example</a></span></span></span></div></div>")))
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
       (should (string-match-p "See example" (buffer-string)))
-      (should (equal (fanyi-test--button-data #'fanyi-dwim) '("example"))))))
+      (should (equal (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query)) '("example"))))))
 
 (ert-deftest fanyi-longman-word-family-does-not-depend-on-whitespace ()
   (dolist (separator '("" "\n  "))
@@ -85,7 +137,7 @@
         (dolist (text '("Word family" "(noun)" "sampler" "(verb)"))
           (should (string-match-p (regexp-quote text) (buffer-string))))
         (should (string-match-p "used for testing" (buffer-string)))
-        (should (member "sampler" (fanyi-test--button-data #'fanyi-dwim)))))))
+        (should (member "sampler" (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query))))))))
 
 (ert-deftest fanyi-longman-unrecognized-word-family-is-optional ()
   (let ((dom (fanyi-test--read-fixture "longman.html")))

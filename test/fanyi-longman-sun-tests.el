@@ -71,9 +71,9 @@ Allow subsequent text on the line when PREFIX is non-nil."
             (should button)
             (button-activate button)))
         (should (equal (nreverse queries)
-                       '("the-sun-the-sun"
-                         "everything-anything-etc-under-the-sun"
-                         "catch-the-sun" "make-hay-while-the-sun-shines")))))))
+                       '("the sun/the Sun"
+                         "everything/anything etc under the sun"
+                         "catch the sun" "make hay while the sun shines")))))))
 
 (ert-deftest fanyi-longman-sun-collocations-have-readable-groups-and-examples ()
   (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-sun-saved.html"
@@ -214,7 +214,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
           (font-lock-ensure)
           (let ((indents (fanyi-test--sun-example-indents))
                 (audio (fanyi-test--button-data #'fanyi-play-sound))
-                (links (fanyi-test--button-data #'fanyi-dwim))
+                (links (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query)))
                 (lines (count-lines (point-min) (point-max)))
                 (shr-width 54))
             (fanyi-shr-reflow)
@@ -223,7 +223,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
             (should (> (count-lines (point-min) (point-max)) lines))
             (should (equal (fanyi-test--sun-example-indents) indents))
             (should (equal (fanyi-test--button-data #'fanyi-play-sound) audio))
-            (should (equal (fanyi-test--button-data #'fanyi-dwim) links))
+            (should (equal (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query)) links))
             (dolist (field '(("COLLOCATIONS" . fanyi-longman-box-heading-face)
                              ("VERBS" . fanyi-longman-group-heading-face)
                              ("S2" . fanyi-longman-frequency-face)
@@ -236,7 +236,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
             (should-not queries)
             (should-not played)
             (button-activate (fanyi-test--longman-style-button "catch the sun"))
-            (should (equal queries '("catch-the-sun")))
+            (should (equal queries '("catch the sun")))
             (goto-char (point-min))
             (search-forward "Too much sun is bad for you.")
             (beginning-of-line)
