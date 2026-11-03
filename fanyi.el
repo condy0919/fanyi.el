@@ -540,17 +540,19 @@ non-nil."
   (message "Copied %s" fanyi-current-word))
 
 ;;; Bookmark support.
-(declare-function bookmark-prop-get "bookmark" (bookmark prop))
 
 (defun fanyi-bookmark-make-record ()
   "Create a bookmark for the current query word."
   `(,fanyi-current-word
+    (fanyi-word . ,fanyi-current-word)
     (handler . fanyi-bookmark-jump)))
 
 ;;;###autoload
 (defun fanyi-bookmark-jump (bookmark)
   "Default BOOKMARK handler for fanyi."
-  (let ((word (car bookmark)))
+  (let ((word (or (alist-get 'fanyi-word (cdr bookmark))
+                  ;; Older records stored the word only as the bookmark name.
+                  (car bookmark))))
     (fanyi-dwim word)))
 
 (put 'fanyi-bookmark-jump 'bookmark-handler-type "Fanyi")

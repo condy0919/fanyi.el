@@ -17,6 +17,7 @@ test:
 	-l test/fanyi-shr-tests.el \
 	-l test/fanyi-font-lock-tests.el \
 	-l test/fanyi-navigation-tests.el \
+	-l test/fanyi-bookmark-tests.el \
 	-l test/fanyi-shr-reflow-tests.el \
 	-l test/fanyi-shr-section-tests.el \
 	-l test/fanyi-longman-style-tests.el \
