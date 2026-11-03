@@ -110,31 +110,31 @@
 It's NOT thread-safe, caller should hold `fanyi-buffer-mtx'
 before calling this method."
   (fanyi-with-fanyi-buffer
-   ;; The headline about Youdao thesaurus service.
-   (insert "# 有道同义词词典 \n\n")
-   (cl-loop for entry in (oref this entries)
-            for ent = (oref entry entry)
-            for explain = (oref entry explain)
-            do (insert "- " ent "\n")
-            ;; Prettify POS, order matters. See `fanyi-mode-font-lock-keywords'.
-            do (insert (propertize
-                        (s-replace-all '(("pron." . "(pron.)")
-                                         ("prep." . "(prep.)")
-                                         ("conj." . "(conj.)")
-                                         ("abbr." . "(abbr.)")
-                                         ("det."  . "(det.)")
-                                         ("adj."  . "(adj.)")
-                                         ("adv."  . "(adv.)")
-                                         ("art."  . "(art.)")
-                                         ("vt."   . "(vt.)")
-                                         ("vi."   . "(vi.)")
-                                         ("n."    . "(n.)")
-                                         ("v."    . "(v.)"))
-                                       explain)
-                        'line-prefix (s-repeat fanyi-youdao-thesaurus-indent " ")
-                        'wrap-prefix (s-repeat fanyi-youdao-thesaurus-indent " ")))
-            do (insert "\n"))
-   (insert "\n")))
+    ;; The headline about Youdao thesaurus service.
+    (insert "# 有道同义词词典 \n\n")
+    (cl-loop for entry in (oref this entries)
+             for ent = (oref entry entry)
+             for explain = (oref entry explain)
+             do (insert "- " ent "\n")
+             ;; Prettify POS, order matters. See `fanyi-mode-font-lock-keywords'.
+             do (insert (propertize
+                         (s-replace-all '(("pron." . "(pron.)")
+                                          ("prep." . "(prep.)")
+                                          ("conj." . "(conj.)")
+                                          ("abbr." . "(abbr.)")
+                                          ("det."  . "(det.)")
+                                          ("adj."  . "(adj.)")
+                                          ("adv."  . "(adv.)")
+                                          ("art."  . "(art.)")
+                                          ("vt."   . "(vt.)")
+                                          ("vi."   . "(vi.)")
+                                          ("n."    . "(n.)")
+                                          ("v."    . "(v.)"))
+                                        explain)
+                         'line-prefix (s-repeat fanyi-youdao-thesaurus-indent " ")
+                         'wrap-prefix (s-repeat fanyi-youdao-thesaurus-indent " ")))
+             do (insert "\n"))
+    (insert "\n")))
 
 (defconst fanyi-youdao-thesaurus-provider
   (fanyi-youdao-thesaurus-service :word "dummy"
