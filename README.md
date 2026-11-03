@@ -124,14 +124,8 @@ styles. Fanyi's text-formatting rules do not reinterpret the HTML body as
 Markdown-style emphasis.
 
 Etymonline displays an `Open in browser` button immediately, without making an
-HTTP request or parsing its pages. Click it to read the current entry and
-complete any browser verification there.
-
-When another dictionary returns a Cloudflare browser challenge, fanyi shows a
-verification message and an `Open in browser` button instead of `Retry query`.
-The button opens that entry in an external browser so you can complete any
-verification and read it there. Other dictionaries continue normally. This
-does not transfer browser cookies or import the browser's results into Emacs.
+HTTP request or parsing its pages. Click it to read the current entry in your
+browser.
 
 For windows users,
 

@@ -19,7 +19,6 @@ test:
 	-l test/fanyi-shr-reflow-tests.el \
 	-l test/fanyi-longman-style-tests.el \
 	-l test/fanyi-longman-sun-tests.el \
-	-l test/fanyi-challenge-tests.el \
 	-f ert-run-tests-batch-and-exit
 
 .PHONY: compile test

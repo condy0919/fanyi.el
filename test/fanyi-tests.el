@@ -243,6 +243,42 @@ including one delivered by a redirected request."
       (with-current-buffer fanyi-buffer-name
         (should (equal (buffer-string) "word: first\n"))))))
 
+(ert-deftest fanyi-query-http-error-skips-parsing-and-settles-once ()
+  (fanyi-test--with-query
+    (fanyi-dwim "word")
+    (let* ((request (car fanyi-test--requests))
+           (task (car fanyi--tasks))
+           (timer (fanyi--task-timer task))
+           parsed rendered)
+      (cl-letf (((symbol-function 'json-parse-buffer)
+                 (lambda (&rest _) (setq parsed t)))
+                ((symbol-function 'fanyi-parse-from)
+                 (lambda (&rest _) (setq parsed t)))
+                ((symbol-function 'fanyi-render)
+                 (lambda (&rest _) (setq rendered t))))
+        ;; Error pages need not have the provider's response format.  Report
+        ;; the HTTP failure before trying to interpret this HTML as JSON.
+        (should-not (buffer-live-p
+                     (fanyi-test--deliver request '(:error (error http 403))
+                                          "<html><title>Forbidden</title></html>"))))
+      (should-not parsed)
+      (should-not rendered)
+      (should (fanyi--task-done task))
+      (should-not (fanyi--task-timer task))
+      (should-not (memq timer timer-list))
+      (with-current-buffer fanyi-buffer-name
+        (should (string-match-p "Request failed.*403" (buffer-string)))
+        (should (string-match-p "Retry query" (buffer-string))))
+      (let ((before (with-current-buffer fanyi-buffer-name (buffer-string))))
+        ;; Both late success and another failure must leave the first failure
+        ;; intact while still disposing of the recreated response buffer.
+        (dolist (status '(nil (:error (error http 403))))
+          (should-not (buffer-live-p (fanyi-test--respond request status "late"))))
+        (with-current-buffer fanyi-buffer-name
+          (should (equal (buffer-string) before))))
+      (should (= fanyi--tasks-failed 1))
+      (should (= fanyi--tasks-completed 0)))))
+
 (ert-deftest fanyi-query-timeout-settles-once-and-cancels-request ()
   (fanyi-test--with-query
     (fanyi-dwim "word")
@@ -261,8 +297,13 @@ including one delivered by a redirected request."
       (should-not (process-live-p process))
       (with-current-buffer fanyi-buffer-name
         (should (string-match-p "[Tt]im.*out" (buffer-string))))
-      (fanyi--timeout task)
-      (should-not (buffer-live-p (fanyi-test--respond request nil "late")))
+      (let ((before (with-current-buffer fanyi-buffer-name (buffer-string))))
+        (fanyi--timeout task)
+        (should-not (buffer-live-p (fanyi-test--respond request nil "late")))
+        (should-not (buffer-live-p
+                     (fanyi-test--respond request '(:error (error http 500)))))
+        (with-current-buffer fanyi-buffer-name
+          (should (equal (buffer-string) before))))
       (should (= fanyi--tasks-failed 1))
       (should (= fanyi--tasks-completed 0))
       (with-current-buffer fanyi-buffer-name
