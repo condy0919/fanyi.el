@@ -98,8 +98,11 @@ the limit (or disable it with `nil`):
 ```
 
 Failed requests show their error in the results buffer without interrupting
-other dictionaries. The `Retry query` button repeats the query using all
-enabled dictionaries.
+other dictionaries. The `Retry dictionary` button retries only that dictionary,
+using its original request settings. It replaces the failed section in place;
+successful results, reading position, selections and folds remain intact.
+Repeated clicks during a retry do not start duplicate requests. Renamed result
+buffers can retry independently while a newer query is running.
 Each result buffer retains its own query word and task counts, including when
 you rename it to keep an earlier lookup. Starting a new query cancels pending
 requests from the previous lookup without changing its saved word or results.

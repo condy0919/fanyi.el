@@ -33,7 +33,7 @@
     (with-current-buffer fanyi-buffer-name
       (should (string-match-p "# Etymonline" (buffer-string)))
       (should (fanyi-test--etymon-button))
-      (should-not (string-match-p "Retry query" (buffer-string))))))
+      (should-not (string-match-p "Retry dictionary" (buffer-string))))))
 
 (ert-deftest fanyi-etymon-button-opens-current-entry-only-when-activated ()
   (fanyi-test--with-query

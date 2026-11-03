@@ -140,6 +140,9 @@ Nil disables the timeout."
 ;; Silence compile warnings.
 (defvar url-http-end-of-headers)
 
+(defvar-local fanyi--buffer-query-id 0
+  "Query generation owned by this result buffer.")
+
 (defvar-local fanyi--tasks nil
   "Tasks belonging to this result buffer's query.")
 (defvar-local fanyi--tasks-failed 0)
@@ -155,15 +158,16 @@ Nil disables the timeout."
   "Original query text displayed in this result buffer.")
 
 (cl-defstruct (fanyi--task (:constructor fanyi--make-task))
-  query-id request result result-buffer buffer timer done)
+  query-id request result result-buffer buffer timer done failure start end)
 
 (defun fanyi--task-active-p (task)
   "Return non-nil if TASK still belongs to the current pending query."
-  (and (= (fanyi--task-query-id task) fanyi--query-id)
-       (not (fanyi--task-done task))
+  (and (not (fanyi--task-done task))
        (buffer-live-p (fanyi--task-result-buffer task))
        (with-current-buffer (fanyi--task-result-buffer task)
-         (derived-mode-p 'fanyi-mode))))
+         (and (derived-mode-p 'fanyi-mode)
+              (= (fanyi--task-query-id task) fanyi--buffer-query-id)
+              (memq task fanyi--tasks)))))
 
 (defun fanyi--stop-task-timer (task)
   "Cancel TASK's timeout timer."
@@ -188,41 +192,105 @@ Nil disables the timeout."
 
 (defun fanyi--cancel-buffer-tasks ()
   "Cancel tasks owned by the result buffer being killed or changing mode."
-  ;; Invalidate every callback before cancelling any network process.
-  (dolist (task fanyi--tasks)
-    (setf (fanyi--task-done task) t))
-  (mapc #'fanyi--cancel-task fanyi--tasks))
+  (let ((retries (cl-remove-if-not
+                  (lambda (task) (and (not (fanyi--task-done task))
+                                      (fanyi--task-failure task)))
+                  fanyi--tasks)))
+    ;; Invalidate every callback before cancelling any network process.
+    (dolist (task fanyi--tasks)
+      (setf (fanyi--task-done task) t))
+    (mapc #'fanyi--cancel-task fanyi--tasks)
+    (dolist (task retries)
+      (fanyi--restore-retry-failure task))))
+
+(defun fanyi--restore-retry-failure (task)
+  "Restore the unresolved failure when TASK's retry is cancelled."
+  (with-current-buffer (fanyi--task-result-buffer task)
+    (cl-incf fanyi--tasks-failed)
+    (fanyi--write-task-error task "Retry cancelled")))
 
 (defun fanyi--quit-task (task condition)
   "Cancel TASK's resources and propagate the original quit CONDITION."
   (unwind-protect
-      (let ((inhibit-quit t))
+      (let ((inhibit-quit t)
+            (pending (fanyi--task-active-p task)))
         (fanyi--cancel-task task)
+        ;; An interrupted retry leaves its original failure unresolved.
+        (when (and pending (fanyi--task-failure task))
+          (fanyi--restore-retry-failure task))
         (force-mode-line-update t))
     (signal (car condition) (cdr condition))))
 
+(defun fanyi--write-task (task writer)
+  "Call WRITER to replace only TASK's output, preserving other dictionaries."
+  (with-current-buffer (fanyi--task-result-buffer task)
+    (save-excursion
+      (save-restriction
+        (widen)
+        (let* ((start (if (fanyi--task-start task)
+                          (marker-position (fanyi--task-start task)) (point-max)))
+               (end (if (fanyi--task-end task)
+                        (marker-position (fanyi--task-end task)) start))
+               (inhibit-read-only t)
+               (deactivate-mark deactivate-mark)
+               (mark-active mark-active)
+               (fanyi-buffer-name (buffer-name)))
+          (narrow-to-region start end)
+          (condition-case err
+              (atomic-change-group
+                (delete-region (point-min) (point-max))
+                (goto-char (point-min))
+                (funcall writer))
+            ((error quit)
+             ;; Undo restores text, but insertion-type markers need their
+             ;; original boundaries before the failure can replace this area.
+             (when (fanyi--task-start task)
+               (set-marker (fanyi--task-start task) start)
+               (set-marker (fanyi--task-end task) end))
+             (signal (car err) (cdr err))))
+          (let ((inhibit-quit t))
+            (unless (fanyi--task-start task)
+              (setf (fanyi--task-start task) (make-marker)
+                    (fanyi--task-end task) (make-marker))
+              (set-marker-insertion-type (fanyi--task-start task) t))
+            (set-marker (fanyi--task-start task) start)
+            (set-marker (fanyi--task-end task) (point-max))))))))
+
+(defun fanyi--write-task-error (task description)
+  "Replace TASK's output with DESCRIPTION and its current retry action."
+  (fanyi--write-task
+   task
+   (lambda ()
+     (let ((name (url-host (url-generic-parse-url
+                            (fanyi-request-url (fanyi--task-request task))))))
+       (insert "# " (or name "Dictionary") "\n\n" description "\n\n")
+       (insert-button (if (fanyi--task-done task) "Retry dictionary" "Retrying dictionary…")
+                      'action #'fanyi--retry-task 'button-data task 'follow-link t)
+       (insert "\n\n")))))
+
 (defun fanyi--report-task-error (task description)
   "Display TASK's failure DESCRIPTION and a retry action."
-  (let* ((request (fanyi--task-request task))
-         (name (url-host (url-generic-parse-url (fanyi-request-url request))))
-         (word (buffer-local-value 'fanyi-current-word (fanyi--task-result-buffer task))))
+  (let ((name (url-host (url-generic-parse-url
+                         (fanyi-request-url (fanyi--task-request task))))))
     (fanyi-log "%s: %s" name description)
-    (when fanyi-verbose
-      (message "%s: %s" name description))
+    (when fanyi-verbose (message "%s: %s" name description)))
+  (fanyi--write-task-error task description))
+
+(defun fanyi--retry-task (task)
+  "Retry a failed TASK in its original buffer using its request snapshot."
+  (when (buffer-live-p (fanyi--task-result-buffer task))
     (with-current-buffer (fanyi--task-result-buffer task)
-      (save-excursion
-        (goto-char (point-max))
-        (let ((inhibit-read-only t))
-          (insert "# " (or name "Dictionary") "\n\n" description "\n\n")
-          (insert-button "Retry query"
-                         'action (lambda (_) (fanyi-dwim word))
-                         'follow-link t)
-          (insert "\n\n"))))))
+      ;; Replaced buttons and callbacks must never start a duplicate attempt.
+      (when (and (derived-mode-p 'fanyi-mode) (memq task fanyi--tasks)
+                 (fanyi--task-done task) (fanyi--task-failure task)
+                 (= (fanyi--task-query-id task) fanyi--buffer-query-id))
+        (fanyi--spawn (fanyi--task-request task) (current-buffer) task)))))
 
 (defun fanyi--finish-task (task &optional failure)
   "Settle TASK once, reporting FAILURE if non-nil."
   (when (fanyi--task-active-p task)
-    (setf (fanyi--task-done task) t)
+    (setf (fanyi--task-done task) t
+          (fanyi--task-failure task) failure)
     (fanyi--stop-task-timer task)
     (with-current-buffer (fanyi--task-result-buffer task)
       (if failure
@@ -243,14 +311,8 @@ Nil disables the timeout."
   "Render TASK's result atomically and mark it complete."
   (when (fanyi--task-active-p task)
     (with-mutex fanyi-buffer-mtx
-      (with-current-buffer (fanyi--task-result-buffer task)
-        (let ((inhibit-read-only t)
-              ;; Provider renderers must use this task's original buffer,
-              ;; even when the user has renamed it during the request.
-              (fanyi-buffer-name (buffer-name)))
-          ;; Do not leave half a dictionary section on failure.
-          (atomic-change-group
-            (fanyi-render-result (fanyi--task-request task) (fanyi--task-result task))))))
+      (fanyi--write-task
+       task (lambda () (fanyi-render-result (fanyi--task-request task) (fanyi--task-result task)))))
     (fanyi--finish-task task)))
 
 (defun fanyi--handle-response (task url status)
@@ -286,34 +348,45 @@ Nil disables the timeout."
       (fanyi--cleanup-response response-buffer)
       (fanyi--cleanup-response (fanyi--task-buffer task)))))
 
-(defun fanyi--spawn (request result-buffer)
-  "Start REQUEST's lookup or render its browser link into RESULT-BUFFER."
-  (let ((task (fanyi--make-task :query-id fanyi--query-id
-                                :request request :result-buffer result-buffer)))
+(defun fanyi--spawn (request result-buffer &optional replacing)
+  "Start REQUEST in RESULT-BUFFER, optionally REPLACING a failed attempt."
+  (let ((task (fanyi--make-task
+               :query-id (buffer-local-value 'fanyi--buffer-query-id result-buffer)
+               :request request :result-buffer result-buffer)))
     ;; Register before starting the request: a callback may run immediately.
     (with-current-buffer result-buffer
-      (push task fanyi--tasks))
+      (if (not replacing)
+          (push task fanyi--tasks)
+        (setf (fanyi--task-start task) (copy-marker (fanyi--task-start replacing) t)
+              (fanyi--task-end task) (copy-marker (fanyi--task-end replacing))
+              (fanyi--task-failure task) (fanyi--task-failure replacing))
+        (setq fanyi--tasks (cl-substitute task replacing fanyi--tasks :test #'eq))
+        (cl-decf fanyi--tasks-failed)
+        (set-marker (fanyi--task-start replacing) nil)
+        (set-marker (fanyi--task-end replacing) nil)))
     (condition-case err
-        (if (eq (fanyi-request-api-type request) 'browser)
-            (fanyi--render-task task)
-          (let ((url (fanyi-request-url request))
-                (url-request-method (fanyi-request-method request))
-                (url-request-extra-headers (fanyi-request-headers request))
-                (url-request-data (fanyi-request-body request)))
-            (setf (fanyi--task-buffer task)
-                  (url-retrieve url
-                                (lambda (status)
-                                  (fanyi--handle-response task url status))
-                                nil t t))
-            (cond
-             ((fanyi--task-done task)
-              ;; The callback may have completed before url-retrieve returned.
-              (fanyi--cleanup-response (fanyi--task-buffer task)))
-             ((not (buffer-live-p (fanyi--task-buffer task)))
-              (error "Could not start request"))
-             (fanyi-request-timeout
-              (setf (fanyi--task-timer task)
-                    (run-at-time fanyi-request-timeout nil #'fanyi--timeout task))))))
+        (progn
+          (when replacing (fanyi--write-task-error task (fanyi--task-failure task)))
+          (if (eq (fanyi-request-api-type request) 'browser)
+              (fanyi--render-task task)
+            (let ((url (fanyi-request-url request))
+                  (url-request-method (fanyi-request-method request))
+                  (url-request-extra-headers (fanyi-request-headers request))
+                  (url-request-data (fanyi-request-body request)))
+              (setf (fanyi--task-buffer task)
+                    (url-retrieve url
+                                  (lambda (status)
+                                    (fanyi--handle-response task url status))
+                                  nil t t))
+              (cond
+               ((fanyi--task-done task)
+                ;; The callback may have completed before url-retrieve returned.
+                (fanyi--cleanup-response (fanyi--task-buffer task)))
+               ((not (buffer-live-p (fanyi--task-buffer task)))
+                (error "Could not start request"))
+               (fanyi-request-timeout
+                (setf (fanyi--task-timer task)
+                      (run-at-time fanyi-request-timeout nil #'fanyi--timeout task)))))))
       (error
        (unwind-protect
            (fanyi--finish-task task (error-message-string err))
@@ -517,7 +590,8 @@ Record every accepted query in `fanyi-history', with the most recent first."
           ;; Clear the previous search result.
           (erase-buffer)
           (fanyi-mode)
-          (setq fanyi-current-word word)))
+          (setq fanyi-current-word word
+                fanyi--buffer-query-id fanyi--query-id)))
 
       (dolist (request requests)
         (fanyi--spawn request buf))

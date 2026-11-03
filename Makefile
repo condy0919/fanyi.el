@@ -9,6 +9,7 @@ compile:
 test:
 	$(CASK) exec $(EMACS) -Q -batch \
 	-L . -L test -l test/fanyi-tests.el -l test/fanyi-base-tests.el \
+	-l test/fanyi-retry-tests.el \
 	-l test/fanyi-config-tests.el \
 	-l test/fanyi-provider-tests.el \
 	-l test/fanyi-haici-tests.el -l test/fanyi-longman-tests.el \

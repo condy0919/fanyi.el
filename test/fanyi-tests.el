@@ -408,7 +408,7 @@
         (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 1))
         (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 0))
         (with-current-buffer fanyi-buffer-name
-          (should (string-match-p "Retry query" (buffer-string)))
+          (should (string-match-p "Retry dictionary" (buffer-string)))
           (should-not (string-match-p "PARTIAL RESULT" (buffer-string))))
         ;; A broken provider must not prevent another provider from finishing.
         (fanyi-test--respond (cadr fanyi-test--requests) nil "healthy")
@@ -455,7 +455,7 @@
       (should-not (memq timer timer-list))
       (with-current-buffer fanyi-buffer-name
         (should (string-match-p "Request failed.*403" (buffer-string)))
-        (should (string-match-p "Retry query" (buffer-string))))
+        (should (string-match-p "Retry dictionary" (buffer-string))))
       (let ((before (with-current-buffer fanyi-buffer-name (buffer-string))))
         ;; Both late success and another failure must leave the first failure
         ;; intact while still disposing of the recreated response buffer.
@@ -592,13 +592,13 @@
         (should-not (buffer-live-p (fanyi--task-buffer task)))
         (should-not (cl-some #'buffer-live-p fanyi-test--buffers))))))
 
-(ert-deftest fanyi-query-retry-button-repeats-current-query ()
+(ert-deftest fanyi-query-retry-button-reuses-original-request ()
   (fanyi-test--with-query
     (fanyi-dwim "Word")
     (fanyi-test--respond (car fanyi-test--requests) '(:error (error http 500)))
     (with-current-buffer fanyi-buffer-name
       (goto-char (point-min))
-      (search-forward "Retry query")
+      (search-forward "Retry dictionary")
       (let ((button (button-at (match-beginning 0))))
         (should button)
         (button-activate button)))
