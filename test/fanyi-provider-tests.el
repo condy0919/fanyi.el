@@ -6,7 +6,6 @@
 (require 'fanyi)
 (require 'fanyi-haici)
 (require 'fanyi-longman)
-(require 'fanyi-etymon)
 (require 'fanyi-youdao-thesaurus)
 
 (defconst fanyi-test--fixture-directory
@@ -87,13 +86,6 @@ Temporarily rename an existing result buffer so its text and mode survive."
                      "https://example.invalid/sample-us.mp3"
                      "https://example.invalid/sample-example.mp3")))
     (should (equal (fanyi-test--button-data #'fanyi-dwim) '("part" "example")))))
-
-(ert-deftest fanyi-provider-etymon-fixture ()
-  (fanyi-test--with-rendered-fixture fanyi-etymon-provider "etymon.html"
-    (should (= (length (oref instance definitions)) 1))
-    (dolist (text '("# Etymonline" "## sample (n.)" "From /exemplum/" "> A small representative part."))
-      (should (string-match-p (regexp-quote text) (buffer-string))))
-    (should (equal (fanyi-test--button-data #'fanyi-dwim) '("example")))))
 
 (ert-deftest fanyi-provider-youdao-fixture ()
   (fanyi-test--with-rendered-fixture fanyi-youdao-thesaurus-provider "youdao.json"

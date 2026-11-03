@@ -9,7 +9,7 @@
 
 - [`海词`](https://dict.cn/)
 - [`有道同义词`](https://dict.youdao.com/suggest?q=accumulate&doctype=json), **Unofficial** API
-- [`etymonline`](https://www.etymonline.com/)
+- [`etymonline`](https://www.etymonline.com/) (opens entries in an external browser)
 - [`Longman`](https://www.ldoceonline.com/).
 
 `fanyi.el` has integrations with:
@@ -100,7 +100,11 @@ Missing pronunciation or audio does not hide available definitions. Responses
 without usable dictionary content are reported as parsing failures; an explicit
 empty result from Youdao is reported as no results found.
 
-When a dictionary returns a Cloudflare browser challenge, fanyi shows a
+Etymonline displays an `Open in browser` button immediately, without making an
+HTTP request or parsing its pages. Click it to read the current entry and
+complete any browser verification there.
+
+When another dictionary returns a Cloudflare browser challenge, fanyi shows a
 verification message and an `Open in browser` button instead of `Retry query`.
 The button opens that entry in an external browser so you can complete any
 verification and read it there. Other dictionaries continue normally. This
@@ -139,7 +143,6 @@ if your sound player can be launched with `your-sound-player url`. Otherwise it 
 ![status indicator](https://user-images.githubusercontent.com/4024656/136776219-0ffd6d27-ce36-48ca-979c-87f163cd79fc.png)
 ![海词](https://user-images.githubusercontent.com/4024656/128582690-2af2bb4a-46aa-4241-bdc0-6a5bb5e2db38.png)
 ![分布](https://user-images.githubusercontent.com/4024656/128582703-3e62cd17-a778-4982-9872-98e8697e333e.png)
-![Etymon](https://user-images.githubusercontent.com/4024656/128583142-dfd26d67-45c5-482a-9268-d7482dbe65f3.png)
 ![Longman](https://user-images.githubusercontent.com/4024656/131615163-7b52a0eb-77a4-481f-b093-8f9c7fa91216.png)
 ![有道同义词英文](https://user-images.githubusercontent.com/4024656/132447780-1bbd9a6e-805e-4a4c-9e0a-03f499864c6f.png)
 ![有道同义词中文](https://user-images.githubusercontent.com/4024656/132447809-af3785bd-fe6d-4e52-a107-71c89fb8a26b.png)

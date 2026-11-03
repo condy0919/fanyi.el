@@ -239,6 +239,17 @@ BROWSER-URL offers an external browser action for blocked requests."
         (fanyi--finish-task task "Request timed out")
       (fanyi--cancel-task task))))
 
+(defun fanyi--render-task (task)
+  "Render TASK's result atomically and mark it complete."
+  (when (fanyi--task-active-p task)
+    (with-mutex fanyi-buffer-mtx
+      (with-current-buffer (get-buffer-create fanyi-buffer-name)
+        (let ((inhibit-read-only t))
+          ;; Do not leave half a dictionary section on failure.
+          (atomic-change-group
+            (fanyi-render (fanyi--task-instance task))))))
+    (fanyi--finish-task task)))
+
 (defun fanyi--handle-response (task url status)
   "Parse and render TASK's response from URL with retrieval STATUS."
   (let ((response-buffer (current-buffer))
@@ -270,14 +281,7 @@ BROWSER-URL offers an external browser action for blocked requests."
                             (fanyi-parse-from instance result)
                             t)
                     (error "No results found")))
-                (when (fanyi--task-active-p task)
-                  (with-mutex fanyi-buffer-mtx
-                    (with-current-buffer (get-buffer-create fanyi-buffer-name)
-                      (let ((inhibit-read-only t))
-                        ;; Do not leave half a dictionary section on failure.
-                        (atomic-change-group
-                          (fanyi-render instance)))))
-                  (fanyi--finish-task task)))
+                (fanyi--render-task task))
             (fanyi--cloudflare-challenge
              (fanyi--finish-task
               task "Cloudflare requires browser verification. Read this entry in your browser."
@@ -287,30 +291,32 @@ BROWSER-URL offers an external browser action for blocked requests."
       (fanyi--cleanup-response (fanyi--task-buffer task)))))
 
 (defun fanyi--spawn (instance)
-  "Look up words asynchronously via INSTANCE for the current query."
+  "Start INSTANCE's lookup or render its browser link for the current query."
   (let ((task (fanyi--make-task :query-id fanyi--query-id
-                               :instance instance)))
+                                :instance instance)))
     ;; Register before starting the request: a callback may run immediately.
     (push task fanyi--tasks)
     (condition-case err
-        (let ((url (format (oref instance url) (oref instance word)))
-              (url-request-method (oref instance method))
-              (url-request-extra-headers (oref instance headers))
-              (url-request-data (oref instance body)))
-          (setf (fanyi--task-buffer task)
-                (url-retrieve url
-                              (lambda (status)
-                                (fanyi--handle-response task url status))
-                              nil t t))
-          (cond
-           ((fanyi--task-done task)
-            ;; The callback may have completed before url-retrieve returned.
-            (fanyi--cleanup-response (fanyi--task-buffer task)))
-           ((not (buffer-live-p (fanyi--task-buffer task)))
-            (error "Could not start request"))
-           (fanyi-request-timeout
-            (setf (fanyi--task-timer task)
-                  (run-at-time fanyi-request-timeout nil #'fanyi--timeout task)))))
+        (if (eq (oref instance api-type) 'browser)
+            (fanyi--render-task task)
+          (let ((url (format (oref instance url) (oref instance word)))
+                (url-request-method (oref instance method))
+                (url-request-extra-headers (oref instance headers))
+                (url-request-data (oref instance body)))
+            (setf (fanyi--task-buffer task)
+                  (url-retrieve url
+                                (lambda (status)
+                                  (fanyi--handle-response task url status))
+                                nil t t))
+            (cond
+             ((fanyi--task-done task)
+              ;; The callback may have completed before url-retrieve returned.
+              (fanyi--cleanup-response (fanyi--task-buffer task)))
+             ((not (buffer-live-p (fanyi--task-buffer task)))
+              (error "Could not start request"))
+             (fanyi-request-timeout
+              (setf (fanyi--task-timer task)
+                    (run-at-time fanyi-request-timeout nil #'fanyi--timeout task))))))
       (error
        (unwind-protect
            (fanyi--finish-task task (error-message-string err))
@@ -422,13 +428,14 @@ BROWSER-URL offers an external browser action for blocked requests."
                                   (format "Search Word (default \"%s\"): " default)
                                 "Search Word: ")))
                  (list (read-string prompt nil 'fanyi-history default))))
-  ;; libxml2 is required.
-  (unless (fboundp 'libxml-parse-html-region)
-    (error "This function requires Emacs to be compiled with libxml2"))
-  ;; libjson is required.
-  (unless (fboundp 'json-parse-buffer)
-    (error "This function requires Emacs to be compiled with libjson"))
   (let ((instances (mapcar #'fanyi--make-provider fanyi-providers)))
+    ;; Browser entries do not need either response parser.
+    (when (and (seq-some (lambda (i) (eq (oref i api-type) 'xml)) instances)
+               (not (fboundp 'libxml-parse-html-region)))
+      (error "This function requires Emacs to be compiled with libxml2"))
+    (when (and (seq-some (lambda (i) (eq (oref i api-type) 'json)) instances)
+               (not (fboundp 'json-parse-buffer)))
+      (error "This function requires Emacs to be compiled with libjson"))
     ;; Save current query word.
     (setq fanyi-current-word word)
     ;; Invalidate callbacks before cancelling requests, which can itself invoke

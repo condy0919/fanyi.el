@@ -202,7 +202,7 @@ See `fanyi-sound-player'."
    (api-type :initarg :api-type
              :type symbol
              :protection :protected
-             :documentation "API type. Currently it could be either 'xml or 'json."))
+             :documentation "Response type: xml, json, or browser for a link without a request."))
   "The base class of dictionary service."
   :abstract t)
 
@@ -227,7 +227,7 @@ QUERY could be a sentence for some services."
 (defmacro fanyi-with-fanyi-buffer (&rest body)
   "Evaluate BODY with `*fanyi*' buffer temporarily current."
   (declare (indent 0))
-  `(with-current-buffer (get-buffer-create ,fanyi-buffer-name)
+  `(with-current-buffer (get-buffer-create fanyi-buffer-name)
      (save-excursion
        ;; Go to the end of buffer.
        (goto-char (point-max))

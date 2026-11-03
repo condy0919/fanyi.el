@@ -3,62 +3,6 @@
 (require 'fanyi-tests)
 (require 'fanyi-provider-tests)
 
-(ert-deftest fanyi-etymon-rejects-missing-or-empty-definitions ()
-  (should-error
-   (fanyi-parse-from (clone fanyi-etymon-provider)
-                     (fanyi-test--read-fixture "error-page.html"))
-   :type 'fanyi-parse-error)
-  (dolist (missing '(title body text))
-    (let* ((dom (fanyi-test--read-fixture "etymon.html"))
-           (title (car (dom-by-class dom "word__name--TTbAA")))
-           (body (car (dom-by-class dom "word__defination--2q7ZH"))))
-      (pcase missing
-        ('title (dom-remove-node dom title))
-        ('body (dom-remove-node dom body))
-        ('text (setcdr (cdr body) '((p nil) (br nil) (span nil "  ")))))
-      (should-error (fanyi-parse-from (clone fanyi-etymon-provider) dom)
-                    :type 'fanyi-parse-error))))
-
-(ert-deftest fanyi-etymon-keeps-text-through-optional-markup ()
-  (let* ((dom (fanyi-test--read-fixture "etymon.html"))
-         (body (car (dom-by-class dom "word__defination--2q7ZH"))))
-    (dom-append-child body '(span nil))
-    (dom-append-child body '(br nil))
-    (dom-append-child body '(p nil "An " (em nil "older " (strong nil "word")) "."))
-    (fanyi-test--with-rendered-response fanyi-etymon-provider dom
-      (should (string-match-p "An older word\\." (buffer-string)))
-      (should (string-match-p "From /exemplum/" (buffer-string)))
-      (should (equal (fanyi-test--button-data #'fanyi-dwim) '("example"))))))
-
-(ert-deftest fanyi-etymon-rejects-empty-formatting ()
-  (dolist (fragment '((blockquote nil "  ")
-                      (blockquote nil (p nil))
-                      (span ((class . "foreign notranslate")) "  ")
-                      (span ((class . "foreign notranslate")) (strong nil "\u00a0"))
-                      (script nil "This is not a definition")))
-    (let* ((dom (fanyi-test--read-fixture "etymon.html"))
-           (body (car (dom-by-class dom "word__defination--2q7ZH"))))
-      (setcdr (cdr body) (list fragment))
-      (should-error (fanyi-parse-from (clone fanyi-etymon-provider) dom)
-                    :type 'fanyi-parse-error))))
-
-(ert-deftest fanyi-etymon-keeps-paragraph-and-inline-separators ()
-  (let* ((dom (fanyi-test--read-fixture "etymon.html"))
-         (body (car (dom-by-class dom "word__defination--2q7ZH"))))
-    (setcdr (cdr body) '("first" (p nil) "second" (span nil " ") "word"))
-    (fanyi-test--with-rendered-response fanyi-etymon-provider dom
-      (should (string-match-p "first\n\nsecond word" (buffer-string))))))
-
-(ert-deftest fanyi-etymon-preserves-valid-entry-next-to-empty-entry ()
-  (let ((dom (fanyi-test--read-fixture "etymon.html")))
-    (dom-append-child (car (dom-by-tag dom 'body))
-                      '(section ((class . "word--C9UPa"))
-                                (h1 ((class . "word__name--TTbAA")) "broken")
-                                (div ((class . "word__defination--2q7ZH")) (p nil))))
-    (fanyi-test--with-rendered-response fanyi-etymon-provider dom
-      (should (= (length (oref instance definitions)) 1))
-      (should-not (string-match-p "broken" (buffer-string))))))
-
 (ert-deftest fanyi-youdao-distinguishes-empty-results-from-invalid-data ()
   (should-not
    (catch 'not-found
@@ -86,7 +30,7 @@
 
 (ert-deftest fanyi-invalid-html-is-failed-not-completed ()
   (fanyi-test--with-query
-    (dolist (provider '(fanyi-haici-provider fanyi-etymon-provider fanyi-longman-provider))
+    (dolist (provider '(fanyi-haici-provider fanyi-longman-provider))
       (setq fanyi-providers (list provider))
       (fanyi-dwim "sample")
       (let ((body (with-temp-buffer
