@@ -26,7 +26,7 @@
       (puthash "explain" explain entry)
       (fanyi-test--with-rendered-response fanyi-youdao-thesaurus-provider data
         (should (string-match-p "- sample" (buffer-string)))
-        (should (equal (oref (car (oref instance entries)) explain) "NO EXPLANATION"))))))
+        (should (equal (cdar (oref instance entries)) "NO EXPLANATION"))))))
 
 (ert-deftest fanyi-invalid-html-is-failed-not-completed ()
   (fanyi-test--with-query

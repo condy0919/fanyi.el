@@ -49,18 +49,8 @@
             :documentation "Thesaurus entries of the word."))
   "The Youdao thesaurus service.")
 
-(defclass fanyi-youdao-thesaurus-entry ()
-  ((entry :initarg :entry
-          :type string
-          :documentation "Thesaurus.")
-   (explain :initarg :explain
-            :type string
-            :documentation "The explanation of an entry."))
-  "An entry of the word.")
-
 ;; Silence unknown slots warning.
 (eieio-declare-slots :entries)
-(eieio-declare-slots :entry :explain)
 
 (cl-defmethod fanyi-set-query-word ((this fanyi-youdao-thesaurus-service) query)
   "Set QUERY on THIS using the current result limit."
@@ -98,12 +88,11 @@
                                     (not (string-empty-p (string-trim (gethash "entry" entry)))))
                          (signal 'fanyi-parse-error '("Youdao: invalid entry text")))
                        (let ((explain (gethash "explain" entry)))
-                         (fanyi-youdao-thesaurus-entry
-                          :entry (gethash "entry" entry)
-                          :explain (if (and (stringp explain)
-                                            (not (string-empty-p (string-trim explain))))
-                                       explain
-                                     "NO EXPLANATION")))))))))
+                         (cons (gethash "entry" entry)
+                               (if (and (stringp explain)
+                                        (not (string-empty-p (string-trim explain))))
+                                   explain
+                                 "NO EXPLANATION")))))))))
 
 (cl-defmethod fanyi-render ((this fanyi-youdao-thesaurus-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
@@ -112,9 +101,7 @@ before calling this method."
   (fanyi-with-fanyi-buffer
     ;; The headline about Youdao thesaurus service.
     (insert "# 有道同义词词典 \n\n")
-    (cl-loop for entry in (oref this entries)
-             for ent = (oref entry entry)
-             for explain = (oref entry explain)
+    (cl-loop for (ent . explain) in (oref this entries)
              do (insert "- " ent "\n")
              ;; Prettify POS, order matters. See `fanyi-mode-font-lock-keywords'.
              do (insert (propertize
