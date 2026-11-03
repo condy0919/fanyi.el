@@ -366,58 +366,75 @@ Use the buffer's default font and character-based layout, with SHR's colors."
      regions)
     :test #'eq)))
 
+(defun fanyi-shr--reflow-regions (updates window)
+  "Apply region/layout UPDATES for WINDOW in the widened current buffer."
+  (let ((position (fanyi-shr--anchor (point)))
+        (mark (and (mark t) (fanyi-shr--anchor (mark t))))
+        ;; Replacing text must not deactivate an existing selection,
+        ;; or reactivate one that the current command has dismissed.
+        (mark-active mark-active)
+        (deactivate-mark deactivate-mark)
+        (folds (fanyi-shr--outline-folds (mapcar #'car updates)))
+        (windows (mapcar
+                  (lambda (win)
+                    (list win (fanyi-shr--anchor (window-point win))
+                          (fanyi-shr--anchor (window-start win))))
+                  (get-buffer-window-list (current-buffer) nil t)))
+        (modified (buffer-modified-p))
+        (inhibit-read-only t)
+        (buffer-undo-list t)
+        (fanyi-shr--updating t))
+    (unwind-protect
+        (progn
+          ;; Measure all text while rendering, including folded bodies.
+          (dolist (fold folds) (delete-overlay (car fold)))
+          (dolist (update updates)
+            (fanyi-shr--replace (car update) window (cdr update)))
+          (setq fanyi-shr--window window))
+      (dolist (fold folds)
+        (move-overlay (car fold) (fanyi-shr--position (cadr fold))
+                      (fanyi-shr--position (caddr fold)) (current-buffer)))
+      (dolist (state windows)
+        (let ((win (car state))
+              (point (fanyi-shr--position (cadr state)))
+              (start (fanyi-shr--position (caddr state))))
+          (when (window-live-p win)
+            (set-window-point win point)
+            (set-window-start win start t))))
+      (goto-char (fanyi-shr--position position))
+      (set-marker (mark-marker) (and mark (fanyi-shr--position mark)))
+      (set-buffer-modified-p modified))))
+
 (defun fanyi-shr-reflow (&optional force)
   "Reflow saved HTML for its displayed window without fetching content.
 With FORCE, re-render even if the layout and provider styles have not changed.
+Preserve any narrowing by anchoring its boundaries in the rendered text.
 When several windows display the buffer, prefer its selected window, then its
 previous one."
   (interactive "P")
   (let ((window (fanyi-shr--window)))
     (when (and window fanyi-shr--regions (not fanyi-shr--updating))
-      (let* ((updates
-              (cl-loop for region in fanyi-shr--regions
-                       for layout = (fanyi-shr--layout
-                                     window (fanyi-shr--region-style-function region))
-                       unless (and (not force) (equal layout (fanyi-shr--region-layout region)))
-                       collect (cons region layout)))
-             (regions (mapcar #'car updates)))
-        (when regions
-          (let ((position (fanyi-shr--anchor (point)))
-                (mark (and (mark t) (fanyi-shr--anchor (mark t))))
-                ;; Replacing text must not deactivate an existing selection,
-                ;; or reactivate one that the current command has dismissed.
-                (mark-active mark-active)
-                (deactivate-mark deactivate-mark)
-                (folds (fanyi-shr--outline-folds regions))
-                (windows (mapcar
-                          (lambda (win)
-                            (list win (fanyi-shr--anchor (window-point win))
-                                  (fanyi-shr--anchor (window-start win))))
-                          (get-buffer-window-list (current-buffer) nil t)))
-                (modified (buffer-modified-p))
-                (inhibit-read-only t)
-                (buffer-undo-list t)
-                (fanyi-shr--updating t))
+      (let ((updates
+             (cl-loop for region in fanyi-shr--regions
+                      for layout = (fanyi-shr--layout
+                                    window (fanyi-shr--region-style-function region))
+                      unless (and (not force) (equal layout (fanyi-shr--region-layout region)))
+                      collect (cons region layout))))
+        (when updates
+          (let ((bounds
+                 (when (buffer-narrowed-p)
+                   (let ((start (point-min)) (end (point-max)))
+                     (save-restriction
+                       (widen)
+                       (cons (fanyi-shr--anchor start) (fanyi-shr--anchor end)))))))
             (unwind-protect
                 (progn
-                  ;; Measure all text while rendering, including folded bodies.
-                  (dolist (fold folds) (delete-overlay (car fold)))
-                  (dolist (update updates)
-                    (fanyi-shr--replace (car update) window (cdr update)))
-                  (setq fanyi-shr--window window))
-              (dolist (fold folds)
-                (move-overlay (car fold) (fanyi-shr--position (cadr fold))
-                              (fanyi-shr--position (caddr fold)) (current-buffer)))
-              (dolist (state windows)
-                (let ((win (car state))
-                      (point (fanyi-shr--position (cadr state)))
-                      (start (fanyi-shr--position (caddr state))))
-                  (when (window-live-p win)
-                    (set-window-point win point)
-                    (set-window-start win start t))))
-              (goto-char (fanyi-shr--position position))
-              (set-marker (mark-marker) (and mark (fanyi-shr--position mark)))
-              (set-buffer-modified-p modified))))))))
+                  (widen)
+                  (fanyi-shr--reflow-regions updates window))
+              (when bounds
+                (let ((inhibit-quit t))
+                  (narrow-to-region (fanyi-shr--position (car bounds))
+                                    (fanyi-shr--position (cdr bounds))))))))))))
 
 (defun fanyi-shr--window-change (window)
   "Reflow displayed HTML after a window size or buffer change."
