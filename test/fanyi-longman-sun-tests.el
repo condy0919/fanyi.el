@@ -270,7 +270,11 @@ Allow subsequent text on the line when PREFIX is non-nil."
                                         (plist-get (cdr display) :data)))
                 ;; The SVG owns its border; do not draw an Emacs face box
                 ;; around it a second time.  Retain the named face beneath.
-                (should (equal (car face) '(:box nil))))
+                (should (plist-member (car face) :box))
+                (should-not (plist-get (car face) :box))
+                (should (equal (plist-get (car face) :background)
+                               (face-attribute 'fanyi-longman-body-face
+                                               :background nil 'default))))
             (should-not display)
             (should-not (member '(:box nil) face)))))
       ;; Whitespace beside a label must not become part of the image.

@@ -15,9 +15,10 @@
 
 (defun fanyi-test--explode-check-badges (svg)
   "Check the saved page's inline labels, expecting SVG images when SVG is non-nil."
-  (dolist (label (cons '("Word family" . fanyi-longman-svg-asset-face)
-                       (mapcar (lambda (entry) (cons (cdr entry) 'fanyi-longman-signpost-face))
-                               fanyi-test--explode-signposts)))
+  (dolist (label (append '(("Word family" . fanyi-longman-svg-asset-face)
+                           ("Origin" . fanyi-longman-svg-asset-face))
+                         (mapcar (lambda (entry) (cons (cdr entry) 'fanyi-longman-signpost-face))
+                                 fanyi-test--explode-signposts)))
     (let* ((text (car label))
            (position (fanyi-test--explode-label text))
            (display (get-char-property position 'display)))
@@ -27,8 +28,23 @@
       (if svg
           (progn
             (should (eq (car-safe display) 'image))
-            (should (string-match-p text (plist-get (cdr display) :data))))
-        (should-not display)))))
+            (should (string-match-p text (plist-get (cdr display) :data)))
+            (let ((override (car (get-char-property position 'face)))
+                  (rect (with-temp-buffer
+                          (insert (plist-get (cdr display) :data))
+                          (car (dom-by-tag
+                                (libxml-parse-xml-region (point-min) (point-max)) 'rect)))))
+              (should (plist-member override :box))
+              (should-not (plist-get override :box))
+              (should (equal (plist-get override :background)
+                             (face-attribute 'fanyi-longman-body-face :background nil 'default)))
+              ;; Keep the fill inside the SVG, despite clearing the face behind it.
+              (should (equal (dom-attr rect 'fill)
+                             (face-attribute (cdr label) :background nil t)))))
+        (should-not display)
+        (should-not (cl-some (lambda (face)
+                               (and (listp face) (plist-member face :background)))
+                             (get-char-property position 'face)))))))
 
 (defun fanyi-test--explode-check-register-and-thesaurus ()
   "Check section boundaries, indentation and semantic faces at the current width."
@@ -172,6 +188,8 @@
 (ert-deftest fanyi-longman-explode-inline-badges-refresh-with-reflow-and-face-changes ()
   (let ((background (face-attribute 'fanyi-longman-svg-asset-face :background))
         (signpost-background (face-attribute 'fanyi-longman-signpost-face :background))
+        (body-background (face-attribute 'fanyi-longman-body-face :background))
+        (default-background (face-attribute 'default :background))
         (shr-width 74) queries)
     (unwind-protect
         (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) t))
@@ -225,13 +243,25 @@
                       (let* ((position (fanyi-test--explode-label (cdr entry)))
                              (svg (plist-get (cdr (get-char-property position 'display)) :data)))
                         (should (string-match-p "#2468ac" svg))))
+                    ;; Resolve inherited default colors as well as explicit body colors.
+                    (set-face-attribute 'fanyi-longman-body-face nil :background 'unspecified)
+                    (set-face-attribute 'default nil :background "#fefdfc")
+                    (run-hooks 'post-command-hook)
+                    (font-lock-ensure)
+                    (fanyi-test--explode-check-badges t)
+                    (set-face-attribute 'fanyi-longman-body-face nil :background "#123456")
+                    (run-hooks 'post-command-hook)
+                    (font-lock-ensure)
+                    (fanyi-test--explode-check-badges t)
                     (should-not queries)
                     (button-activate (fanyi-test--longman-style-button "explosion"))
                     (button-activate (fanyi-test--explode-thesaurus-button))
                     (should (equal queries '("bomb" "explosion"))))))
               (should (equal result prepared)))))
       (set-face-attribute 'fanyi-longman-svg-asset-face nil :background background)
-      (set-face-attribute 'fanyi-longman-signpost-face nil :background signpost-background))))
+      (set-face-attribute 'fanyi-longman-signpost-face nil :background signpost-background)
+      (set-face-attribute 'fanyi-longman-body-face nil :background body-background)
+      (set-face-attribute 'default nil :background default-background))))
 
 (provide 'fanyi-longman-explode-tests)
 ;;; fanyi-longman-explode-tests.el ends here

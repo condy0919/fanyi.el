@@ -524,8 +524,12 @@ Keep the underlying text available for searching and copying."
     (put-text-property start end 'display
                        (fanyi-longman-svg-tag-make
                         (buffer-substring-no-properties start end) face))
-    ;; The image supplies its own background and border.
-    (add-face-text-property start end '(:box nil))))
+    ;; Transparent SVG corners must reveal the surrounding text background,
+    ;; not the filled semantic face retained for the text fallback.
+    (add-face-text-property
+     start end
+     `(:box nil :background ,(face-attribute 'fanyi-longman-body-face
+                                             :background nil 'default)))))
 
 (defun fanyi-longman--shr-asset-label (dom)
   "Render DOM as an inline asset badge, with a styled text fallback."
@@ -618,6 +622,7 @@ Keep the underlying text available for searching and copying."
           (display-images-p frame) (image-type-available-p 'svg)
           (window-font-width window) (window-font-height window)
           (face-attribute 'default :family frame t)
+          (face-attribute 'fanyi-longman-body-face :background frame 'default)
           (mapcar (lambda (face)
                     (mapcar (lambda (attribute) (face-attribute face attribute frame t))
                             '(:foreground :background :weight :box)))
