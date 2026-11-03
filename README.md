@@ -1,278 +1,302 @@
 [![build](https://github.com/condy0919/fanyi.el/actions/workflows/build.yml/badge.svg)](https://github.com/condy0919/fanyi.el/actions/workflows/build.yml)
-[![License](http://img.shields.io/:license-gpl3-blue.svg)](LICENSE)
+[![License](https://img.shields.io/:license-gpl3-blue.svg)](LICENSE)
 ![Supports Emacs 29.1+](https://img.shields.io/badge/Supports-Emacs_29.1%2B-blueviolet.svg?style=flat-square&logo=GNU%20Emacs&logoColor=white)
 [![MELPA](https://melpa.org/packages/fanyi-badge.svg)](https://melpa.org/#/fanyi)
 
 # fanyi.el
 
-`fanyi.el` is a simple yet powerful multi-dictionaries interface for Emacs, currently it includes:
+Look up words and phrases in multiple dictionaries from Emacs. Results include
+clickable cross-references, pronunciation buttons, folding sections and layouts
+that adapt to the window width.
 
-- [`海词`](https://dict.cn/)
-- [`有道同义词`](https://dict.youdao.com/suggest?q=accumulate&doctype=json), **Unofficial** API
-- [`etymonline`](https://www.etymonline.com/) (opens entries in an external browser)
-- [`Longman`](https://www.ldoceonline.com/).
+All four providers are enabled by default, in the configuration order below.
+Results appear as requests complete; Etymonline's browser button appears immediately.
 
-`fanyi.el` has integrations with:
-
-- `imenu`, <kbd>M-x imenu</kbd> to jump to dictionary section directly.
-- `bookmark`, <kbd>C-x r m</kbd> to make a bookmark for current query word which turns `bookmark` into a vocabulary notebook.
-- `outline-mode`, <kbd>TAB</kbd> to collapse on section.
-- `ol` (aka `org-link`), `org-store-link` on a fanyi buffer, the link can be inserted later via `org-insert-link`. It's accomplished by introducing a `fanyi` link type.
-  e.g., <kbd>C-c C-o</kbd> on `[[fanyi:happy][description of happy]]` will invoke a fanyi search.
-  Since `ol` depends on `org` package, this integration needs an explicit `(require 'ol-fanyi)`.
+| Dictionary | Provider | Content |
+| --- | --- | --- |
+| [海词 / Haici](https://dict.cn/) | `fanyi-haici-provider` | Chinese and English definitions, examples, collocations, quotations and related words |
+| [Etymonline](https://www.etymonline.com/) | `fanyi-etymon-provider` | An `Open in browser` button for the entry |
+| [Longman](https://www.ldoceonline.com/) | `fanyi-longman-provider` | English definitions, examples, word families, collocations, thesaurus and origins |
+| [有道同义词 / Youdao](https://dict.youdao.com/) | `fanyi-youdao-thesaurus-provider` | Suggested words and explanations, using an unofficial API |
 
 ## Installation
 
-Requires Emacs 29.1 or later.
+Requires **Emacs 29.1 or later**. Runtime Lisp dependencies are built into Emacs.
+Haici and Longman require HTML parsing support (`libxml-parse-html-region`);
+Youdao requires JSON parsing support (`json-parse-buffer`). Etymonline's browser
+button works without either parser. Audio playback uses an external player;
+see [Pronunciation](#pronunciation).
 
-Install `fanyi.el` from [MELPA](https://melpa.org) with:
+With [MELPA](https://melpa.org/) configured, install with:
 
-```
+```text
 M-x package-install RET fanyi RET
 ```
 
-## Usage
+Or use `use-package`:
 
-<kbd>M-x</kbd> `fanyi-dwim`, or `fanyi-dwim2` if you can confirm the word at
-point is wanted. A new command `fanyi-from-history` is introduced to browse the
-search history.
-
-Queries trim surrounding whitespace and reject empty input. All query entry
-points, including dictionary buttons, bookmarks, and Org links, update the
-same history, with duplicate words moved to the front.
-
-If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim`, `fanyi-dwim2` and
-`fanyi-from-history`, try
-
-``` emacs-lisp
-(setq read-extended-command-predicate #'command-completion-default-include-p)
+```emacs-lisp
+(use-package fanyi
+  :ensure t
+  :commands (fanyi-dwim fanyi-dwim2 fanyi-from-history))
 ```
 
-Set `fanyi-providers` with `setq`, Customize, or `use-package`. Changes take
-effect on the next query; dictionary modules are loaded when needed.
+## Looking up words
 
-``` emacs-lisp
-;; If you want English-English dictionary only.
-(use-package fanyi
-  :ensure t
-  :custom
-  (fanyi-providers '(fanyi-etymon-provider
-                     fanyi-longman-provider)))
+| Command | Behavior |
+| --- | --- |
+| `M-x fanyi-dwim` | Prompt for a query, using the active region or word at point as the default |
+| `M-x fanyi-dwim2` | Query the active region or word at point immediately; prompt if neither exists |
+| `M-x fanyi-from-history` | Select and repeat a previous query |
 
-;; Default, comment out the providers you don't need.
-(use-package fanyi
-  :ensure t
-  :custom
-  (fanyi-providers '(;; 海词
-                     fanyi-haici-provider
-                     ;; 有道同义词词典
-                     fanyi-youdao-thesaurus-provider
-                     ;; Etymonline
-                     fanyi-etymon-provider
-                     ;; Longman
-                     fanyi-longman-provider)))
+Queries trim surrounding whitespace and reject empty input. Dictionary links,
+bookmarks and Org links use the same query history; repeated queries move to
+the front. The original query text is kept in the buffer and history, while
+requests use lowercase text.
 
-;; For non-`use-package' users
+Results open in `*fanyi*`. The header shows the query followed by the counts of
+pending, completed and failed dictionaries. Each buffer retains its own query
+and request state, so you can rename a result buffer to keep an earlier lookup.
+Starting another query cancels pending requests from the previous lookup.
+
+### Result-buffer keys
+
+| Key | Action |
+| --- | --- |
+| `s` | Start another query |
+| `h` | Look up a word from history |
+| `w` | Copy the current query |
+| `q` | Quit the result window |
+| `TAB` / `S-TAB` | Move to the next/previous visible button, wrapping at the ends |
+| `RET` or mouse click on a button | Follow a word, play audio, toggle a section or activate another action |
+
+On outline headings beginning with `#` or `##`, `TAB` cycles that section and
+`S-TAB` cycles the buffer's outline. Haici tab headings and Longman thesaurus or
+collocation headings are separate folding buttons: navigate to them with `TAB`,
+then use `RET` to toggle their contents. Navigation skips buttons inside folded
+sections; searching can reveal folded content.
+
+### Imenu, bookmarks and Org links
+
+- `M-x imenu` jumps to a dictionary heading.
+- `C-x r m` creates a bookmark for the current query. Following it repeats the
+  lookup, even if you rename the bookmark.
+- Load the optional Org integration with `(require 'ol-fanyi)`. Use
+  `org-store-link` in a result buffer and `org-insert-link` in an Org buffer.
+  Following `[[fanyi:happy][happy]]` with `C-c C-o` starts a lookup.
+
+## Configuration
+
+Use `M-x customize-group RET fanyi RET`, `setq`, or `use-package`'s `:custom`.
+Provider modules load when needed. Changes to `fanyi-providers` take effect on
+the next query without reloading Fanyi.
+
+```emacs-lisp
+;; Default providers. Remove any you do not need.
 (setq fanyi-providers '(fanyi-haici-provider
-                        fanyi-youdao-thesaurus-provider
                         fanyi-etymon-provider
-                        fanyi-longman-provider))
-
-;; Also takes effect on the next query, without reloading the package.
-(setq fanyi-youdao-thesaurus-max-count 15)
+                        fanyi-longman-provider
+                        fanyi-youdao-thesaurus-provider))
 ```
 
-By default, `M-x fanyi-dwim` will move the point to the new created `*fanyi* `buffer.
+For English definitions and a browser link to etymology, use
+`'(fanyi-longman-provider fanyi-etymon-provider)` instead.
 
-``` elisp
-(setq fanyi-auto-select nil)
-```
+| Option | Default | Effect |
+| --- | --- | --- |
+| `fanyi-auto-select` | `t` | Select the result window; use `nil` to keep focus in the current window |
+| `fanyi-request-timeout` | `15` | Timeout in seconds for each dictionary request; `nil` disables it |
+| `fanyi-headline-max-length` | `30` | Maximum query length displayed in the header |
+| `fanyi-use-glyphs` | `t` | Use image-based labels and icons where supported |
+| `fanyi-verbose` | `nil` | Report errors in the echo area |
+| `fanyi-log` | `nil` | Record diagnostic messages in `*fanyi-log*` |
 
-to keep the point.
+Failed dictionaries show an error and a `Retry dictionary` button. Retrying uses
+the original request settings and replaces only that dictionary's result; other
+results, reading position, selections and folds remain intact. Saved, renamed
+result buffers can retry independently of a newer query. Missing optional audio
+or pronunciation does not hide available definitions.
 
-Each dictionary request times out after 15 seconds by default. To change
-the limit (or disable it with `nil`):
+## Dictionary display
 
-``` emacs-lisp
-(setq fanyi-request-timeout 30)
-```
+Haici, Longman and Youdao use Emacs's built-in `shr` rendering infrastructure.
+`shr-use-fonts` is locally disabled to keep the buffer's default font and
+character-based layout; semantic faces still supply highlighting and emphasis.
+SVG labels have searchable, copyable text underneath and a text fallback when
+images are disabled or unavailable.
 
-Failed requests show their error in the results buffer without interrupting
-other dictionaries. The `Retry dictionary` button retries only that dictionary,
-using its original request settings. It replaces the failed section in place;
-successful results, reading position, selections and folds remain intact.
-Repeated clicks during a retry do not start duplicate requests. Renamed result
-buffers can retry independently while a newer query is running.
-Each result buffer retains its own query word and task counts, including when
-you rename it to keep an earlier lookup. Starting a new query cancels pending
-requests from the previous lookup without changing its saved word or results.
+Resizing the displayed window reflows cached content without another request.
+Reflow preserves reading position, selections, narrowing and folded sections.
+When several windows show the same buffer, the selected one determines its
+layout, or the previous rendering window if none is selected. Use
+`C-u M-x fanyi-shr-reflow` to force a refresh. Rendering does not fetch page
+scripts, images or other remote assets.
 
-Missing pronunciation or audio does not hide available definitions. Responses
-without usable dictionary content are reported as parsing failures; an explicit
-empty result from Youdao is reported as no results found.
+### Haici
 
-Youdao entries use a borderless layout with clickable, bold words on the left
-and explanations on the right. Parts of speech start separate lines and retain
-their highlighting. Long explanations wrap within their column. Narrow windows
-automatically place each explanation below its word, and missing explanations
-appear as subdued `暂无释义` text. Layout changes reuse cached content without
-another request. To always use the stacked layout:
+The compact header groups the headword, star level, pronunciation and basic
+meanings. The vocabulary level uses an SVG label with its full description in a
+hover/ElDoc hint. `释义分布` opens the distribution chart; `原网页` opens the entry
+in EWW.
 
-``` emacs-lisp
-(setq fanyi-youdao-thesaurus-layout 'stacked)
-```
-
-`fanyi-youdao-thesaurus-indent` controls indentation in the stacked layout.
-
-Haici includes detailed Chinese and English definitions, bilingual examples,
-collocations, quotations and related words when supplied by the page. Its compact
-header groups the headword, pronunciation and basic meanings; the vocabulary
-level uses an SVG badge with a text fallback and the full explanation in its
-tooltip. `释义分布` opens the distribution chart and `原网页` opens the page in EWW.
-
-Website tabs become independent folding headings with item counts. Use `TAB` to
-reach a heading and `RET` to toggle it. Bilingual definitions, examples,
-collocations and synonyms start expanded; detailed definitions, English
-definitions, quotations and nearby words start collapsed. With the default
-configuration, detailed definitions expand when bilingual definitions are
-unavailable. All available content, including inactive website tabs, remains
-searchable in the buffer.
-
-Chinese meanings and their English explanations occupy separate lines. Examples
-keep English above subdued Chinese translations, with space between pairs.
+Website tabs become independent folding sections with item counts. Chinese
+meanings and their English explanations occupy separate lines. Examples put
+English above subdued Chinese translations, with space between pairs.
 Collocations and synonyms align words with their explanations in two columns;
-narrow windows stack them. Nearby words form a compact wrapping list. Dictionary
-links query the full word or phrase inside Emacs; other references open in EWW.
-The header and sections use `shr` with `shr-use-fonts` disabled, retain semantic
-highlighting, and reflow from cached content while preserving folds, selections
-and reading position. Rendering does not fetch page scripts or images.
+narrow windows stack them. Nearby words form a compact wrapping list. Word and
+phrase buttons start another lookup inside Emacs.
 
-Customize the initially expanded tabs with `fanyi-haici-expanded-sections`:
+Choose which sections start expanded on a new lookup:
 
-``` emacs-lisp
+```emacs-lisp
 (setq fanyi-haici-expanded-sections '(dual sort anno nfo)) ; Default
-;; Or expand every tab on a new lookup:
-(setq fanyi-haici-expanded-sections t)
 ```
 
-The tab symbols are `detail` (detailed definitions), `dual` (bilingual definitions),
-`en` (English definitions), `sort` (examples), `anno` (collocations), `auth`
-(quotations), `nfo` (synonyms/antonyms), and `nwd` (nearby words). Manual folding
-choices survive window resizing.
+| Symbol | Section | Expanded by default |
+| --- | --- | --- |
+| `detail` | Detailed Chinese definitions | When bilingual definitions are unavailable |
+| `dual` | Bilingual definitions | Yes |
+| `en` | English definitions | No |
+| `sort` | Examples | Yes |
+| `anno` | Collocations | Yes |
+| `auth` | Quotations | No |
+| `nfo` | Synonyms and antonyms | Yes |
+| `nwd` | Nearby words | No |
+| `etm` | Origin | No |
 
-Longman uses Emacs's built-in `shr` renderer for dictionary HTML. Definitions,
-lists, and inline formatting follow the document structure. A small set of
-Longman class rules supplies headword sizes, colors, headings and example
-indentation, based on a saved page and its CSS. This preserves native HTML
-emphasis and persistent highlighting for parts of speech and grammar; it does
-not implement a general CSS engine. Duplicate headwords and hidden field labels
-are omitted. Visible signpost labels use the site's uppercase orange badges.
-Synonym and antonym labels (`synopp`, such as SYN) use yellow SVG badges with
-a styled text fallback; their following words retain their text and links.
-Register and thesaurus sections keep separate headings, explanations, entries,
-and examples, including the site's emphasis within those paragraphs.
-Supplementary sections use headings, whitespace and indentation instead of
-outer borders. Group headings follow the theme's keyword face; short Register
-notes use a body-sized bold heading and remain expanded.
-Thesaurus and collocation sections start expanded. Their headings are buttons:
-use `TAB` to reach one, then `RET` or a mouse click to toggle its contents. Each
-button folds only its own section, including when it appears inside a sense;
-following definitions and other dictionaries remain visible. These local folds
-are independent of outline headings and survive window and style changes.
-Audio buttons play pronunciations. Dictionary links query the entry name while
-retaining the original Longman URL, so phrases keep their spaces in other
-dictionaries and query history. Links to the current page jump to a rendered
-anchor and open its folds; targets outside the rendered content open in EWW
-with their original URL. Related-topic links also open in EWW. Word family, Origin, and frequency
-labels such as S2 and W1 use SVG badges when supported (controlled by `fanyi-use-glyphs` and
-`fanyi-longman-svg-border-radius`), with a text fallback. Only dictionary content
-is selected; rendering does not download images or other page resources.
+Use `t` to expand all sections, or `nil` to collapse them all. The `detail`
+fallback applies when `dual` is requested but unavailable. All available content,
+including inactive website tabs, stays in the buffer. Changing this option
+applies to new lookups; reflow preserves the reader's existing fold choices.
 
-Longman renders with `shr-use-fonts` locally disabled, using the buffer's default
-font and character-based layout. It still respects `shr-use-colors`. HTML regions
-reflow from their saved DOM when the displayed window changes width or Longman's
-styles and glyph settings change, without another request. Visible results are
-checked after each command; asynchronous setting changes are picked up by the next
-command or window event. Unchanged settings do not trigger rendering. SVG badges
-follow the window's font size, including text scaling. Reading position, folded
-headings, and other dictionaries are retained. When the buffer appears in several
-windows, its selected window determines the layout. `C-u M-x fanyi-shr-reflow`
-still forces a refresh. Fanyi's text-formatting rules do not reinterpret the HTML
-body as Markdown-style emphasis.
+Set `fanyi-haici-chart-inhibit-same-window` to `t` to open distribution charts in
+another window. Its default is `nil`.
 
-Etymonline displays an `Open in browser` button immediately, without making an
-HTTP request or parsing its pages. Click it to read the current entry in your
-browser.
+### Longman
 
-For windows users,
+Definitions and examples retain their structure, parts of speech, grammar labels
+and emphasis. Word family, Origin, frequency markers such as S2/W1, sense
+signposts and SYN/OPP labels use SVG badges when supported. Register notes keep
+their own heading and explanation. Thesaurus and collocation sections start
+expanded and can be folded individually.
 
-``` emacs-lisp
+Dictionary links query the word or phrase inside Emacs while retaining its
+original Longman URL. Related-topic links open in EWW. Links to anchors in the
+current entry jump to rendered content and reveal its folds; missing targets
+open in EWW. External links open in a browser.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `fanyi-longman-example-indent` | `2` | Indentation for examples |
+| `fanyi-longman-svg-border-radius` | `7` | Label corner radius in pixels |
+
+The renderer maps dictionary-specific HTML classes to semantic styles; it does
+not reproduce arbitrary website CSS. `shr-use-colors` controls SHR's color
+handling, while Fanyi's semantic faces and SVG label colors remain customizable
+through their faces.
+
+### Youdao
+
+Each entry has a clickable word and explanations grouped by part of speech.
+The default borderless layout uses aligned columns when space permits, switching
+to stacked entries in narrow windows. Missing explanations appear as subdued
+`暂无释义` text.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `fanyi-youdao-thesaurus-layout` | `columns` | Use adaptive columns, or `stacked` to always put explanations below words |
+| `fanyi-youdao-thesaurus-indent` | `2` | Explanation indentation in stacked entries |
+| `fanyi-youdao-thesaurus-max-count` | `10` | Maximum entries requested; changes apply to the next query |
+
+### Etymonline
+
+Etymonline displays an `Open in browser` button without making an HTTP request
+or parsing the page. Activating it opens the entry in an external browser.
+
+## Pronunciation
+
+Fanyi detects `mpv`, then `mplayer`, then `mpg123`. You can set
+`fanyi-sound-player` to an executable name or full path; it is not a shell command
+with arguments.
+
+By default, Fanyi downloads the audio and sends its bytes to the player's standard
+input through a binary pipe, passing `-` as the input argument. If your player
+accepts HTTPS URLs directly, enable:
+
+```emacs-lisp
 (setq fanyi-sound-player-support-https t)
 ```
 
-if your sound player can be launched with `your-sound-player url`. Otherwise it will be called like `your-sound-player - <(the voice file)`, where `-` is interpreted as `stdin` which is an UNIX convention.
+This option works across platforms. Audio is fetched or played only when a
+pronunciation button is activated.
 
-## FAQ
+## Troubleshooting
 
-1. Audio button icon displayed in tofu.
-   The icon is emoji, install the proper font to display it. If you use archlinux, `yay -S ttf-symbola` without additional settings. For MacOS users, add the following elisp to your Emacs config.
-   ```elisp
-   ;; "Apple Color Emoji" is bundled with MacOS.
-   (set-fontset-font t 'emoji (font-spec :family "Apple Color Emoji") nil 'prepend)
-   ```
-
-2. A dictionary reports `Could not parse dictionary response`.
-   The response did not contain usable dictionary content. Retry the query;
-   if it keeps failing, file an issue with the dictionary, query word, and
-   displayed error. Missing audio alone should not prevent definitions from
-   being displayed.
-
-## Screenshots
-
-![status indicator](https://user-images.githubusercontent.com/4024656/136776219-0ffd6d27-ce36-48ca-979c-87f163cd79fc.png)
-![海词](https://user-images.githubusercontent.com/4024656/128582690-2af2bb4a-46aa-4241-bdc0-6a5bb5e2db38.png)
-![分布](https://user-images.githubusercontent.com/4024656/128582703-3e62cd17-a778-4982-9872-98e8697e333e.png)
-![有道同义词英文](https://user-images.githubusercontent.com/4024656/132447780-1bbd9a6e-805e-4a4c-9e0a-03f499864c6f.png)
-![有道同义词中文](https://user-images.githubusercontent.com/4024656/132447809-af3785bd-fe6d-4e52-a107-71c89fb8a26b.png)
+- **Missing player or no sound:** check `fanyi-sound-player`. Enable
+  `fanyi-verbose` and/or `fanyi-log` to see download or playback errors.
+- **Missing glyphs:** use a font with the required characters, or set
+  `fanyi-use-glyphs` to `nil` to use text in place of supported image labels.
+  Text speaker symbols still require a font that can display them.
+- **`Could not parse dictionary response`:** the response did not contain usable
+  dictionary content. Retry that dictionary. If the issue persists, report the
+  dictionary, query and displayed error. Website changes or error pages can
+  affect HTML providers; missing optional audio alone should not cause this.
+- **Missing parser support:** check the functions listed under
+  [Installation](#installation), or disable providers requiring the unavailable
+  parser.
 
 ## Development
 
-Run `make test CASK=` for the ERT suite and `make compile CASK=` for byte
-compilation; no external Lisp packages are required. If using Cask, run
-`cask install`, then `make test` and `make compile`. CI runs both checks.
-Tests use mocked requests and the small HTML/JSON samples in `test/fixtures/`;
-they do not contact dictionary websites. The fixtures exercise parsing and
-rendering, but are not a check of the websites' current availability.
+Run the checks without external Lisp packages:
 
-Dictionary modules expose `fanyi-provider` records containing configuration
-and ordinary callbacks. The existing provider symbols in `fanyi-providers`
-remain the normal configuration interface. Direct records are also accepted;
-use `copy-fanyi-provider` to customize an endpoint without changing a built-in
-provider.
+```sh
+make test CASK=
+make compile CASK=
+```
 
-`fanyi-make-request` creates a separate snapshot for each lookup, copying the
-HTTP settings and capturing the callbacks. Parsed data is stored on the task,
-separately from both the provider and the request:
+Alternatively, run `cask install`, then `make test` and `make compile`. The
+[CI workflow](.github/workflows/build.yml) compiles and tests on Emacs 29.1 and
+snapshot. Tests use mocked requests and local HTML/JSON fixtures; they do not
+contact dictionary websites. See [fixture documentation](test/fixtures/README.md)
+for saved-page references and their coverage.
 
-- `prepare(request)` is optional and adjusts only that request, for example
-  to apply Youdao's current result limit.
-- `parse(response, request)` returns dictionary data. Longman returns a prepared
-  DOM that rendering and reflow reuse without repeating HTML conversion; the
-  response DOM is left unchanged. Youdao returns word/explanation pairs, and
-  Haici returns a `fanyi-haici-result` record with a prepared DOM in `content`.
-  Empty results still use `(throw 'not-found nil)`;
-  malformed responses signal `fanyi-parse-error`.
-- `render(result, request)` inserts the result at point in the current buffer.
-  It does not select a buffer or move to the end of it. The dispatcher supplies
-  a writable region for that dictionary, preserves the reader's position, and
-  rolls back partial text on failure. Browser providers skip parsing and receive
-  a nil result. Direct callers of `fanyi-render-result` supply their own writable
-  destination and insertion point.
+### Source layout
 
-The former EIEIO service classes and generic methods have been removed.
-New providers use `fanyi-provider-create` with `:parse` and `:render` callbacks,
-and optionally `:prepare`. Restart Emacs after upgrading from the EIEIO version
-so previously loaded provider objects are replaced with the new records.
+| File | Responsibility |
+| --- | --- |
+| [fanyi.el](fanyi.el) | Commands, result buffers, asynchronous tasks, retries and navigation |
+| [fanyi-base.el](fanyi-base.el) | Provider/request records, callback dispatch, audio and logging |
+| [fanyi-shr.el](fanyi-shr.el) | Cached rendering, reflow and local folding sections |
+| [fanyi-haici.el](fanyi-haici.el) | Haici parsing, rendering and responsive word-list layouts |
+| [fanyi-longman.el](fanyi-longman.el) | Longman HTML preparation, semantic styles and interactions |
+| [fanyi-youdao-thesaurus.el](fanyi-youdao-thesaurus.el) | Youdao JSON parsing and adaptive entry layout |
+| [fanyi-etymon.el](fanyi-etymon.el) | Etymonline browser button |
+| [ol-fanyi.el](ol-fanyi.el) | Optional Org link integration |
+
+### Provider interface
+
+Providers are `fanyi-provider` records created with `fanyi-provider-create`.
+`fanyi-providers` accepts the built-in symbols or provider records directly;
+`copy-fanyi-provider` can be used to customize an existing provider.
+
+Each lookup creates a separate `fanyi-request`, copying HTTP settings and
+capturing callbacks before optional request preparation. Results belong to the
+task, separately from the request and provider.
+
+- `prepare(request)` optionally adjusts the new request, such as Youdao's result
+  limit. Subsequent configuration changes affect future requests.
+- `parse(response, request)` returns independent dictionary data. Longman returns
+  prepared DOM, Haici a `fanyi-haici-result` record containing prepared content,
+  and Youdao word/explanation pairs. Explicitly empty results use
+  `(throw 'not-found nil)`; malformed responses signal `fanyi-parse-error`.
+- `render(result, request)` inserts at point in the current buffer. The task
+  supplies a writable destination and rolls back partial output on failure.
+  Direct callers of `fanyi-render-result` supply their own writable region and
+  transaction. Browser providers skip fetching/parsing and receive a nil result.
+
+The old EIEIO service classes and generic methods have been removed. Custom
+providers should use these records and callbacks. Restart Emacs when migrating
+from the EIEIO version to replace previously loaded provider objects.
 
 ## Similar projects
 
