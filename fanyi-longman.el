@@ -222,31 +222,45 @@ Typically it can be a list of strings or \"riched\" strings."))
               :y descent)
     (svg-image svg :scale 1 :ascent 'center)))
 
+(defun fanyi-longman--word-family (dom)
+  "Extract optional word-family groups from DOM without layout assumptions."
+  (let (pos groups)
+    (dolist (node (dom-children (dom-by-class dom "wordfams")))
+      (cond
+       ((and (consp node) (dom-by-class node "asset_intro")))
+       ((and (consp node) (dom-by-class node "pos"))
+        (setq pos (s-trim (dom-texts node ""))))
+       (pos
+        (let ((word (s-trim (if (stringp node) node (dom-texts node "")))))
+          (unless (s-blank-str? word)
+            (cl-pushnew word (alist-get pos groups nil nil #'equal)
+                        :test #'equal))))))
+    (mapcar (lambda (group) (cons (car group) (nreverse (cdr group))))
+            (nreverse groups))))
+
+(defun fanyi-longman--crossref-target (href)
+  "Return a dictionary lookup target for HREF, or nil for unknown links."
+  (when (and (stringp href)
+             (string-match
+              "\\`\\(?:https?://\\(?:www\\.\\)?ldoceonline\\.com\\)?/dictionary/\\([^?#]+\\)"
+              href))
+    (match-string 1 href)))
+
+(defun fanyi-longman--sense-content-p (sense)
+  "Return non-nil if SENSE has a definition or a usable cross-reference."
+  (or (oref sense crossref)
+      (seq-some (lambda (part)
+                  (let ((text (if (stringp part) part (car-safe part))))
+                    (and (stringp text) (not (s-blank-str? text)))))
+                (oref sense def))))
+
 (cl-defmethod fanyi-parse-from ((this fanyi-longman-service) dom)
-  "Complete the fields of THIS from DOM tree."
+  "Complete the fields of THIS from DOM tree.
+Signal `fanyi-parse-error' when the page contains no usable dictionary entry."
   (let ((dict (dom-by-class dom "^\\(dictionary\\)$")))
-    ;; Word family, e.g. (noun) accumulation (adjective) accumulative (verb) accumulate (adverb) accumulatively
-    (when-let ((wordfams (dom-children (dom-by-class dict "wordfams"))))
-      (let ((head1 (pop wordfams))
-            (head2 (pop wordfams)))
-        (cl-assert (s-blank-str? head1))
-        (cl-assert (dom-by-class head2 "asset_intro")))
-      (oset this word-family
-            (cl-loop with pos = ""
-                     with fam-set = nil
-                     for node in wordfams
-                     when (and (stringp node) (not (s-blank-str? node))) do
-                     (cl-pushnew
-                      (s-trim node)
-                      (alist-get pos fam-set))
-                     when (listp node)
-                     if (dom-by-class node "pos") do
-                     (setq pos (s-trim (dom-text node)))
-                     else do
-                     (cl-pushnew
-                      (s-trim (dom-text node))
-                      (alist-get pos fam-set))
-                     finally return fam-set)))
+    (unless (and dict (dom-by-class dict "^\\(dictentry\\)$"))
+      (signal 'fanyi-parse-error '("Longman dictionary entries are missing")))
+    (oset this word-family (fanyi-longman--word-family dict))
     ;; Dicts
     (let ((dict-entries (dom-by-class dict "^\\(dictentry\\)$")))
       (oset this dicts
@@ -317,11 +331,11 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                                     (dom-children (dom-by-class sense "^\\(DEF\\)$"))))
                                                                      ;; Crossref.
                                                                      (when-let* ((crossref (dom-by-class sense "Crossref"))
-                                                                                 (href (dom-attr (dom-child-by-tag crossref 'a) 'href)))
-                                                                       (cl-assert (s-prefix? "/dictionary/" href))
-                                                                       (oset dict-sense crossref
-                                                                             (cons (s-trim (dom-texts crossref ""))
-                                                                                   (car (s-split "#" (substring href 12))))))
+                                                                                 (href (dom-attr (dom-by-tag crossref 'a) 'href))
+                                                                                 (target (fanyi-longman--crossref-target href))
+                                                                                 (text (s-trim (dom-texts crossref "")))
+                                                                                 ((not (s-blank-str? text))))
+                                                                       (oset dict-sense crossref (cons text target)))
                                                                      ;; Synonym.
                                                                      (when-let ((syn (dom-by-class sense "^\\(SYN\\)$")))
                                                                        (oset dict-sense syn (s-trim (dom-text syn))))
@@ -345,7 +359,14 @@ Typically it can be a list of strings or \"riched\" strings."))
                                                                                                (string child)
                                                                                                (list (concat "*" (dom-text child) "*"))))))
                                                                      dict-sense)))
+                               (oset dict senses
+                                     (seq-filter #'fanyi-longman--sense-content-p
+                                                 (oref dict senses)))
                                dict))))
+    (oset this dicts (seq-filter (lambda (entry) (oref entry senses))
+                                (oref this dicts)))
+    (unless (oref this dicts)
+      (signal 'fanyi-parse-error '("Longman definitions are missing")))
     ;; Etymon
     (let ((etymon (dom-by-class (dom-by-class dict "etym") "Sense")))
       (oset this etymon (dom-texts etymon "")))))
@@ -406,21 +427,20 @@ before calling this method."
                   (insert " " inflect))
              do (when-let ((gram (oref dict grammar)))
                   (insert " " gram))
-             do (when (oref dict british)
-                  (insert " ")
-                  (insert-button "🔊"
-                                 'action #'fanyi-play-sound
-                                 'button-data (oref dict british)
-                                 'face 'fanyi-female-speaker-face
-                                 'help-echo "Play British pronunciation"
-                                 'follow-link t)
-                  (insert " ")
-                  (insert-button "🔊"
-                                 'action #'fanyi-play-sound
-                                 'button-data (oref dict american)
-                                 'face 'fanyi-male-speaker-face
-                                 'help-echo "Play American pronunciation"
-                                 'follow-link t))
+             do (cl-loop for (url face help) in
+                         (list (list (oref dict british) 'fanyi-female-speaker-face
+                                     "Play British pronunciation")
+                               (list (oref dict american) 'fanyi-male-speaker-face
+                                     "Play American pronunciation"))
+                         when (and (stringp url) (not (s-blank-str? url)))
+                         do (progn
+                              (insert " ")
+                              (insert-button "🔊"
+                                             'action #'fanyi-play-sound
+                                             'button-data (s-trim url)
+                                             'face face
+                                             'help-echo help
+                                             'follow-link t)))
              do (insert "\n\n")
              ;; - work [countable] informal unit   GEO   the regular paid work SYN *foo* link
              ;;   ^             ^         ^    ^     ^       ^                 ^           ^
@@ -478,16 +498,18 @@ before calling this method."
                          do (cl-loop for example in (oref sense examples)
                                      for mp3 = (car example)
                                      for expl = (cdr example)
-                                     do (insert-button (if mp3 "🔊" "🔇")
-                                                       'action #'fanyi-play-sound
-                                                       'button-data (or mp3 "")
-                                                       'face 'fanyi-longman-example-face
-                                                       'line-prefix (s-repeat fanyi-longman-example-indent " ")
-                                                       'help-echo "Play Example"
-                                                       'follow-link t)
-                                     do (insert " "
-                                                (propertize expl
+                                     do (when (and (stringp mp3) (not (s-blank-str? mp3)))
+                                          (insert-button "🔊"
+                                                         'action #'fanyi-play-sound
+                                                         'button-data (s-trim mp3)
+                                                         'face 'fanyi-longman-example-face
+                                                         'line-prefix (s-repeat fanyi-longman-example-indent " ")
+                                                         'help-echo "Play Example"
+                                                         'follow-link t)
+                                          (insert " "))
+                                     do (insert (propertize expl
                                                             'font-lock-face 'fanyi-longman-example-face
+                                                            'line-prefix (s-repeat fanyi-longman-example-indent " ")
                                                             'wrap-prefix (s-repeat fanyi-longman-example-indent " "))
                                                 "\n"))
                          ;; Footnote.

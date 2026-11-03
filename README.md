@@ -96,6 +96,10 @@ Failed requests show their error in the results buffer without interrupting
 other dictionaries. The `Retry query` button repeats the query using all
 enabled dictionaries.
 
+Missing pronunciation or audio does not hide available definitions. Responses
+without usable dictionary content are reported as parsing failures; an explicit
+empty result from Youdao is reported as no results found.
+
 For windows users,
 
 ``` emacs-lisp
@@ -118,8 +122,11 @@ if your sound player can be launched with `your-sound-player url`. Otherwise it 
    (set-fontset-font t 'symbol (font-spec :family "Apple Color Emoji") nil 'prepend)
    ```
 
-2. Longman throws an `user-error`
-   It's expected. File an issue please.
+2. A dictionary reports `Could not parse dictionary response`.
+   The response did not contain usable dictionary content. Retry the query;
+   if it keeps failing, file an issue with the dictionary, query word, and
+   displayed error. Missing audio alone should not prevent definitions from
+   being displayed.
 
 ## Screenshots
 

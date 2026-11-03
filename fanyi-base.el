@@ -209,6 +209,8 @@ See `fanyi-sound-player'."
 ;; Silence unknown slots warning.
 (eieio-declare-slots :word :url :sound-url :method :headers :body :api-type)
 
+(define-error 'fanyi-parse-error "Could not parse dictionary response")
+
 (cl-defmethod fanyi-set-query-word ((this fanyi-base-service) query)
   "Set QUERY word to THIS.
 QUERY could be a sentence for some services."

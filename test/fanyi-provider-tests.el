@@ -21,8 +21,8 @@
         (progn (goto-char (point-min)) (json-parse-buffer))
       (libxml-parse-html-region (point-min) (point-max)))))
 
-(defmacro fanyi-test--with-rendered-fixture (provider file &rest body)
-  "Parse FILE with PROVIDER and evaluate BODY in its rendered result buffer.
+(defmacro fanyi-test--with-rendered-response (provider response &rest body)
+  "Parse RESPONSE with PROVIDER and evaluate BODY in its result buffer.
 Temporarily rename an existing result buffer so its text and mode survive."
   (declare (indent 2) (debug (form form body)))
   `(let* ((fanyi-use-glyphs nil)
@@ -37,7 +37,7 @@ Temporarily rename an existing result buffer so its text and mode survive."
                (rename-buffer (generate-new-buffer-name " *fanyi-saved-result*"))))
            (setq result-buffer (get-buffer-create fanyi-buffer-name))
            (fanyi-set-query-word instance "sample")
-           (fanyi-parse-from instance (fanyi-test--read-fixture ,file))
+           (fanyi-parse-from instance ,response)
            (fanyi-render instance)
            (with-current-buffer result-buffer
              ,@body))
@@ -46,6 +46,12 @@ Temporarily rename an existing result buffer so its text and mode survive."
        (when (buffer-live-p existing)
          (with-current-buffer existing
            (rename-buffer original-name))))))
+
+(defmacro fanyi-test--with-rendered-fixture (provider file &rest body)
+  "Parse FILE with PROVIDER and evaluate BODY in its rendered result buffer."
+  (declare (indent 2) (debug (form form body)))
+  `(fanyi-test--with-rendered-response ,provider (fanyi-test--read-fixture ,file)
+     ,@body))
 
 (defun fanyi-test--button-data (action)
   "Return button data for buttons invoking ACTION in the current buffer."

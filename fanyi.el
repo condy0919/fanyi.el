@@ -31,6 +31,7 @@
 ;;; Code:
 
 (require 's)
+(require 'subr-x)
 (require 'seq)
 (require 'url)
 (require 'imenu)

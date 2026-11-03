@@ -30,6 +30,7 @@
 (require 'fanyi-base)
 
 (require 's)
+(require 'subr-x)
 (require 'dom)
 (require 'seq)
 (require 'json)
@@ -62,8 +63,8 @@
               :documentation "Frequency description of the word.")
    (phonetics :initarg :phonetics
               :type list
-              :documentation "Phonetics of the word.
-It could be either British pronunciation or American pronunciation.")
+              :documentation "List of (label pronunciation female-audio male-audio).
+The label identifies the pronunciation without relying on its position.")
    (paraphrases :initarg :paraphrases
                 :type list
                 :documentation "List of (pos . paraphrase).")
@@ -113,12 +114,38 @@ static char* speaker_xpm[] = {
 ;; Silence compile warning.
 (declare-function fanyi-dwim "fanyi")
 
+(defun fanyi-haici--present-p (value)
+  "Return non-nil if VALUE is a nonblank string."
+  (and (stringp value) (not (string-empty-p (string-trim value)))))
+
+(defun fanyi-haici--distribution (data)
+  "Read optional chart DATA, ignoring malformed rows and chart data."
+  (when (fanyi-haici--present-p data)
+    (condition-case nil
+        (let ((json-object-type 'alist)
+              (json-array-type 'list)
+              (json-key-type 'symbol))
+          (cl-loop for row in (json-read-from-string (url-unhex-string data))
+                   for fields = (and (listp (cdr-safe row)) (cdr-safe row))
+                   for percent = (cdr (assq 'percent fields))
+                   for sense = (cdr (assq 'sense fields))
+                   when (and (numberp percent) (<= 0 percent 100)
+                             (fanyi-haici--present-p sense))
+                   collect (list percent sense)))
+      (error nil))))
+
 (cl-defmethod fanyi-parse-from ((this fanyi-haici-service) dom)
-  "Complete the fields of THIS from DOM tree.
-A \='not-found exception will be thrown if there is no result."
-  ;; No brief paraphrase is found, return early.
-  (unless (dom-by-class dom "dict-basic-ul")
-    (throw 'not-found nil))
+  "Complete THIS from DOM, preserving definitions when optional data is absent.
+Signal `fanyi-parse-error' when no usable definitions can be extracted."
+  ;; Locate elements rather than depending on whitespace or a final dummy li.
+  (oset this paraphrases
+        (cl-loop for item in (dom-by-tag (dom-by-class dom "dict-basic-ul") 'li)
+                 for pos = (string-trim (dom-texts (dom-child-by-tag item 'span) ""))
+                 for para = (string-trim (dom-texts (dom-child-by-tag item 'strong) ""))
+                 when (fanyi-haici--present-p para)
+                 collect (list pos para)))
+  (unless (oref this paraphrases)
+    (signal 'fanyi-parse-error '("Haici response contains no usable definitions")))
   ;; Syllable, could be nil.
   (when-let* ((str (dom-attr (dom-by-class dom "keyword") 'tip))
               (matches (s-match "\\([a-zA-Z·]+\\)" str)))
@@ -128,52 +155,65 @@ A \='not-found exception will be thrown if there is no result."
               (matches (s-match "\\([12345]\\)" str)))
     (oset this star (string-to-number (nth 1 matches)))
     (oset this star-desc str))
-  ;; Phonetics, a list of (pronunciation, female sound url, male sound url)
-  ;;
-  ;; British: female, male
-  ;; American: female, male
-  (let ((phonetics (dom-children (dom-by-class dom "phonetic"))))
-    (oset this phonetics
-          (cl-loop for p being the elements of phonetics using (index idx)
-                   ;; British -> 1
-                   ;; American -> 3
-                   when (or (= idx 1) (= idx 3))
-                   collect (list
-                            ;; Pronunciation
-                            (dom-text
-                             (dom-search p
-                                         (lambda (x)
-                                           (string= (dom-attr x 'lang) "EN-US"))))
-                            ;; Female sound url
-                            (dom-attr (dom-by-class p "^\\(sound fsound\\)$") 'naudio)
-                            ;; Male sound url
-                            (dom-attr (dom-by-class p "^\\(sound\\)$") 'naudio)))))
-  ;; Brief paraphrases, list of (pos, paraphrase)
-  (let ((paraphrases (butlast (dom-by-tag (dom-by-class dom "dict-basic-ul") 'li))))
-    (oset this paraphrases
-          (cl-loop for p in paraphrases
-                   for pos = (dom-text (nth 3 p))
-                   for para = (dom-text (nth 5 p))
-                   collect (list pos para))))
-  ;; Distribution of senses, could be nil
-  (when-let* ((chart-basic (dom-attr (dom-by-id dom "dict-chart-basic") 'data))
-              (json (json-read-from-string (url-unhex-string chart-basic))))
-    (oset this distribution
-          ;; Transform (\1 (percent . 55) (sense . "abc")) into (55 "abc")
-          (cl-loop for j in json
-                   collect (seq-map #'cdr (seq-drop j 1)))))
-  ;; The related words, could be nil.
-  (let ((shapes (dom-children (dom-by-class dom "shape"))))
-    (oset this related
-          (seq-partition (cl-loop for i in shapes
-                                  when (consp i)
-                                  collect (s-trim (dom-text i)))
-                         2)))
-  ;; The etymons of the word, could be nil.
-  (let ((etymons (dom-attributes (dom-children (dom-by-class dom "layout etm")))))
-    (oset this etymons (cl-loop for i in etymons
-                                 when (consp i)
-                                 collect (dom-texts i)))))
+  (oset this phonetics
+        (cl-loop for item in (dom-non-text-children (dom-by-class dom "phonetic"))
+                 for phonetic = (dom-search item (lambda (node) (dom-attr node 'lang)))
+                 for pronunciation = (string-trim (dom-texts phonetic ""))
+                 for label-text = (string-trim (dom-text item))
+                 for lang = (downcase (or (dom-attr phonetic 'lang) ""))
+                 for label = (cond ((string-match-p "\\`\\(?:英\\|UK\\|British\\)" label-text) "英")
+                                   ((string-match-p "\\`\\(?:美\\|US\\|American\\)" label-text) "美")
+                                   ((equal lang "en-gb") "英")
+                                   ((equal lang "en-us") "美")
+                                   (t "音标"))
+                 for female = (dom-attr (dom-by-class item "\\bfsound\\b") 'naudio)
+                 for male = (dom-attr
+                             (dom-search item
+                                         (lambda (node)
+                                           (let ((classes (split-string (or (dom-attr node 'class) ""))))
+                                             (and (member "sound" classes)
+                                                  (not (member "fsound" classes))))))
+                             'naudio)
+                 when (or (fanyi-haici--present-p pronunciation)
+                          (fanyi-haici--present-p female)
+                          (fanyi-haici--present-p male))
+                 collect (list label pronunciation female male)))
+  (oset this distribution
+        (fanyi-haici--distribution (dom-attr (dom-by-id dom "dict-chart-basic") 'data)))
+  ;; Ignore incomplete related-word pairs.
+  (oset this related
+        (cl-loop for (label word)
+                 in (seq-partition
+                     (mapcar (lambda (node) (string-trim (dom-texts node "")))
+                             (dom-non-text-children (dom-by-class dom "shape")))
+                     2)
+                 when (and (fanyi-haici--present-p label)
+                           (fanyi-haici--present-p word))
+                 collect (list label word)))
+  (let* ((section (dom-by-class dom "\\betm\\b"))
+         (items (or (dom-by-tag section 'li) (dom-by-tag section 'p))))
+    (oset this etymons
+          (cl-loop for item in items
+                   for text = (string-trim (dom-texts item ""))
+                   when (fanyi-haici--present-p text)
+                   collect text))))
+
+(defun fanyi-haici--insert-sound (this audio face description)
+  "Insert an AUDIO button for THIS with FACE and DESCRIPTION when available."
+  (when (fanyi-haici--present-p audio)
+    (insert " ")
+    (insert-button "🔊"
+                   'display (when (fanyi-display-glyphs-p)
+                              (find-image `((:type xpm
+                                                   :data ,fanyi-haici-speaker-xpm
+                                                   :ascent center
+                                                   :color-symbols
+                                                   (("color" . ,(face-attribute face :foreground)))))))
+                   'action #'fanyi-play-sound
+                   'button-data (format (oref this sound-url) audio)
+                   'face face
+                   'follow-link t
+                   'help-echo description)))
 
 (cl-defmethod fanyi-render ((this fanyi-haici-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
@@ -189,40 +229,14 @@ before calling this method."
             " "
             (oref this star-desc)
             "\n\n")
-    ;; Phonetics.
-    ;; British: pronunciation, female sound url, male sound url
-    ;; American: pronunciation, female sound url, male sound url
-    (let ((phonetics (oref this phonetics)))
-      (cl-assert (equal (length phonetics) 2))
-      (cl-loop for i from 0 to 1
-               for (pronunciation female male) = (nth i phonetics)
-               do (insert (if (equal i 0) "英" "  美"))
-               do (insert " " pronunciation " ")
-               do (insert-button "🔊"
-                                 'display (when (fanyi-display-glyphs-p)
-                                            (find-image `((:type xpm
-                                                                 :data ,fanyi-haici-speaker-xpm
-                                                                 :ascent center
-                                                                 :color-symbols
-                                                                 (("color" . ,(face-attribute 'fanyi-female-speaker-face :foreground)))))))
-                                 'action #'fanyi-play-sound
-                                 'button-data (format (oref this sound-url) female)
-                                 'face 'fanyi-female-speaker-face
-                                 'follow-link t
-                                 'help-echo "女声版发音")
-               do (insert " ")
-               do (insert-button "🔊"
-                                 'display (when (fanyi-display-glyphs-p)
-                                            (find-image `((:type xpm
-                                                                 :data ,fanyi-haici-speaker-xpm
-                                                                 :ascent center
-                                                                 :color-symbols
-                                                                 (("color" . ,(face-attribute 'fanyi-male-speaker-face :foreground)))))))
-                                 'action #'fanyi-play-sound
-                                 'button-data (format (oref this sound-url) male)
-                                 'face 'fanyi-male-speaker-face
-                                 'follow-link t
-                                 'help-echo "男声版发音"))
+    ;; Each available pronunciation carries its own label and optional audio.
+    (when (oref this phonetics)
+      (cl-loop for (label pronunciation female male) in (oref this phonetics)
+               for first = t then nil
+               do (unless first (insert "  "))
+               do (insert label " " pronunciation)
+               do (fanyi-haici--insert-sound this female 'fanyi-female-speaker-face "女声版发音")
+               do (fanyi-haici--insert-sound this male 'fanyi-male-speaker-face "男声版发音"))
       (insert "\n\n"))
     ;; Paraphrases.
     ;; - n. 荣誉；荣幸；尊敬；信用；正直；贞洁

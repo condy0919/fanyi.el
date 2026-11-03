@@ -30,6 +30,7 @@
 (require 'fanyi-base)
 
 (require 's)
+(require 'subr-x)
 (require 'cl-lib)
 
 (defcustom fanyi-youdao-thesaurus-max-count 10
@@ -77,43 +78,32 @@
     (oset this url (url-recreate-url url))))
 
 (cl-defmethod fanyi-parse-from ((this fanyi-youdao-thesaurus-service) js)
-  "Complete the fields of THIS from JS json.
-A \='not-found exception will be thrown if there is no result."
-  ;; Nothing is found or the json is malformed.
-  ;;
-  ;; An example:
-  ;;
-  ;; ```js
-  ;; {
-  ;;     "result":
-  ;;     {
-  ;;         "code": 200
-  ;;     },
-  ;;     "data":
-  ;;     {
-  ;;         "entries":
-  ;;         [
-  ;;             {
-  ;;                 "explain": "vi. 累积",
-  ;;                 "entry": "accumulate"
-  ;;             }
-  ;;         ]
-  ;;     }
-  ;; }
-  ;; ```
-  (unless (when-let* ((result (gethash "result" js))
-                      (code (gethash "code" result))
-                      (data (gethash "data" js)))
-            (and (equal code 200)
-                 (gethash "entries" data)))
-    (throw 'not-found nil))
-  (let ((entries (gethash "entries" (gethash "data" js))))
-    (oset this entries
-          (cl-loop for entry across entries
-                   for ent = (gethash "entry" entry)
-                   for explain = (or (gethash "explain" entry) "NO EXPLANATION")
-                   collect (fanyi-youdao-thesaurus-entry :entry ent
-                                                         :explain explain)))))
+  "Complete THIS from JS, distinguishing empty results from invalid data."
+  (unless (hash-table-p js)
+    (signal 'fanyi-parse-error '("Youdao: expected a response object")))
+  (let ((result (gethash "result" js))
+        (data (gethash "data" js)))
+    (unless (and (hash-table-p result) (equal (gethash "code" result) 200)
+                 (hash-table-p data) (vectorp (gethash "entries" data)))
+      (signal 'fanyi-parse-error '("Youdao: missing or invalid result entries")))
+    (let ((entries (gethash "entries" data)))
+      (when (= (length entries) 0)
+        (throw 'not-found nil))
+      (oset this entries
+            (cl-loop for entry across entries
+                     collect
+                     (progn
+                       (unless (and (hash-table-p entry)
+                                    (stringp (gethash "entry" entry))
+                                    (not (string-empty-p (string-trim (gethash "entry" entry)))))
+                         (signal 'fanyi-parse-error '("Youdao: invalid entry text")))
+                       (let ((explain (gethash "explain" entry)))
+                         (fanyi-youdao-thesaurus-entry
+                          :entry (gethash "entry" entry)
+                          :explain (if (and (stringp explain)
+                                            (not (string-empty-p (string-trim explain))))
+                                       explain
+                                     "NO EXPLANATION")))))))))
 
 (cl-defmethod fanyi-render ((this fanyi-youdao-thesaurus-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.

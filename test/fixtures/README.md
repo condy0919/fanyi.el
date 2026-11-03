@@ -12,7 +12,11 @@ identifiers are test data; `example.invalid` URLs must never be fetched.
   a cross-reference, an example with audio, and an origin section.
 - `etymon.html`: a title, foreign-word formatting, a cross-reference, and a quote.
 - `youdao.json`: two entries, including one without an explanation.
+- `youdao-empty.json`: a successful API response explicitly containing no entries.
+- `error-page.html`: a generic service error page with no dictionary structure.
 
 The provider tests parse these files with Emacs's HTML/JSON parsers and render
 results without network requests or image rendering. When extending coverage,
 keep each example small enough that its purpose is clear.
+Partial-response tests also vary the parsed fixture trees to remove audio,
+pronunciation, or required content and to change optional formatting.

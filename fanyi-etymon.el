@@ -30,6 +30,7 @@
 (require 'fanyi-base)
 
 (require 's)
+(require 'subr-x)
 (require 'dom)
 (require 'seq)
 (require 'cl-lib)
@@ -48,54 +49,56 @@ Where def could be a list of string/(string 'face face)/(string 'button data).")
 ;; Silence compile warning.
 (declare-function fanyi-dwim "fanyi")
 
-(defvar fanyi-etymon--consecutive-newlines nil)
+(defun fanyi-etymon--content-p (content)
+  "Return non-nil when CONTENT contains text or a nonempty query button."
+  (seq-some (lambda (part)
+              (string-match-p "\\S-" (if (stringp part) part (car part))))
+            content))
+
+(defun fanyi-etymon--parse-node (node)
+  "Convert a definition NODE into text and query buttons.
+Unknown formatting elements retain their text; empty paragraphs keep spacing."
+  (if (stringp node)
+      (list (s-replace-all '(("\u00a0" . " ") ("\u0009" . " ")) node))
+    (let ((tag (dom-tag node))
+          (classes (split-string (or (dom-attr node 'class) ""))))
+      (cond
+       ((memq tag '(script style)) nil)
+       ((eq tag 'br) '("\n"))
+       ((member "foreign" classes)
+        (let ((text (s-replace-all '(("\u00a0" . " ") ("\u0009" . " "))
+                                   (dom-texts node ""))))
+          (unless (string-empty-p (string-trim text))
+            (let ((marker (if (dom-by-tag node 'strong) "*" "/")))
+              (list (concat marker text marker))))))
+       ((member "crossreference" classes)
+        (let ((text (string-trim (dom-texts node ""))))
+          (unless (string-empty-p text)
+            (list (list text 'button text)))))
+       (t
+        (let ((content (seq-mapcat #'fanyi-etymon--parse-node (dom-children node))))
+          ;; Empty paragraphs are separators in some responses.  Retain their
+          ;; whitespace, but do not turn empty quotes into visible content.
+          (append (when (and (eq tag 'blockquote)
+                             (fanyi-etymon--content-p content))
+                    '("> "))
+                  content
+                  (when (memq tag '(p blockquote)) '("\n\n")))))))))
 
 (cl-defmethod fanyi-parse-from ((this fanyi-etymon-service) dom)
-  "Complete the fields of THIS from DOM tree.
-If the definitions of word are not found, http 404 error is
-expected.
-
+  "Complete THIS from DOM, rejecting pages without usable definitions.
 The /italic/ and *bold* styles are borrowed from `org-mode',
-while the quote style is from mailing list."
-  (let ((defs (dom-by-class dom "^\\(word--C9UPa\\)$")))
-    (oset this definitions
-          (cl-loop for def in defs
-                   for title = (dom-text (dom-by-class def "word__name--TTbAA"))
-                   for details = (dom-children (dom-by-class def "^\\(word__defination--2q7ZH\\)$"))
-                   collect (list title
-                                 (seq-mapcat
-                                  (lambda (arg)
-                                    (pcase arg
-                                      ('(p nil)
-                                       (prog1
-                                           ;; Eliminate extra '\n\n' if it happens two or more times.
-                                           (if fanyi-etymon--consecutive-newlines
-                                               ""
-                                             "\n\n")
-                                         (setq fanyi-etymon--consecutive-newlines t)))
-                                      ((pred stringp) arg)
-                                      (_
-                                       (cl-assert (> (length arg) 2))
-                                       (setq fanyi-etymon--consecutive-newlines nil)
-                                       (seq-concatenate
-                                        'list
-                                        (when (equal (car arg) 'blockquote)
-                                          '("> "))
-                                        (seq-map (lambda (arg)
-                                                   (cond ((stringp arg) arg)
-                                                         ((dom-by-class arg "foreign notranslate")
-                                                          (cond ((dom-by-tag arg 'strong)
-                                                                 (concat "*" (dom-texts arg) "*"))
-                                                                (t
-                                                                 (concat "/" (dom-text arg) "/"))))
-                                                         ((dom-by-class arg "crossreference notranslate")
-                                                          (list (dom-text arg) 'button (dom-text arg)))
-                                                         (t
-                                                          (s-replace-all '(("\u00a0" . "")
-                                                                           ("\u0009" . ""))
-                                                                         (dom-text arg)))))
-                                                 (cddr arg))))))
-                                  details))))))
+while the quote style is from mailing lists."
+  (oset this definitions
+        (cl-loop for def in (dom-by-class dom "^\\(word--C9UPa\\)$")
+                 for title = (string-trim (dom-texts (dom-by-class def "word__name--TTbAA") ""))
+                 for details = (dom-by-class def "^\\(word__defination--2q7ZH\\)$")
+                 for content = (seq-mapcat #'fanyi-etymon--parse-node (dom-children details))
+                 when (and (not (string-empty-p title))
+                           (fanyi-etymon--content-p content))
+                 collect (list title content)))
+  (unless (oref this definitions)
+    (signal 'fanyi-parse-error '("Etymonline: missing or empty definitions"))))
 
 (cl-defmethod fanyi-render ((this fanyi-etymon-service))
   "Render THIS page into a buffer named `fanyi-buffer-name'.
