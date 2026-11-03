@@ -82,6 +82,17 @@ By default, `M-x fanyi-dwim` will move the point to the new created `*fanyi* `bu
 
 to keep the point.
 
+Each dictionary request times out after 15 seconds by default. To change
+the limit (or disable it with `nil`):
+
+``` emacs-lisp
+(setq fanyi-request-timeout 30)
+```
+
+Failed requests show their error in the results buffer without interrupting
+other dictionaries. The `Retry query` button repeats the query using all
+enabled dictionaries.
+
 For windows users,
 
 ``` emacs-lisp

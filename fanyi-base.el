@@ -86,6 +86,24 @@ Otherwise, `url-retrieve' first, the data will then be sent to
      '("-cache" "1024"))
     (_ nil)))
 
+(defun fanyi--cleanup-response (buffer)
+  "Kill BUFFER and any response buffers reached through redirects.
+Completed HTTP connections are managed by `url-retrieve', so do not
+explicitly delete their processes here."
+  (let (seen)
+    (while (and (buffer-live-p buffer) (not (memq buffer seen)))
+      (push buffer seen)
+      (let ((next (buffer-local-value 'url-redirect-buffer buffer)))
+        (kill-buffer buffer)
+        (setq buffer next)))))
+
+(defun fanyi--report-sound-error (err)
+  "Report audio download or playback error ERR."
+  (let ((text (error-message-string err)))
+    (fanyi-log "Audio: %s" text)
+    (when fanyi-verbose
+      (message "Fanyi audio: %s" text))))
+
 (defun fanyi-play-sound (url)
   "Play URL via external program.
 See `fanyi-sound-player'."
@@ -93,34 +111,51 @@ See `fanyi-sound-player'."
     (user-error "Set `fanyi-sound-player' first"))
   (when (string-empty-p url)
     (user-error "No voice found"))
-  (if fanyi-sound-player-support-https
-      (start-process fanyi-sound-player nil fanyi-sound-player url)
-    ;; Some programs, e.g. mpg123, can't play https files. So we download then
-    ;; play them via `fanyi-sound-player'.
-    ;;
-    ;; "-" stands for standard input, which is an UNIX convention.
-    ;;
-    ;; mplayer needs an additional option, or exits with an error:
-    ;;
-    ;;     Cannot seek backward in linear streams!
-    (url-retrieve url (lambda (status)
-                        (cl-block nil
-                          ;; Something went wrong, but we don't care.
-                          (when (or (not status) (plist-member status :error))
-                            (cl-return))
-                          ;; Move point to the real http content. Plus 1 for '\n'.
-                          (goto-char (1+ url-http-end-of-headers))
-                          (let ((proc (make-process :name "fanyi-player-process"
-                                                    :buffer nil
-                                                    :command `(,fanyi-sound-player "-" ,@(fanyi--sound-player-options fanyi-sound-player))
-                                                    :noquery t
-                                                    :connection-type 'pipe)))
-                            (process-send-region proc (point) (point-max))
-                            (when (process-live-p proc)
-                              (process-send-eof proc)))))
-                  nil
-                  t
-                  t)))
+  (condition-case err
+      (if fanyi-sound-player-support-https
+          (start-process fanyi-sound-player nil fanyi-sound-player url)
+        ;; Download first for players without HTTPS support.  "-" selects
+        ;; standard input; mplayer also needs a cache for this stream.
+        (let (response finished)
+          (setq response
+                (url-retrieve
+                 url
+                 (lambda (status)
+                   (let ((buffer (current-buffer)))
+                     (unwind-protect
+                         (condition-case err
+                             (progn
+                               (when (plist-member status :error)
+                                 (error "Audio download failed: %S"
+                                        (plist-get status :error)))
+                               (goto-char (1+ url-http-end-of-headers))
+                               (let ((proc
+                                      (make-process
+                                       :name "fanyi-player-process"
+                                       :buffer nil
+                                       :command `(,fanyi-sound-player "-"
+                                                  ,@(fanyi--sound-player-options
+                                                     fanyi-sound-player))
+                                       :noquery t
+                                       :connection-type 'pipe))
+                                     delivered)
+                                 (unwind-protect
+                                     (progn
+                                       (process-send-region proc (point) (point-max))
+                                       (when (process-live-p proc)
+                                         (process-send-eof proc))
+                                       (setq delivered t))
+                                   (when (and (not delivered) (process-live-p proc))
+                                     (delete-process proc)))))
+                           (error (fanyi--report-sound-error err)))
+                       (setq finished t)
+                       (fanyi--cleanup-response response)
+                       (fanyi--cleanup-response buffer))))
+                 nil t t))
+          ;; A synchronous callback can finish before RESPONSE is assigned.
+          (when finished
+            (fanyi--cleanup-response response))))
+    (error (fanyi--report-sound-error err))))
 
 (defconst fanyi-buffer-name "*fanyi*"
   "The default name of translation buffer.")
@@ -203,7 +238,7 @@ QUERY could be a sentence for some services."
 The FMT and ARGS will be passed to `format-message'."
   (when fanyi-log
     (let ((timestamp (format-time-string "[%F %T]"))
-          (text (format-message fmt args)))
+          (text (apply #'format-message fmt args)))
       (with-mutex fanyi-log-buffer-mtx
         (with-current-buffer (get-buffer-create fanyi-log-buffer-name)
           (insert timestamp " " text "\n"))))))
@@ -213,9 +248,9 @@ The FMT and ARGS will be passed to `format-message'."
 If `fanyi-verbose' is nil (default), message won't be displayed.
 If `fanyi-log' is non-nil, the message will also be collected in
 \"*fanyi-log*\" buffer."
-  (fanyi-log fmt args)
+  (apply #'fanyi-log fmt args)
   (if fanyi-verbose
-      (user-error fmt args)
+      (apply #'user-error fmt args)
     (signal 'user-error nil)))
 
 (provide 'fanyi-base)

@@ -121,6 +121,13 @@
   :type 'boolean
   :group 'fanyi)
 
+(defcustom fanyi-request-timeout 15
+  "Maximum seconds to wait for each dictionary request.
+Nil disables the timeout."
+  :type '(choice (const :tag "No timeout" nil)
+                 (number :tag "Seconds"))
+  :group 'fanyi)
+
 (defvar fanyi-history nil
   "History list for `fanyi-dwim' and `fanyi-dwim2'.")
 
@@ -134,11 +141,27 @@
 (defvar fanyi--query-id 0
   "Identifier of the current query.")
 
+(defvar fanyi-current-word nil)
+
 (cl-defstruct (fanyi--task (:constructor fanyi--make-task))
-  query-id instance buffer)
+  query-id instance buffer timer done)
+
+(defun fanyi--task-active-p (task)
+  "Return non-nil if TASK still belongs to the current pending query."
+  (and (= (fanyi--task-query-id task) fanyi--query-id)
+       (not (fanyi--task-done task))))
+
+(defun fanyi--stop-task-timer (task)
+  "Cancel TASK's timeout timer."
+  (when (fanyi--task-timer task)
+    (cancel-timer (fanyi--task-timer task))
+    (setf (fanyi--task-timer task) nil)))
 
 (defun fanyi--cancel-task (task)
   "Cancel the network request associated with TASK."
+  ;; Invalidate first: deleting a process can invoke its callback.
+  (setf (fanyi--task-done task) t)
+  (fanyi--stop-task-timer task)
   (let ((buffer (fanyi--task-buffer task)) seen)
     (while (and (buffer-live-p buffer) (not (memq buffer seen)))
       (push buffer seen)
@@ -149,47 +172,111 @@
         (kill-buffer buffer)
         (setq buffer next)))))
 
+(defun fanyi--report-task-error (task description)
+  "Display TASK's failure DESCRIPTION and a query retry button."
+  (let* ((instance (fanyi--task-instance task))
+         (name (url-host (url-generic-parse-url (oref instance url))))
+         (word fanyi-current-word))
+    (fanyi-log "%s: %s" name description)
+    (when fanyi-verbose
+      (message "%s: %s" name description))
+    (with-current-buffer (get-buffer-create fanyi-buffer-name)
+      (save-excursion
+        (goto-char (point-max))
+        (let ((inhibit-read-only t))
+          (insert "# " (or name "Dictionary") "\n\n" description "\n\n")
+          (insert-button "Retry query"
+                         'action (lambda (_) (fanyi-dwim word))
+                         'follow-link t)
+          (insert "\n\n"))))))
+
+(defun fanyi--finish-task (task &optional failure)
+  "Settle TASK once, reporting FAILURE if non-nil."
+  (when (fanyi--task-active-p task)
+    (setf (fanyi--task-done task) t)
+    (fanyi--stop-task-timer task)
+    (if failure
+        (progn
+          (cl-incf fanyi--tasks-failed)
+          (fanyi--report-task-error task failure))
+      (cl-incf fanyi--tasks-completed))
+    (force-mode-line-update t)))
+
+(defun fanyi--timeout (task)
+  "Fail and cancel TASK if its response has not arrived."
+  (when (fanyi--task-active-p task)
+    (unwind-protect
+        (fanyi--finish-task task "Request timed out")
+      (fanyi--cancel-task task))))
+
+(defun fanyi--handle-response (task url status)
+  "Parse and render TASK's response from URL with retrieval STATUS."
+  (let ((response-buffer (current-buffer))
+        (instance (fanyi--task-instance task)))
+    (unwind-protect
+        (when (fanyi--task-active-p task)
+          (condition-case err
+              (progn
+                ;; An empty status is success.  Redirects are followed by
+                ;; url.el and are not failures unless accompanied by :error.
+                (when (plist-member status :error)
+                  (error "Request failed: %S" (plist-get status :error)))
+                (unless (and (bound-and-true-p url-http-end-of-headers)
+                             (integer-or-marker-p url-http-end-of-headers)
+                             (<= (point-min) url-http-end-of-headers)
+                             (< url-http-end-of-headers (point-max)))
+                  (error "Invalid HTTP response"))
+                (goto-char (1+ url-http-end-of-headers))
+                (let ((result (pcase (oref instance api-type)
+                                ('xml (libxml-parse-html-region (point) (point-max) url))
+                                ('json (json-parse-buffer))
+                                (_ (error "Unsupported response format")))))
+                  (unless (catch 'not-found
+                            (fanyi-parse-from instance result)
+                            t)
+                    (error "No results found")))
+                (when (fanyi--task-active-p task)
+                  (with-mutex fanyi-buffer-mtx
+                    (with-current-buffer (get-buffer-create fanyi-buffer-name)
+                      (let ((inhibit-read-only t))
+                        ;; Do not leave half a dictionary section on failure.
+                        (atomic-change-group
+                          (fanyi-render instance)))))
+                  (fanyi--finish-task task)))
+            (error (fanyi--finish-task task (error-message-string err)))))
+      (fanyi--cleanup-response response-buffer)
+      (fanyi--cleanup-response (fanyi--task-buffer task)))))
+
 (defun fanyi--spawn (instance)
   "Look up words asynchronously via INSTANCE for the current query."
-  (let* ((url (format (oref instance url) (oref instance word)))
-         (task (fanyi--make-task :query-id fanyi--query-id
-                                 :instance instance))
-         (url-request-method (oref instance method))
-         (url-request-extra-headers (oref instance headers))
-         (url-request-data (oref instance body)))
+  (let ((task (fanyi--make-task :query-id fanyi--query-id
+                               :instance instance)))
     ;; Register before starting the request: a callback may run immediately.
     (push task fanyi--tasks)
-    (setf (fanyi--task-buffer task)
-          (url-retrieve
-           url
-           (lambda (status)
-             ;; Cancelling a request is best effort.  Its callback may already
-             ;; be queued, so never let an old query affect the current one.
-             (if (/= (fanyi--task-query-id task) fanyi--query-id)
-                 (kill-buffer (current-buffer))
-               ;; Something went wrong.
-               (when (or (not status) (plist-member status :error))
-                 (cl-incf fanyi--tasks-failed)
-                 (fanyi-user-error "Something went wrong.\n\n%s"
-                                   (pp-to-string (plist-get status :error))))
-               (when (plist-member status :redirect)
-                 (cl-incf fanyi--tasks-failed)
-                 (fanyi-user-error "Did you misspell the word?\n\n%s"
-                                   (pp-to-string (plist-get status :redirect))))
-               (goto-char (1+ url-http-end-of-headers))
-               (let ((result (pcase (oref instance api-type)
-                               ('xml (libxml-parse-html-region (point) (point-max) url))
-                               ('json (json-parse-buffer)))))
-                 (unless
-                     (catch 'not-found
-                       (fanyi-parse-from instance result)
-                       (with-mutex fanyi-buffer-mtx
-                         (fanyi-render instance))
-                       (cl-incf fanyi--tasks-completed))
-                   (cl-incf fanyi--tasks-failed)))))
-           nil t t))))
-
-(defvar fanyi-current-word nil)
+    (condition-case err
+        (let ((url (format (oref instance url) (oref instance word)))
+              (url-request-method (oref instance method))
+              (url-request-extra-headers (oref instance headers))
+              (url-request-data (oref instance body)))
+          (setf (fanyi--task-buffer task)
+                (url-retrieve url
+                              (lambda (status)
+                                (fanyi--handle-response task url status))
+                              nil t t))
+          (cond
+           ((fanyi--task-done task)
+            ;; The callback may have completed before url-retrieve returned.
+            (fanyi--cleanup-response (fanyi--task-buffer task)))
+           ((not (buffer-live-p (fanyi--task-buffer task)))
+            (error "Could not start request"))
+           (fanyi-request-timeout
+            (setf (fanyi--task-timer task)
+                  (run-at-time fanyi-request-timeout nil #'fanyi--timeout task)))))
+      (error
+       (unwind-protect
+           (fanyi--finish-task task (error-message-string err))
+         (fanyi--cancel-task task))))
+    task))
 
 (defun fanyi-format-header-line ()
   "Used as `header-line-format'."
