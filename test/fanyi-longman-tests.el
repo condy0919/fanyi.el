@@ -94,5 +94,63 @@
       (should (string-match-p "Different layout" (buffer-string)))
       (should (string-match-p "used for testing" (buffer-string))))))
 
+(ert-deftest fanyi-longman-validates-visible-prepared-content ()
+  (let* ((dom (fanyi-test--longman-html
+               (concat "<div class='dictionary'>"
+                       "<div class='dictentry'><span hidden='hidden'><span class='DEF'>Hidden definition.</span></span></div>"
+                       "<div class='dictentry'><span class='suppressed Crossref'><a href='/dictionary/hidden'>Hidden reference.</a></span></div>"
+                       "<div class='dictentry HWD'><span class='DEF'>Visible definition.</span></div>"
+                       "</div>")))
+         (before (copy-tree dom))
+         (request (fanyi-make-request fanyi-longman-provider "sample"))
+         (result (fanyi-parse-response request dom)))
+    (should (equal dom before))
+    ;; A face wrapper around the surviving entry must not hide its identity.
+    (should (= (length (fanyi-longman--nodes result "dictentry")) 1))
+    (should (string-match-p "Visible definition" (dom-texts result "")))
+    (should-not (string-match-p "Hidden" (dom-texts result "")))))
+
+(ert-deftest fanyi-longman-prepares-once-and-reuses-result ()
+  (let* ((dom (fanyi-test--read-fixture "longman-sun-saved.html"))
+         (before (copy-tree dom))
+         (rules (copy-tree fanyi-longman--class-styles))
+         (request (fanyi-make-request fanyi-longman-provider "sun"))
+         (sections (fanyi-longman--sections
+                    (car (fanyi-longman--nodes dom "dictionary"))))
+         (prepare (symbol-function 'fanyi-longman--prepare-node))
+         (section-counts (make-hash-table :test #'eq))
+         result)
+    (cl-letf (((symbol-function 'fanyi-longman--prepare-node)
+               (lambda (node base &optional context)
+                 (when (memq node sections)
+                   (puthash node (1+ (gethash node section-counts 0)) section-counts))
+                 (funcall prepare node base context))))
+      (setq result (fanyi-parse-response request dom)))
+    (dolist (section sections)
+      (should (= (gethash section section-counts 0) 1)))
+    (let ((prepared (copy-tree result))
+          (fanyi-use-glyphs nil))
+      (cl-letf (((symbol-function 'fanyi-longman--prepare-node)
+                 (lambda (&rest _) (ert-fail "Prepared DOM must be reused"))))
+        (with-temp-buffer
+          (let ((fanyi-buffer-name (buffer-name))
+                (shr-width 74))
+            (fanyi-mode)
+            (save-window-excursion
+              (set-window-buffer nil (current-buffer))
+              (fanyi-render-result request result)
+              (let ((first (buffer-string))
+                    (inhibit-read-only t))
+                (erase-buffer)
+                (fanyi-render-result request result)
+                (should (equal first (buffer-string))))
+              (let ((lines (count-lines (point-min) (point-max)))
+                    (shr-width 44))
+                (fanyi-shr-reflow)
+                (should (> (count-lines (point-min) (point-max)) lines)))))))
+      (should (equal result prepared)))
+    (should (equal dom before))
+    (should (equal fanyi-longman--class-styles rules))))
+
 (provide 'fanyi-longman-tests)
 ;;; fanyi-longman-tests.el ends here

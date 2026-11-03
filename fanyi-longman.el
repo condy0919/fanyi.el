@@ -291,82 +291,101 @@ The saved page puts the corpus label and title in sibling containers."
           (push node result))))
     (nreverse result)))
 
+(defun fanyi-longman--node-context (node classes context)
+  "Extend CONTEXT with the semantic sections introduced by NODE and CLASSES."
+  (append (when (member "wordfams" classes) '(family))
+          (when (member "etym" classes) '(origin))
+          (when (member "Sense" classes) '(sense))
+          (when (member "asset_intro" classes) '(asset-heading))
+          (when (cl-intersection classes '("exaGroup" "corpus") :test #'equal)
+            '(corpus))
+          (when (and (member "Head" classes)
+                     (fanyi-longman--nodes node "HYPHENATION"))
+            '(hyphenated))
+          context))
+
+(defun fanyi-longman--hidden-node-p (node classes context)
+  "Return non-nil if NODE with CLASSES is omitted in CONTEXT."
+  (or (memq (dom-tag node) '(script style iframe form input img svg
+                                    object embed audio video source link meta base))
+      (and (eq (dom-tag node) 'button) (not (dom-attr node 'data-src-mp3)))
+      (cl-intersection classes '("FIELD" "ACTIV" "SIGNPOST" "suppressed")
+                       :test #'equal)
+      (and (memq 'hyphenated context) (member "HWD" classes))
+      (dom-attr node 'hidden)
+      (equal (dom-attr node 'aria-hidden) "true")
+      (string-match-p "display[ \t]*:[ \t]*none" (or (dom-attr node 'style) ""))))
+
+(defun fanyi-longman--prepare-link (node base context)
+  "Return NODE's tag and copied attributes, resolving links against BASE.
+A word-family anchor without a URL becomes a query link in CONTEXT."
+  (let ((tag (dom-tag node))
+        (attributes (copy-tree (dom-attributes node))))
+    (when (eq tag 'a)
+      (setf (alist-get 'href attributes)
+            (fanyi-longman--http-url (dom-attr node 'href) base))
+      (when (and (memq 'family context) (not (dom-attr node 'href)))
+        (setq tag 'fanyi-query)
+        (setf (alist-get 'word attributes) (string-trim (dom-texts node "")))))
+    (cons tag attributes)))
+
+(defun fanyi-longman--node-style (tag classes context audio)
+  "Resolve TAG, CLASSES and CONTEXT to SHR styling, accounting for AUDIO."
+  (let ((style (copy-sequence
+                (apply #'append
+                       (mapcar (lambda (rule)
+                                 (when (member (car rule) classes) (cdr rule)))
+                               fanyi-longman--class-styles)))))
+    (cond
+     (audio (setq tag 'fanyi-audio))
+     ((member "etym" classes) (setq tag 'fanyi-origin))
+     ((and (memq 'origin context) (member "asset_intro" classes))
+      (setq tag 'fanyi-origin-label))
+     ((and (memq 'origin context) (member "HOMNUM" classes))
+      (setq tag 'fanyi-homonym style (plist-put style :face 'bold)))
+     ((memq 'origin context)
+      ;; Keep emphasis and links while laying out the origin inline.
+      (when (memq tag '(div p h1 h2 h3 h4 h5 h6 br))
+        (setq tag 'span)))
+     ((and (member "Crossref" classes) (memq 'sense context))
+      (setq tag 'span))
+     ((and (member "title" classes) (memq 'corpus context)
+           (not (memq 'asset-heading context)))
+      (setq tag 'fanyi-block
+            style (plist-put style :face 'fanyi-longman-heading-face)
+            style (plist-put style :indent 1)))
+     ((and (member "HEADING" classes) (member "newline" classes))
+      (setq tag 'fanyi-line))
+     ((plist-get style :tag) (setq tag (plist-get style :tag))))
+    (plist-put style :tag tag)))
+
 (defun fanyi-longman--prepare-node (node base &optional context)
-  "Copy NODE for shr, adapting CSS layout and resolving URLs against BASE.
+  "Copy NODE into a reusable SHR DOM, resolving URLs against BASE.
 CONTEXT records the semantic sections enclosing NODE.
 Keep ordinary HTML and unfamiliar inline markup for shr to render."
   (if (stringp node)
       node
     (let* ((classes (split-string (or (dom-attr node 'class) "")))
-           (node (if (cl-intersection classes '("asset" "corpus") :test #'equal)
-                     (fanyi-longman--asset-heading node)
-                   node))
-           (tag (dom-tag node))
-           (style (apply #'append
-                         (mapcar (lambda (rule)
-                                   (when (member (car rule) classes) (cdr rule)))
-                                 fanyi-longman--class-styles)))
-           (context (append
-                     (when (member "wordfams" classes) '(family))
-                     (when (member "etym" classes) '(origin))
-                     (when (member "Sense" classes) '(sense))
-                     (when (member "asset_intro" classes) '(asset-heading))
-                     (when (cl-intersection classes '("exaGroup" "corpus") :test #'equal)
-                       '(corpus))
-                     (when (and (member "Head" classes)
-                                (fanyi-longman--nodes node "HYPHENATION"))
-                       '(hyphenated))
-                     context)))
-      (unless (or (memq tag '(script style iframe form input img svg
-                                     object embed audio video source link meta base))
-                  (and (eq tag 'button) (not (dom-attr node 'data-src-mp3)))
-                  (cl-intersection classes '("FIELD" "ACTIV" "SIGNPOST" "suppressed")
-                                   :test #'equal)
-                  (and (memq 'hyphenated context) (member "HWD" classes))
-                  (dom-attr node 'hidden)
-                  (equal (dom-attr node 'aria-hidden) "true")
-                  (string-match-p "display[ \t]*:[ \t]*none"
-                                  (or (dom-attr node 'style) "")))
-        (let* ((attributes (copy-tree (dom-attributes node)))
+           (context (fanyi-longman--node-context node classes context)))
+      (unless (fanyi-longman--hidden-node-p node classes context)
+        (let* ((node (if (cl-intersection classes '("asset" "corpus") :test #'equal)
+                         (fanyi-longman--asset-heading node)
+                       node))
+               (link (fanyi-longman--prepare-link node base context))
+               (attributes (cdr link))
+               (audio (fanyi-longman--http-url (dom-attr node 'data-src-mp3) base))
+               (style (fanyi-longman--node-style (car link) classes context audio))
+               (tag (plist-get style :tag))
+               (face (plist-get style :face))
                (children (delq nil (mapcar (lambda (child)
                                              (fanyi-longman--prepare-node child base context))
-                                           (fanyi-longman--group-assets (dom-children node)))))
-               (audio (fanyi-longman--http-url (dom-attr node 'data-src-mp3) base))
-               (face (plist-get style :face)))
+                                           (fanyi-longman--group-assets (dom-children node))))))
           (when (plist-get style :indent)
             (setf (alist-get 'fanyi-indent attributes) (plist-get style :indent)))
-          ;; URL normalization avoids relying on shr's document-local base URL.
-          (when (eq tag 'a)
-            (setf (alist-get 'href attributes)
-                  (fanyi-longman--http-url (dom-attr node 'href) base))
-            (when (and (memq 'family context) (not (dom-attr node 'href)))
-              (setq tag 'fanyi-query)
-              (setf (alist-get 'word attributes) (string-trim (dom-texts node "")))))
-          (cond
-           (audio
-            (setq tag 'fanyi-audio)
-            (setf (alist-get 'src attributes) audio))
-           ((member "etym" classes)
-            (setq tag 'fanyi-origin)
-            (unless (fanyi-longman--nodes node "asset_intro")
-              (push '(fanyi-origin-label nil "Origin") children)))
-           ((and (memq 'origin context) (member "asset_intro" classes))
-            (setq tag 'fanyi-origin-label))
-           ((and (memq 'origin context) (member "HOMNUM" classes))
-            (setq tag 'fanyi-homonym face 'bold))
-           ((memq 'origin context)
-            ;; Keep emphasis and links while laying out the origin inline.
-            (when (memq tag '(div p h1 h2 h3 h4 h5 h6 br))
-              (setq tag 'span)))
-           ((and (member "Crossref" classes) (memq 'sense context))
-            (setq tag 'span))
-           ((and (member "title" classes) (memq 'corpus context)
-                 (not (memq 'asset-heading context)))
-            (setq tag 'fanyi-block face 'fanyi-longman-heading-face)
-            (setf (alist-get 'fanyi-indent attributes) 1))
-           ((and (member "HEADING" classes) (member "newline" classes))
-            (setq tag 'fanyi-line))
-           ((plist-get style :tag) (setq tag (plist-get style :tag))))
+          (when audio (setf (alist-get 'src attributes) audio))
+          (when (and (eq tag 'fanyi-origin)
+                     (not (fanyi-longman--nodes node "asset_intro")))
+            (push '(fanyi-origin-label nil "Origin") children))
           (when (plist-get style :space)
             (setq children (append '(" ") children '(" "))))
           (when (member "SYN" classes)
@@ -388,18 +407,20 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
     (cl-mapcan #'fanyi-longman--sections (dom-non-text-children node))))
 
 (defun fanyi-longman-parse (dom request)
-  "Return usable dictionary content from DOM for REQUEST."
+  "Select, prepare and validate reusable dictionary DOM for REQUEST.
+The returned DOM is ready for SHR; DOM itself is not modified."
   (let* ((base (fanyi-request-url request))
          (dictionary (car (fanyi-longman--nodes dom "dictionary")))
-         (sections (seq-filter
-                    (lambda (node)
-                      (or (not (fanyi-longman--class-p node "dictentry"))
-                          (fanyi-longman--entry-p
-                           (fanyi-longman--prepare-node node base) base)))
-                    (fanyi-longman--sections dictionary))))
-    (unless (seq-some (lambda (node) (fanyi-longman--class-p node "dictentry")) sections)
+         sections has-entry)
+    (dolist (node (fanyi-longman--sections dictionary))
+      (let ((entry (fanyi-longman--class-p node "dictentry"))
+            (prepared (fanyi-longman--prepare-node node base)))
+        (when (and prepared (or (not entry) (fanyi-longman--entry-p prepared base)))
+          (when entry (setq has-entry t))
+          (push prepared sections))))
+    (unless has-entry
       (signal 'fanyi-parse-error '("Longman response contains no usable dictionary entries")))
-    (copy-tree `(div nil ,@sections))))
+    `(div nil ,@(nreverse sections))))
 
 (defun fanyi-longman--shr-heading (dom)
   "Render DOM as a Fanyi outline heading."
@@ -570,14 +591,12 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
     (add-face-text-property start (point) 'fanyi-longman-example-face)
     (shr-ensure-newline)))
 
-(defun fanyi-longman-render (content request)
-  "Render CONTENT for REQUEST with Fanyi headings and actions."
+(defun fanyi-longman-render (content _request)
+  "Render prepared CONTENT with Fanyi headings and actions."
   (fanyi-with-fanyi-buffer
     (insert "# Longman\n\n")
     (fanyi-shr-insert
-     `(fanyi-face ((face . fanyi-longman-body-face))
-                  ,(fanyi-longman--prepare-node
-                    content (fanyi-request-url request)))
+     `(fanyi-face ((face . fanyi-longman-body-face)) ,content)
      '((a . fanyi-longman--shr-link)
        (fanyi-query . fanyi-longman--shr-link)
        (fanyi-audio . fanyi-longman--shr-audio)

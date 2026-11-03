@@ -182,9 +182,10 @@ separately from both the provider and the request:
 
 - `prepare(request)` is optional and adjusts only that request, for example
   to apply Youdao's current result limit.
-- `parse(response, request)` returns dictionary data. Longman returns a DOM,
-  Youdao returns word/explanation pairs, and Haici returns a
-  `fanyi-haici-result` record. Empty results still use `(throw 'not-found nil)`;
+- `parse(response, request)` returns dictionary data. Longman returns a prepared
+  DOM that rendering and reflow reuse without repeating HTML conversion; the
+  response DOM is left unchanged. Youdao returns word/explanation pairs, and
+  Haici returns a `fanyi-haici-result` record. Empty results still use `(throw 'not-found nil)`;
   malformed responses signal `fanyi-parse-error`.
 - `render(result, request)` displays the result. Browser providers skip parsing
   and receive a nil result. Rendering still runs inside an atomic change group.

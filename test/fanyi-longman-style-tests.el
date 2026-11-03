@@ -39,8 +39,11 @@
       ;; The saved page uses nested asset/yellow_box and assetlink/exaGroup
       ;; siblings, and an ACTIV label hidden by CSS, unlike the synthetic page.
       (should (equal dom before))
-      (should (dom-by-class result "^ACTIV$"))
-      (should (= (length (dom-by-class result "^HWD$")) 2))
+      (should (dom-by-class dom "^ACTIV$"))
+      (should (= (length (dom-by-class dom "^HWD$")) 2))
+      (should-not (dom-by-class result "^ACTIV$"))
+      ;; The headword duplicate is removed, while Origin retains its HWD.
+      (should (= (length (dom-by-class result "^HWD$")) 1))
       (should (string-match-p "^## From Longman Dictionary of Contemporary English$"
                               (buffer-string)))
       (should (string-match-p "^## Examples from the Corpus dragon$" (buffer-string)))

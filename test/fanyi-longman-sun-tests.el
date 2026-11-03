@@ -42,7 +42,7 @@ Allow subsequent text on the line when PREFIX is non-nil."
     (should-not (dom-by-class dom "am-dictionary"))
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
       (should (equal dom before))
-      (should (dom-by-class result "suppressed"))
+      (should-not (dom-by-class result "suppressed"))
       (let ((case-fold-search nil))
         (should-not (string-match-p
                      "The Sun" (buffer-substring-no-properties (point-min) (point-max)))))
