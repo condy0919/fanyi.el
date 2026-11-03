@@ -78,6 +78,61 @@
             (should (equal (fanyi-shr-test--text) fanyi-shr-test--text)))
         (kill-buffer " *fanyi-shr-other-window*")))))
 
+(ert-deftest fanyi-shr-reflow-preserves-active-selections-in-both-directions ()
+  (dolist (ends '(("word10" "word25") ("word25" "word10")))
+    (fanyi-shr-test--with-window
+      (fanyi-shr-insert `(p nil ,fanyi-shr-test--text) nil)
+      (goto-char (point-min))
+      (search-forward (car ends))
+      (set-mark (match-beginning 0))
+      (goto-char (point-min))
+      (search-forward (cadr ends))
+      (goto-char (match-beginning 0))
+      (let ((transient-mark-mode t)
+            (mark-active t)
+            (deactivate-mark nil)
+            (ring mark-ring)
+            (selected (replace-regexp-in-string
+                       "[ \t\r\n]+" " "
+                       (buffer-substring-no-properties (region-beginning) (region-end)))))
+        (split-window-right 35)
+        (fanyi-shr-reflow)
+        (should (use-region-p))
+        (should-not deactivate-mark)
+        (should (eq mark-ring ring))
+        (should (looking-at-p (cadr ends)))
+        (should (save-excursion (goto-char (mark)) (looking-at-p (car ends))))
+        (should (equal selected
+                       (replace-regexp-in-string
+                        "[ \t\r\n]+" " "
+                        (buffer-substring-no-properties (region-beginning) (region-end)))))))))
+
+(ert-deftest fanyi-shr-reflow-preserves-an-inactive-mark ()
+  (fanyi-shr-test--with-window
+    (fanyi-shr-insert `(p nil ,fanyi-shr-test--text) nil)
+    (goto-char (point-min))
+    (search-forward "word10")
+    (set-mark (match-beginning 0))
+    (let ((mark-active nil)
+          (deactivate-mark t)
+          (shr-width 35))
+      (fanyi-shr-reflow)
+      (should-not mark-active)
+      (should deactivate-mark)
+      (should (save-excursion (goto-char (mark t)) (looking-at-p "word10"))))))
+
+(ert-deftest fanyi-shr-reflow-does-not-create-an-unset-mark ()
+  (fanyi-shr-test--with-window
+    (fanyi-shr-insert `(p nil ,fanyi-shr-test--text) nil)
+    (should-not (mark t))
+    (let ((mark-active nil)
+          (deactivate-mark nil)
+          (shr-width 35))
+      (fanyi-shr-reflow)
+      (should-not (mark t))
+      (should-not mark-active)
+      (should-not deactivate-mark))))
+
 (ert-deftest fanyi-shr-rendering-preserves-horizontal-scroll ()
   (fanyi-shr-test--with-window
     (set-window-hscroll nil 7)

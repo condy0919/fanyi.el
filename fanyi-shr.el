@@ -377,6 +377,11 @@ previous one."
              (regions (mapcar #'car updates)))
         (when regions
           (let ((position (fanyi-shr--anchor (point)))
+                (mark (and (mark t) (fanyi-shr--anchor (mark t))))
+                ;; Replacing text must not deactivate an existing selection,
+                ;; or reactivate one that the current command has dismissed.
+                (mark-active mark-active)
+                (deactivate-mark deactivate-mark)
                 (folds (fanyi-shr--outline-folds regions))
                 (windows (mapcar
                           (lambda (win)
@@ -405,6 +410,7 @@ previous one."
                     (set-window-point win point)
                     (set-window-start win start t))))
               (goto-char (fanyi-shr--position position))
+              (set-marker (mark-marker) (and mark (fanyi-shr--position mark)))
               (set-buffer-modified-p modified))))))))
 
 (defun fanyi-shr--window-change (window)
