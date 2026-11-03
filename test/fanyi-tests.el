@@ -62,18 +62,21 @@ including one delivered by a redirected request."
    request status
    (json-encode `((definition . ,(or definition "definition"))))))
 
+(defun fanyi-test--query-state (variable)
+  "Read VARIABLE from the active result buffer, or its default before a query."
+  (if (buffer-live-p fanyi--active-buffer)
+      (buffer-local-value variable fanyi--active-buffer)
+    (default-value variable)))
+
 (defmacro fanyi-test--with-query (&rest body)
   "Evaluate BODY with isolated query state and mocked HTTP requests."
   (declare (indent 0) (debug t))
   `(let* ((fanyi-buffer-name (generate-new-buffer-name " *fanyi-test*"))
           (fanyi-providers (list (fanyi-test--provider)))
           (fanyi-auto-select nil)
-          (fanyi-current-word nil)
           (fanyi-history nil)
           (fanyi--query-id 0)
-          (fanyi--tasks nil)
-          (fanyi--tasks-completed 0)
-          (fanyi--tasks-failed 0)
+          (fanyi--active-buffer nil)
           (fanyi-verbose t)
           (fanyi-log nil)
           (fanyi-request-timeout 15)
@@ -99,11 +102,11 @@ including one delivered by a redirected request."
 (ert-deftest fanyi-query-normalizes-input-before-building-requests ()
   (fanyi-test--with-query
     (fanyi-dwim " \tChase  the Dragon\n ")
-    (let ((request (fanyi--task-request (car fanyi--tasks))))
+    (let ((request (fanyi--task-request (car (fanyi-test--query-state 'fanyi--tasks)))))
       (should (equal (fanyi-request-word request) "chase  the dragon"))
       (should (equal (fanyi-request-url request)
                      "https://example.invalid/chase%20%20the%20dragon")))
-    (should (equal fanyi-current-word "Chase  the Dragon"))
+    (should (equal (fanyi-test--query-state 'fanyi-current-word) "Chase  the Dragon"))
     (should (equal fanyi-history '("Chase  the Dragon")))))
 
 (ert-deftest fanyi-query-invalid-input-preserves-running-query ()
@@ -112,7 +115,7 @@ including one delivered by a redirected request."
     (with-current-buffer fanyi-buffer-name
       (let ((inhibit-read-only t))
         (insert "Existing results")))
-    (let* ((task (car fanyi--tasks))
+    (let* ((task (car (fanyi-test--query-state 'fanyi--tasks)))
            (timer (fanyi--task-timer task))
            (response (fanyi-test-request-buffer (car fanyi-test--requests)))
            (process (make-pipe-process :name "fanyi-test-valid-query"
@@ -123,19 +126,19 @@ including one delivered by a redirected request."
                    (ert-fail "Invalid input must not prepare providers"))))
         (dolist (input '(nil 42 word ("word") "" " \t\n "))
           (should-error (fanyi-dwim input) :type 'user-error)
-          (should (equal fanyi--tasks (list task)))
+          (should (equal (fanyi-test--query-state 'fanyi--tasks) (list task)))
           (should-not (fanyi--task-done task))
           (should (memq timer timer-list))
           (should (buffer-live-p response))
           (should (process-live-p process))
           (should (= (length fanyi-test--requests) 1))
           (should (= fanyi--query-id query-id))
-          (should (equal fanyi-current-word "running"))
+          (should (equal (fanyi-test--query-state 'fanyi-current-word) "running"))
           (should (equal fanyi-history '("running")))
           (with-current-buffer fanyi-buffer-name
             (should (equal (buffer-string) "Existing results")))))
       (fanyi-test--respond (car fanyi-test--requests) nil "completed")
-      (should (= fanyi--tasks-completed 1)))))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 1)))))
 
 (ert-deftest fanyi-query-entry-points-share-recent-deduplicated-history ()
   (fanyi-test--with-query
@@ -174,7 +177,7 @@ including one delivered by a redirected request."
                    (should-not history-add-new-input)
                    " \tMixed Case\n ")))
         (call-interactively #'fanyi-dwim)))
-    (should (equal fanyi-current-word "Mixed Case"))
+    (should (equal (fanyi-test--query-state 'fanyi-current-word) "Mixed Case"))
     (should (equal fanyi-history '("Mixed Case" "previous")))))
 
 (ert-deftest fanyi-query-failed-preparation-does-not-record-history ()
@@ -184,7 +187,7 @@ including one delivered by a redirected request."
           (lambda (_request) (error "Cannot prepare request")))
     (should-error (fanyi-dwim "next"))
     (should (equal fanyi-history '("previous")))
-    (should-not fanyi-current-word)
+    (should-not (fanyi-test--query-state 'fanyi-current-word))
     (should-not fanyi-test--requests)
     (should-not (get-buffer fanyi-buffer-name))))
 
@@ -197,14 +200,14 @@ including one delivered by a redirected request."
                    (fanyi-test--respond old-request '(:peer nil) "obsolete")))
       (with-current-buffer fanyi-buffer-name
         (should (equal (buffer-string) "")))
-      (should (= fanyi--tasks-completed 0))
-      (should (= fanyi--tasks-failed 0))
-      (should (= (length fanyi--tasks) 1))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 0))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 0))
+      (should (= (length (fanyi-test--query-state 'fanyi--tasks)) 1))
       (fanyi-test--respond (cadr fanyi-test--requests) '(:peer nil) "current")
       (with-current-buffer fanyi-buffer-name
         (should (equal (buffer-string) "new: current\n")))
-      (should (= fanyi--tasks-completed 1))
-      (should (= fanyi--tasks-failed 0)))))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 1))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 0)))))
 
 (ert-deftest fanyi-query-ignores-stale-error ()
   (fanyi-test--with-query
@@ -213,12 +216,12 @@ including one delivered by a redirected request."
       (fanyi-dwim "new")
       (should-not (buffer-live-p
                    (fanyi-test--respond old-request '(:error (error http 500)))))
-      (should (= fanyi--tasks-completed 0))
-      (should (= fanyi--tasks-failed 0))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 0))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 0))
       (with-current-buffer fanyi-buffer-name
         (should (equal (buffer-string) "")))
       (fanyi-test--respond (cadr fanyi-test--requests) '(:peer nil))
-      (should (= fanyi--tasks-completed 1)))))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 1)))))
 
 (ert-deftest fanyi-query-repeated-word-still-invalidates-old-request ()
   (fanyi-test--with-query
@@ -229,14 +232,14 @@ including one delivered by a redirected request."
       (fanyi-test--respond old-request '(:peer nil) "obsolete")
       (with-current-buffer fanyi-buffer-name
         (should (equal (buffer-string) "word: current\n")))
-      (should (= fanyi--tasks-completed 1))
-      (should (= fanyi--tasks-failed 0)))))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 1))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 0)))))
 
 (ert-deftest fanyi-query-cancels-previous-request ()
   (fanyi-test--with-query
     (fanyi-dwim "old")
     (let* ((request (car fanyi-test--requests))
-           (timer (fanyi--task-timer (car fanyi--tasks)))
+           (timer (fanyi--task-timer (car (fanyi-test--query-state 'fanyi--tasks))))
            (buffer (fanyi-test-request-buffer request))
            (process (make-pipe-process :name "fanyi-test-pending"
                                        :buffer buffer :noquery t)))
@@ -245,9 +248,9 @@ including one delivered by a redirected request."
       (should-not (process-live-p process))
       (should-not (buffer-live-p buffer))
       (should-not (memq timer timer-list))
-      (should (= (length fanyi--tasks) 1))
-      (should (= fanyi--tasks-completed 0))
-      (should (= fanyi--tasks-failed 0)))))
+      (should (= (length (fanyi-test--query-state 'fanyi--tasks)) 1))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 0))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 0)))))
 
 (ert-deftest fanyi-query-cancels-redirected-request ()
   (fanyi-test--with-query
@@ -263,16 +266,16 @@ including one delivered by a redirected request."
       (should-not (process-live-p process))
       (should-not (buffer-live-p original))
       (should-not (buffer-live-p redirected))
-      (should (= (length fanyi--tasks) 1))
-      (should (= fanyi--tasks-completed 0))
-      (should (= fanyi--tasks-failed 0)))))
+      (should (= (length (fanyi-test--query-state 'fanyi--tasks)) 1))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 0))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 0)))))
 
 (ert-deftest fanyi-query-killing-result-buffer-cancels-pending-resources ()
   (fanyi-test--with-query
     (setq fanyi-providers (list (car fanyi-providers) (car fanyi-providers)))
     (fanyi-dwim "word")
-    (let ((tasks (copy-sequence fanyi--tasks))
-          (timers (mapcar #'fanyi--task-timer fanyi--tasks))
+    (let ((tasks (copy-sequence (fanyi-test--query-state 'fanyi--tasks)))
+          (timers (mapcar #'fanyi--task-timer (fanyi-test--query-state 'fanyi--tasks)))
           buffers processes)
       (dolist (request fanyi-test--requests)
         (let ((original (fanyi-test-request-buffer request))
@@ -299,7 +302,7 @@ including one delivered by a redirected request."
       (fanyi-test--with-query
         (fanyi-dwim "word")
         (let ((request (car fanyi-test--requests))
-              (task (car fanyi--tasks))
+              (task (car (fanyi-test--query-state 'fanyi--tasks)))
               replacement-buffer)
           (kill-buffer fanyi-buffer-name)
           (when replacement
@@ -311,8 +314,8 @@ including one delivered by a redirected request."
             (should-not (buffer-live-p (fanyi-test--respond request status "too late"))))
           ;; A timeout callback may already have been queued when cancelled.
           (fanyi--timeout task)
-          (should (= fanyi--tasks-completed 0))
-          (should (= fanyi--tasks-failed 0))
+          (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 0))
+          (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 0))
           (if replacement
               (with-current-buffer replacement-buffer
                 (should (eq (get-buffer fanyi-buffer-name) replacement-buffer))
@@ -324,8 +327,8 @@ including one delivered by a redirected request."
   (fanyi-test--with-query
     (fanyi-dwim "word")
     (let ((request (car fanyi-test--requests))
-          (task (car fanyi--tasks))
-          (timer (fanyi--task-timer (car fanyi--tasks))))
+          (task (car (fanyi-test--query-state 'fanyi--tasks)))
+          (timer (fanyi--task-timer (car (fanyi-test--query-state 'fanyi--tasks)))))
       (with-current-buffer fanyi-buffer-name
         (fundamental-mode)
         (let ((inhibit-read-only t)) (insert "Reused for editing")))
@@ -342,7 +345,7 @@ including one delivered by a redirected request."
   (fanyi-test--with-query
     (fanyi-dwim "word")
     (let ((target (get-buffer fanyi-buffer-name))
-          (task (car fanyi--tasks)))
+          (task (car (fanyi-test--query-state 'fanyi--tasks))))
       (save-window-excursion
         (set-window-buffer nil target)
         (with-current-buffer target
@@ -352,7 +355,7 @@ including one delivered by a redirected request."
         (should-not (fanyi--task-done task))
         (should (memq (fanyi--task-timer task) timer-list))
         (fanyi-test--respond (car fanyi-test--requests) nil "ready when reopened")
-        (should (= fanyi--tasks-completed 1))
+        (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 1))
         (with-current-buffer target
           (should (eq major-mode 'fanyi-mode))
           (should buffer-read-only)
@@ -374,23 +377,57 @@ including one delivered by a redirected request."
               (should (equal (buffer-string) "word: original lookup\n")))
             (with-current-buffer fanyi-buffer-name
               (should (equal (buffer-string) "Different buffer with the original name")))
-            (should (= fanyi--tasks-completed 1)))
+            (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 1)))
         (when (buffer-live-p target) (kill-buffer target))))))
+
+(ert-deftest fanyi-query-saved-results-keep-their-own-word-and-status ()
+  (require 'ol-fanyi)
+  (fanyi-test--with-query
+    (setq fanyi-providers (list (car fanyi-providers) (car fanyi-providers)))
+    (fanyi-dwim "Dragon")
+    (fanyi-test--respond (car fanyi-test--requests) nil "old definition")
+    (let ((saved (get-buffer fanyi-buffer-name))
+          (late (cadr fanyi-test--requests))
+          (kill-ring nil) stored)
+      (push saved fanyi-test--buffers)
+      (with-current-buffer saved
+        (rename-buffer (generate-new-buffer-name " *fanyi-saved-query*"))
+        ;; Starting another query from an old result must not overwrite its word.
+        (fanyi-dwim "Sun"))
+      (fanyi-test--respond (nth 2 fanyi-test--requests) nil "first new definition")
+      (fanyi-test--respond (nth 3 fanyi-test--requests) nil "second new definition")
+      (fanyi-test--respond late nil "obsolete")
+      (with-current-buffer saved
+        (should (equal fanyi-current-word "Dragon"))
+        (should (equal (buffer-string) "dragon: old definition\n"))
+        (should (equal (substring-no-properties (fanyi-format-header-line))
+                       "Translating Dragon 0 1 0"))
+        (fanyi-copy-query-word)
+        (should (equal (car kill-ring) "Dragon"))
+        (should (equal (car (fanyi-bookmark-make-record)) "Dragon"))
+        (cl-letf (((symbol-function 'org-link-store-props)
+                   (lambda (&rest properties) (setq stored properties))))
+          (fanyi-org-store-link))
+        (should (equal (plist-get stored :link) "fanyi:Dragon")))
+      (with-current-buffer fanyi-buffer-name
+        (should (equal fanyi-current-word "Sun"))
+        (should (equal (substring-no-properties (fanyi-format-header-line))
+                       "Translating Sun 0 2 0"))))))
 
 (ert-deftest fanyi-query-accepts-success-status-and-cleans-response ()
   (fanyi-test--with-query
     (dolist (status '(nil (:redirect "https://example.invalid/canonical")))
       (ert-info ((format "Success status: %S" status))
         (fanyi-dwim "word")
-        (let* ((task (car fanyi--tasks))
+        (let* ((task (car (fanyi-test--query-state 'fanyi--tasks)))
                (timer (fanyi--task-timer task))
                (response (fanyi-test--respond (car (last fanyi-test--requests))
                                               status)))
           (should-not (buffer-live-p response))
           (should-not (memq timer timer-list))
           (should (fanyi--task-done task))
-          (should (= fanyi--tasks-completed 1))
-          (should (= fanyi--tasks-failed 0))
+          (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 1))
+          (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 0))
           (with-current-buffer fanyi-buffer-name
             (should (equal (buffer-string) "word: definition\n"))))))))
 
@@ -409,7 +446,7 @@ including one delivered by a redirected request."
       (should (equal captured
                      '("https://example.invalid/mixed%20word%3F" "POST"
                        (("X-Token" . "test-token")) "payload")))
-      (should (equal fanyi-current-word "Mixed Word?")))))
+      (should (equal (fanyi-test--query-state 'fanyi-current-word) "Mixed Word?")))))
 
 (ert-deftest fanyi-query-shared-provider-keeps-requests-and-results-independent ()
   (fanyi-test--with-query
@@ -417,8 +454,8 @@ including one delivered by a redirected request."
            (before (prin1-to-string provider)))
       (setq fanyi-providers (list provider provider))
       (fanyi-dwim "word")
-      (let ((first (cadr fanyi--tasks))
-            (second (car fanyi--tasks)))
+      (let ((first (cadr (fanyi-test--query-state 'fanyi--tasks)))
+            (second (car (fanyi-test--query-state 'fanyi--tasks))))
         (should-not (eq (fanyi--task-request first) (fanyi--task-request second)))
         ;; Responses can arrive in reverse order, and a previous result can
         ;; still be rendered after the other request has finished parsing.
@@ -426,7 +463,7 @@ including one delivered by a redirected request."
         (fanyi-test--respond (car fanyi-test--requests) nil "first result")
         (should (equal (fanyi--task-result first) "first result"))
         (should (equal (fanyi--task-result second) "second result"))
-        (should (= fanyi--tasks-completed 2))
+        (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 2))
         (should (equal (prin1-to-string provider) before))
         (with-current-buffer fanyi-buffer-name
           (should (equal (buffer-string) "word: second result\nword: first result\n")))
@@ -465,15 +502,15 @@ including one delivered by a redirected request."
                     (when (eq failure 'http) '(:error (error http 500)))
                     (if (eq failure 'json) "{invalid" "{\"definition\":\"valid\"}"))))
               (should-not (buffer-live-p response)))))
-        (should (= fanyi--tasks-failed 1))
-        (should (= fanyi--tasks-completed 0))
+        (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 1))
+        (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 0))
         (with-current-buffer fanyi-buffer-name
           (should (string-match-p "Retry query" (buffer-string)))
           (should-not (string-match-p "PARTIAL RESULT" (buffer-string))))
         ;; A broken provider must not prevent another provider from finishing.
         (fanyi-test--respond (cadr fanyi-test--requests) nil "healthy")
-        (should (= fanyi--tasks-failed 1))
-        (should (= fanyi--tasks-completed 1))
+        (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 1))
+        (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 1))
         (with-current-buffer fanyi-buffer-name
           (should (string-match-p "word: healthy" (buffer-string))))))))
 
@@ -485,8 +522,8 @@ including one delivered by a redirected request."
       (should-not (buffer-live-p (fanyi-test--respond request nil "duplicate")))
       (should-not (buffer-live-p
                    (fanyi-test--respond request '(:error (error http 500)))))
-      (should (= fanyi--tasks-completed 1))
-      (should (= fanyi--tasks-failed 0))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 1))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 0))
       (with-current-buffer fanyi-buffer-name
         (should (equal (buffer-string) "word: first\n"))))))
 
@@ -494,7 +531,7 @@ including one delivered by a redirected request."
   (fanyi-test--with-query
     (fanyi-dwim "word")
     (let* ((request (car fanyi-test--requests))
-           (task (car fanyi--tasks))
+           (task (car (fanyi-test--query-state 'fanyi--tasks)))
            (timer (fanyi--task-timer task))
            parsed rendered)
       (cl-letf (((symbol-function 'json-parse-buffer)
@@ -523,13 +560,13 @@ including one delivered by a redirected request."
           (should-not (buffer-live-p (fanyi-test--respond request status "late"))))
         (with-current-buffer fanyi-buffer-name
           (should (equal (buffer-string) before))))
-      (should (= fanyi--tasks-failed 1))
-      (should (= fanyi--tasks-completed 0)))))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 1))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 0)))))
 
 (ert-deftest fanyi-query-timeout-settles-once-and-cancels-request ()
   (fanyi-test--with-query
     (fanyi-dwim "word")
-    (let* ((task (car fanyi--tasks))
+    (let* ((task (car (fanyi-test--query-state 'fanyi--tasks)))
            (timer (fanyi--task-timer task))
            (request (car fanyi-test--requests))
            (buffer (fanyi-test-request-buffer request))
@@ -551,8 +588,8 @@ including one delivered by a redirected request."
                      (fanyi-test--respond request '(:error (error http 500)))))
         (with-current-buffer fanyi-buffer-name
           (should (equal (buffer-string) before))))
-      (should (= fanyi--tasks-failed 1))
-      (should (= fanyi--tasks-completed 0))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 1))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 0))
       (with-current-buffer fanyi-buffer-name
         (should-not (string-match-p "word: late" (buffer-string)))))))
 
@@ -568,11 +605,11 @@ including one delivered by a redirected request."
                      (apply #'fanyi-test--retrieve args)))))
         (fanyi-dwim "word"))
       (should (= attempts 2)))
-    (should (= fanyi--tasks-failed 1))
+    (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 1))
     (fanyi-test--respond (car fanyi-test--requests) nil)
-    (should (= fanyi--tasks-completed 1))
-    (should (= fanyi--tasks-failed 1))
-    (dolist (task fanyi--tasks)
+    (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 1))
+    (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 1))
+    (dolist (task (fanyi-test--query-state 'fanyi--tasks))
       (should (fanyi--task-done task))
       (should-not (fanyi--task-timer task)))))
 
@@ -584,10 +621,10 @@ including one delivered by a redirected request."
                    (fanyi-test--respond (car fanyi-test--requests) nil)
                    buffer))))
       (fanyi-dwim "word"))
-    (should (= fanyi--tasks-completed 1))
-    (should (= fanyi--tasks-failed 0))
-    (should (fanyi--task-done (car fanyi--tasks)))
-    (should-not (fanyi--task-timer (car fanyi--tasks)))
+    (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 1))
+    (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 0))
+    (should (fanyi--task-done (car (fanyi-test--query-state 'fanyi--tasks))))
+    (should-not (fanyi--task-timer (car (fanyi-test--query-state 'fanyi--tasks))))
     (should-not (buffer-live-p
                  (fanyi-test-request-buffer (car fanyi-test--requests))))))
 
@@ -601,11 +638,11 @@ including one delivered by a redirected request."
       (let ((button (button-at (match-beginning 0))))
         (should button)
         (button-activate button)))
-    (should (equal fanyi-current-word "Word"))
+    (should (equal (fanyi-test--query-state 'fanyi-current-word) "Word"))
     (should (equal fanyi-history '("Word")))
     (should (= (length fanyi-test--requests) 2))
-    (should (= fanyi--tasks-completed 0))
-    (should (= fanyi--tasks-failed 0))
+    (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 0))
+    (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 0))
     (fanyi-test--respond (cadr fanyi-test--requests) nil "retried")
     (with-current-buffer fanyi-buffer-name
       (should (equal (buffer-string) "word: retried\n")))))

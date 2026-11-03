@@ -25,8 +25,8 @@
            (entry (aref (gethash "entries" (gethash "data" data)) 0)))
       (puthash "explain" explain entry)
       (fanyi-test--with-rendered-response fanyi-youdao-thesaurus-provider data
-        (should (string-match-p "- sample" (buffer-string)))
-        (should (equal (cdar result) "NO EXPLANATION"))))))
+                                          (should (string-match-p "- sample" (buffer-string)))
+                                          (should (equal (cdar result) "NO EXPLANATION"))))))
 
 (ert-deftest fanyi-invalid-html-is-failed-not-completed ()
   (fanyi-test--with-query
@@ -37,8 +37,8 @@
                     (insert-file-contents (expand-file-name "error-page.html" fanyi-test--fixture-directory))
                     (buffer-string))))
         (fanyi-test--deliver (car (last fanyi-test--requests)) nil body))
-      (should (= fanyi--tasks-failed 1))
-      (should (= fanyi--tasks-completed 0))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 1))
+      (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 0))
       (with-current-buffer fanyi-buffer-name
         (should (string-match-p "Could not parse dictionary response" (buffer-string)))))))
 
@@ -48,8 +48,8 @@
     (fanyi-dwim "sample")
     (fanyi-test--deliver (car fanyi-test--requests) nil
                          "{\"result\":{\"code\":200},\"data\":{\"entries\":[]}}")
-    (should (= fanyi--tasks-failed 1))
-    (should (= fanyi--tasks-completed 0))
+    (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 1))
+    (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 0))
     (with-current-buffer fanyi-buffer-name
       (should (string-match-p "No results found" (buffer-string)))
       (should-not (string-match-p "Could not parse" (buffer-string))))))

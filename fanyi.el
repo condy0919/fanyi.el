@@ -140,14 +140,19 @@ Nil disables the timeout."
 ;; Silence compile warnings.
 (defvar url-http-end-of-headers)
 
-(defvar fanyi--tasks nil)
-(defvar fanyi--tasks-failed 0)
-(defvar fanyi--tasks-completed 0)
+(defvar-local fanyi--tasks nil
+  "Tasks belonging to this result buffer's query.")
+(defvar-local fanyi--tasks-failed 0)
+(defvar-local fanyi--tasks-completed 0)
+
+(defvar fanyi--active-buffer nil
+  "Result buffer whose query supersedes the previous pending query.")
 
 (defvar fanyi--query-id 0
   "Identifier of the current query.")
 
-(defvar fanyi-current-word nil)
+(defvar-local fanyi-current-word nil
+  "Original query text displayed in this result buffer.")
 
 (cl-defstruct (fanyi--task (:constructor fanyi--make-task))
   query-id request result result-buffer buffer timer done)
@@ -183,20 +188,16 @@ Nil disables the timeout."
 
 (defun fanyi--cancel-buffer-tasks ()
   "Cancel tasks owned by the result buffer being killed or changing mode."
-  (let ((tasks (seq-filter
-                (lambda (task)
-                  (eq (fanyi--task-result-buffer task) (current-buffer)))
-                fanyi--tasks)))
-    ;; Invalidate every callback before cancelling any network process.
-    (dolist (task tasks)
-      (setf (fanyi--task-done task) t))
-    (mapc #'fanyi--cancel-task tasks)))
+  ;; Invalidate every callback before cancelling any network process.
+  (dolist (task fanyi--tasks)
+    (setf (fanyi--task-done task) t))
+  (mapc #'fanyi--cancel-task fanyi--tasks))
 
 (defun fanyi--report-task-error (task description)
   "Display TASK's failure DESCRIPTION and a retry action."
   (let* ((request (fanyi--task-request task))
          (name (url-host (url-generic-parse-url (fanyi-request-url request))))
-         (word fanyi-current-word))
+         (word (buffer-local-value 'fanyi-current-word (fanyi--task-result-buffer task))))
     (fanyi-log "%s: %s" name description)
     (when fanyi-verbose
       (message "%s: %s" name description))
@@ -215,11 +216,12 @@ Nil disables the timeout."
   (when (fanyi--task-active-p task)
     (setf (fanyi--task-done task) t)
     (fanyi--stop-task-timer task)
-    (if failure
-        (progn
-          (cl-incf fanyi--tasks-failed)
-          (fanyi--report-task-error task failure))
-      (cl-incf fanyi--tasks-completed))
+    (with-current-buffer (fanyi--task-result-buffer task)
+      (if failure
+          (progn
+            (cl-incf fanyi--tasks-failed)
+            (fanyi--report-task-error task failure))
+        (cl-incf fanyi--tasks-completed)))
     (force-mode-line-update t)))
 
 (defun fanyi--timeout (task)
@@ -280,7 +282,8 @@ Nil disables the timeout."
   (let ((task (fanyi--make-task :query-id fanyi--query-id
                                 :request request :result-buffer result-buffer)))
     ;; Register before starting the request: a callback may run immediately.
-    (push task fanyi--tasks)
+    (with-current-buffer result-buffer
+      (push task fanyi--tasks))
     (condition-case err
         (if (eq (fanyi-request-api-type request) 'browser)
             (fanyi--render-task task)
@@ -312,11 +315,11 @@ Nil disables the timeout."
   "Used as `header-line-format'."
   (let ((truncated (if (> (length fanyi-current-word) fanyi-headline-max-length)
                        (concat (substring fanyi-current-word 0 fanyi-headline-max-length) "...")
-                     fanyi-current-word)))
+                     (or fanyi-current-word ""))))
     (concat "Translating "
             (propertize truncated 'face 'fanyi-word-face)
             " "
-            (propertize (number-to-string (- (length fanyi--tasks) fanyi--tasks-completed fanyi--tasks-failed)) 'face 'fanyi-tasks-pending-face)
+            (propertize (number-to-string (cl-count-if-not #'fanyi--task-done fanyi--tasks)) 'face 'fanyi-tasks-pending-face)
             " "
             (propertize (number-to-string fanyi--tasks-completed) 'face 'fanyi-tasks-completed-face)
             " "
@@ -449,24 +452,22 @@ Record every accepted query in `fanyi-history', with the most recent first."
     (let ((history-delete-duplicates t))
       ;; Also remove duplicates restored from history by older versions.
       (add-to-history 'fanyi-history word nil t))
-    ;; Save current query word.
-    (setq fanyi-current-word word)
     ;; Invalidate callbacks before cancelling requests, which can itself invoke
     ;; process sentinels.  `url-retrieve' is already asynchronous; no threads are
     ;; needed to start concurrent dictionary requests.
     (cl-incf fanyi--query-id)
-    (mapc #'fanyi--cancel-task fanyi--tasks)
-    (setq fanyi--tasks nil)
-    ;; Reset the counter of completed/failed tasks.
-    (setq fanyi--tasks-completed 0)
-    (setq fanyi--tasks-failed 0)
+    (when (buffer-live-p fanyi--active-buffer)
+      (with-current-buffer fanyi--active-buffer
+        (fanyi--cancel-buffer-tasks)))
 
     (let ((buf (get-buffer-create fanyi-buffer-name)))
+      (setq fanyi--active-buffer buf)
       (with-current-buffer buf
         (let ((inhibit-read-only t))
           ;; Clear the previous search result.
           (erase-buffer)
-          (fanyi-mode)))
+          (fanyi-mode)
+          (setq fanyi-current-word word)))
 
       (dolist (request requests)
         (fanyi--spawn request buf))
