@@ -418,8 +418,9 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
             (setq children (append '(" ") children '(" "))))
           (when (member "SYN" classes)
             (setq children
-                  (append (if (string-match-p "\\`SYN\\(?:[[:space:]]\\|\\'\\)"
-                                              (string-trim (dom-texts node "")))
+                  (append (if (or (fanyi-longman--nodes node "synopp")
+                                  (string-match-p "\\`SYN\\(?:[[:space:]]\\|\\'\\)"
+                                                  (string-trim (dom-texts node ""))))
                               '(" ") '(" SYN "))
                           children '(" "))))
           (let ((prepared (cons tag (cons attributes children))))

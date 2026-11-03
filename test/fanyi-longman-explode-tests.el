@@ -195,6 +195,27 @@
               (should-not (get-char-property (+ start 3) 'display))
               (should-not (get-char-property (+ start 4) 'display)))))))))
 
+(ert-deftest fanyi-longman-explode-synonym-labels-do-not-depend-on-whitespace ()
+  (dolist (separator '("" " " "\n\t"))
+    (ert-info ((format "Whitespace after synonym label: %S" separator))
+      (let ((dom (fanyi-test--read-fixture "longman-explode-saved.html"))
+            (shr-width 1000))
+        (dolist (synonym (fanyi-longman--nodes dom "SYN"))
+          (let ((label (car (fanyi-longman--nodes synonym "synopp")))
+                (target (string-trim (car (last (dom-children synonym))))))
+            ;; Minifying HTML can remove whitespace between the badge and its
+            ;; target; the renderer already provides their visual separation.
+            (setcdr (cdr synonym) (list label (concat separator target)))))
+        (fanyi-test--with-rendered-response fanyi-longman-provider dom
+          (should (= (how-many "\\bSYN\\b" (point-min) (point-max)) 2))
+          (dolist (target '("rocket" "blow up"))
+            (goto-char (point-min))
+            (search-forward (concat "SYN " target))
+            (should (fanyi-test--longman-style-has-face-p
+                     (get-char-property (match-beginning 0) 'face)
+                     'fanyi-longman-synopp-face))
+            (should-not (button-at (+ (match-beginning 0) 4)))))))))
+
 (ert-deftest fanyi-longman-explode-register-and-thesaurus-layout-and-actions ()
   ;; Relative heights in inherited faces multiply; a note must remain body-sized.
   (should (= (face-attribute 'fanyi-longman-note-heading-face :height nil t) 1.0))

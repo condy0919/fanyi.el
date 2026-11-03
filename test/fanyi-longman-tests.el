@@ -94,6 +94,15 @@
       (should (string-match-p "Different layout" (buffer-string)))
       (should (string-match-p "used for testing" (buffer-string))))))
 
+(ert-deftest fanyi-longman-synonym-text-fallback-adds-only-a-missing-label ()
+  (dolist (text '("specimen" "SYN specimen"))
+    (let* ((dom (fanyi-test--read-fixture "longman.html"))
+           (synonym (car (fanyi-longman--nodes dom "SYN"))))
+      (setcdr (cdr synonym) (list text))
+      (fanyi-test--with-rendered-response fanyi-longman-provider dom
+        (should (= (how-many "\\bSYN\\b" (point-min) (point-max)) 1))
+        (should (string-match-p "SYN specimen" (buffer-string)))))))
+
 (ert-deftest fanyi-longman-validates-visible-prepared-content ()
   (let* ((dom (fanyi-test--longman-html
                (concat "<div class='dictionary'>"
