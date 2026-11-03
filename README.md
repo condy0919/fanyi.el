@@ -100,6 +100,12 @@ Missing pronunciation or audio does not hide available definitions. Responses
 without usable dictionary content are reported as parsing failures; an explicit
 empty result from Youdao is reported as no results found.
 
+When a dictionary returns a Cloudflare browser challenge, fanyi shows a
+verification message and an `Open in browser` button instead of `Retry query`.
+The button opens that entry in an external browser so you can complete any
+verification and read it there. Other dictionaries continue normally. This
+does not transfer browser cookies or import the browser's results into Emacs.
+
 For windows users,
 
 ``` emacs-lisp

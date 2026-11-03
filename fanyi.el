@@ -36,6 +36,7 @@
 (require 'url)
 (require 'imenu)
 (require 'button)
+(require 'browse-url)
 (require 'cl-lib)
 (require 'outline)
 
@@ -153,6 +154,20 @@ Nil disables the timeout."
 (cl-defstruct (fanyi--task (:constructor fanyi--make-task))
   query-id instance buffer timer done)
 
+(define-error 'fanyi--cloudflare-challenge "Browser verification required")
+
+(defun fanyi--cloudflare-challenge-p ()
+  "Return non-nil when the current HTTP response is a Cloudflare challenge.
+Only inspect response headers, never matching text in the response body."
+  (let ((end (bound-and-true-p url-http-end-of-headers)))
+    (and (integer-or-marker-p end)
+         (<= (point-min) end (point-max))
+         (save-excursion
+           (save-match-data
+             (goto-char (point-min))
+             (let ((case-fold-search t))
+               (re-search-forward "^cf-mitigated:[ \t]*challenge[ \t]*\r?$" end t)))))))
+
 (defun fanyi--task-active-p (task)
   "Return non-nil if TASK still belongs to the current pending query."
   (and (= (fanyi--task-query-id task) fanyi--query-id)
@@ -179,8 +194,10 @@ Nil disables the timeout."
         (kill-buffer buffer)
         (setq buffer next)))))
 
-(defun fanyi--report-task-error (task description)
-  "Display TASK's failure DESCRIPTION and a query retry button."
+(defun fanyi--report-task-error (task description &optional browser-url)
+  "Display TASK's failure DESCRIPTION and an appropriate action.
+When BROWSER-URL is non-nil, offer to open it in an external browser
+instead of repeating the blocked query."
   (let* ((instance (fanyi--task-instance task))
          (name (url-host (url-generic-parse-url (oref instance url))))
          (word fanyi-current-word))
@@ -192,20 +209,26 @@ Nil disables the timeout."
         (goto-char (point-max))
         (let ((inhibit-read-only t))
           (insert "# " (or name "Dictionary") "\n\n" description "\n\n")
-          (insert-button "Retry query"
-                         'action (lambda (_) (fanyi-dwim word))
-                         'follow-link t)
+          (if browser-url
+              (insert-button "Open in browser"
+                             'action (lambda (_) (browse-url-default-browser browser-url))
+                             'help-echo "Read this entry in an external browser"
+                             'follow-link t)
+            (insert-button "Retry query"
+                           'action (lambda (_) (fanyi-dwim word))
+                           'follow-link t))
           (insert "\n\n"))))))
 
-(defun fanyi--finish-task (task &optional failure)
-  "Settle TASK once, reporting FAILURE if non-nil."
+(defun fanyi--finish-task (task &optional failure browser-url)
+  "Settle TASK once, reporting FAILURE if non-nil.
+BROWSER-URL offers an external browser action for blocked requests."
   (when (fanyi--task-active-p task)
     (setf (fanyi--task-done task) t)
     (fanyi--stop-task-timer task)
     (if failure
         (progn
           (cl-incf fanyi--tasks-failed)
-          (fanyi--report-task-error task failure))
+          (fanyi--report-task-error task failure browser-url))
       (cl-incf fanyi--tasks-completed))
     (force-mode-line-update t)))
 
@@ -224,6 +247,11 @@ Nil disables the timeout."
         (when (fanyi--task-active-p task)
           (condition-case err
               (progn
+                ;; A challenge is not dictionary content, even if it arrives
+                ;; with a successful HTTP status.  Detect it before parsing
+                ;; or handling the generic HTTP error from url.el.
+                (when (fanyi--cloudflare-challenge-p)
+                  (signal 'fanyi--cloudflare-challenge nil))
                 ;; An empty status is success.  Redirects are followed by
                 ;; url.el and are not failures unless accompanied by :error.
                 (when (plist-member status :error)
@@ -250,6 +278,10 @@ Nil disables the timeout."
                         (atomic-change-group
                           (fanyi-render instance)))))
                   (fanyi--finish-task task)))
+            (fanyi--cloudflare-challenge
+             (fanyi--finish-task
+              task "Cloudflare requires browser verification. Read this entry in your browser."
+              url))
             (error (fanyi--finish-task task (error-message-string err)))))
       (fanyi--cleanup-response response-buffer)
       (fanyi--cleanup-response (fanyi--task-buffer task)))))

@@ -13,6 +13,7 @@ test:
 	-l test/fanyi-provider-tests.el \
 	-l test/fanyi-haici-tests.el -l test/fanyi-longman-tests.el \
 	-l test/fanyi-response-tests.el \
+	-l test/fanyi-challenge-tests.el \
 	-f ert-run-tests-batch-and-exit
 
 .PHONY: compile test
