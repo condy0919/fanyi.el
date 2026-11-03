@@ -114,6 +114,9 @@ not implement a general CSS engine. Duplicate headwords and hidden field labels
 are omitted. Visible signpost labels use the site's uppercase orange badges.
 Register and thesaurus sections keep separate headings, explanations, entries,
 and examples, including the site's emphasis within those paragraphs.
+Supplementary sections use headings, whitespace and indentation instead of
+outer borders. Group headings follow the theme's keyword face; short Register
+notes use a body-sized bold heading and remain expanded.
 Audio buttons play pronunciations, dictionary links start Fanyi queries, and
 related-topic links open in Emacs's EWW browser. Word family, Origin, and frequency
 labels such as S2 and W1 use SVG badges when supported (controlled by `fanyi-use-glyphs` and

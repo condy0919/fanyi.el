@@ -53,7 +53,7 @@
   (let ((indent (current-indentation)))
     (back-to-indentation)
     (should (fanyi-test--longman-style-has-face-p
-             (get-char-property (point) 'face) 'fanyi-longman-box-heading-face))
+             (get-char-property (point) 'face) 'fanyi-longman-note-heading-face))
     (forward-line 1)
     (back-to-indentation)
     (should (= (current-indentation) indent))

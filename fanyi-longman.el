@@ -118,14 +118,18 @@
   :group 'fanyi)
 
 (defface fanyi-longman-box-heading-face
-  '((t :foreground "#364395" :weight bold :height 1.2))
-  "Face used for collocation box headings."
+  '((t :inherit fanyi-longman-heading-face :height 1.2))
+  "Face used for thesaurus and collocation section headings."
+  :group 'fanyi)
+
+(defface fanyi-longman-note-heading-face
+  '((t :inherit fanyi-longman-heading-face :height 1.0))
+  "Face used for short usage-note headings such as Register."
   :group 'fanyi)
 
 (defface fanyi-longman-group-heading-face
-  '((t :foreground "white" :background "#6f469d" :weight bold
-       :box (:line-width 2 :color "#6f469d")))
-  "Face used for collocation group labels."
+  '((t :inherit font-lock-keyword-face :weight bold))
+  "Face used for group headings within supplementary sections."
   :group 'fanyi)
 
 (defface fanyi-longman-frequency-face
@@ -309,6 +313,7 @@ The saved page puts the corpus label and title in sibling containers."
   (append (when (member "wordfams" classes) '(family))
           (when (member "etym" classes) '(origin))
           (when (member "Sense" classes) '(sense))
+          (when (member "F2NBox" classes) '(note))
           (when (member "asset_intro" classes) '(asset-heading))
           (when (cl-intersection classes '("exaGroup" "corpus") :test #'equal)
             '(corpus))
@@ -371,6 +376,8 @@ A word-family anchor without a URL becomes a query link in CONTEXT."
             style (plist-put style :indent 1)))
      ((and (member "HEADING" classes) (member "newline" classes))
       (setq tag 'fanyi-line))
+     ((and (memq 'note context) (member "heading" classes))
+      (setq style (plist-put style :face 'fanyi-longman-note-heading-face)))
      ((plist-get style :tag) (setq tag (plist-get style :tag))))
     (plist-put style :tag tag)))
 
