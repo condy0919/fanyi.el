@@ -234,5 +234,73 @@
       (search-forward "Visible conclusion.")
       (should-not (outline-invisible-p (match-beginning 0))))))
 
+(ert-deftest fanyi-shr-style-refresh-is-selective-and-cleans-up ()
+  (let ((fanyi-shr--buffers nil)
+        (post-command-hook nil))
+    (fanyi-shr-test--with-window
+      (let ((style (list 'original))
+            (first-renders 0) (second-renders 0))
+        (fanyi-shr-insert
+         '(sample nil "First result")
+         `((sample . ,(lambda (dom) (cl-incf first-renders) (shr-generic dom))))
+         (lambda (_window) style))
+        (insert "\n")
+        (fanyi-shr-insert
+         '(sample nil "Second result")
+         `((sample . ,(lambda (dom) (cl-incf second-renders) (shr-generic dom))))
+         (lambda (_window) 'unchanged))
+        (should (memq (current-buffer) fanyi-shr--buffers))
+        (should (memq #'fanyi-shr--post-command post-command-hook))
+        (run-hooks 'post-command-hook)
+        (should (equal (list first-renders second-renders) '(1 1)))
+        ;; Mutating the same list must not mutate its saved signature.
+        (setcar style 'changed)
+        (with-temp-buffer (run-hooks 'post-command-hook))
+        (should (equal (list first-renders second-renders) '(2 1)))
+        (run-hooks 'post-command-hook)
+        (should (equal (list first-renders second-renders) '(2 1)))
+        (fundamental-mode)
+        (should-not fanyi-shr--buffers)
+        (should-not (memq #'fanyi-shr--post-command post-command-hook))))))
+
+(ert-deftest fanyi-shr-style-refresh-isolates-buffer-errors ()
+  (let ((fanyi-shr--buffers nil)
+        (post-command-hook nil)
+        (bad (generate-new-buffer " *fanyi-shr-style-error*")))
+    (unwind-protect
+        (fanyi-shr-test--with-window
+          (let ((good (current-buffer)) (state 0) (renders 0) fail)
+            (fanyi-shr-insert
+             '(sample nil "Working result")
+             `((sample . ,(lambda (dom) (cl-incf renders) (shr-generic dom))))
+             (lambda (_window) state))
+            (let ((other (split-window-right 35)))
+              (set-window-buffer other bad)
+              (with-current-buffer bad
+                (fanyi-shr-insert
+                 '(p nil "Keep this result") nil
+                 (lambda (_window) (if fail (error "Invalid style") state))))
+              ;; The bad buffer is checked first; its error must not block good.
+              (setq state 1 fail t)
+              (run-hooks 'post-command-hook)
+              (should (= renders 2))
+              (should (memq #'fanyi-shr--post-command post-command-hook))
+              (with-current-buffer bad
+                (should (string-match-p "Keep this result" (buffer-string))))
+              ;; Hidden buffers wait until they are displayed again.
+              (set-window-buffer other good)
+              (setq state 2)
+              (with-current-buffer bad
+                (cl-letf (((symbol-function 'message)
+                           (lambda (&rest _) (ert-fail "Hidden buffers must not refresh"))))
+                  (run-hooks 'post-command-hook)))
+              (should (= renders 3))
+              (kill-buffer bad)
+              (should (equal fanyi-shr--buffers (list good)))
+              (erase-buffer)
+              (should-not fanyi-shr--buffers)
+              (should-not (memq #'fanyi-shr--post-command post-command-hook)))))
+      (when (buffer-live-p bad) (kill-buffer bad)))))
+
 (provide 'fanyi-shr-reflow-tests)
 ;;; fanyi-shr-reflow-tests.el ends here

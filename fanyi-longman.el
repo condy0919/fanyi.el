@@ -204,8 +204,8 @@ retain Fanyi's requested presentation.  This is not a CSS interpreter.")
 (defun fanyi-longman-svg-tag-make (text face)
   "Create a rounded SVG label displaying TEXT with FACE.
 A boxed FACE produces a transparent badge with a one-pixel outline."
-  (let* ((height (frame-char-height))
-         (padding (frame-char-width))
+  (let* ((height (window-font-height))
+         (padding (window-font-width))
          (width (* padding (+ (string-width text) 2)))
          (foreground (face-attribute face :foreground nil t))
          (box (face-attribute face :box nil t))
@@ -591,6 +591,18 @@ The returned DOM is ready for SHR; DOM itself is not modified."
     (add-face-text-property start (point) 'fanyi-longman-example-face)
     (shr-ensure-newline)))
 
+(defun fanyi-longman--render-style (window)
+  "Return the settings used to render Longman labels and examples in WINDOW."
+  (let ((frame (window-frame window)))
+    (list fanyi-use-glyphs fanyi-longman-svg-border-radius fanyi-longman-example-indent
+          (display-images-p frame) (image-type-available-p 'svg)
+          (window-font-width window) (window-font-height window)
+          (face-attribute 'default :family frame t)
+          (mapcar (lambda (face)
+                    (mapcar (lambda (attribute) (face-attribute face attribute frame t))
+                            '(:foreground :background :weight :box)))
+                  '(fanyi-longman-frequency-face fanyi-longman-svg-asset-face)))))
+
 (defun fanyi-longman-render (content _request)
   "Render prepared CONTENT with Fanyi headings and actions."
   (fanyi-with-fanyi-buffer
@@ -610,7 +622,8 @@ The returned DOM is ready for SHR; DOM itself is not modified."
        (fanyi-sense . fanyi-longman--shr-sense)
        (fanyi-example . fanyi-longman--shr-example)
        (fanyi-origin . fanyi-longman--shr-origin)
-       (fanyi-origin-label . fanyi-longman--shr-origin-label)))
+       (fanyi-origin-label . fanyi-longman--shr-origin-label))
+     #'fanyi-longman--render-style)
     (goto-char (point-max))
     (unless (bolp) (insert "\n"))
     (insert "\n")))

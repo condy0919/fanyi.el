@@ -14,7 +14,10 @@
 (require 'shr)
 
 (cl-defstruct (fanyi-shr--region (:constructor fanyi-shr--region-create))
-  start end dom renderers layout)
+  start end dom renderers style-function layout)
+
+(defvar fanyi-shr--buffers nil
+  "Buffers with saved HTML regions checked after interactive commands.")
 
 (defvar-local fanyi-shr--regions nil
   "Rendered HTML regions in the current buffer.")
@@ -32,10 +35,12 @@
            fanyi-shr--window)
           (t (get-buffer-window buffer t)))))
 
-(defun fanyi-shr--layout (window)
-  "Describe the rendering width and font settings of WINDOW."
+(defun fanyi-shr--layout (window &optional style-function)
+  "Describe WINDOW's layout and provider state from STYLE-FUNCTION.
+Copy the style signature so later list mutations cannot change this snapshot."
   (list (window-body-width window t) shr-width shr-max-width
-        (frame-char-width (window-frame window)) shr-use-colors))
+        (frame-char-width (window-frame window)) shr-use-colors
+        (when style-function (copy-tree (funcall style-function window) t))))
 
 (defun fanyi-shr--render (dom renderers window)
   "Insert DOM with RENDERERS, using WINDOW when it is displayed."
@@ -80,7 +85,10 @@
 (defun fanyi-shr--clear ()
   "Release saved DOMs and hooks when the buffer is cleared or killed."
   (mapc #'fanyi-shr--forget fanyi-shr--regions)
-  (setq fanyi-shr--regions nil fanyi-shr--window nil)
+  (setq fanyi-shr--regions nil fanyi-shr--window nil
+        fanyi-shr--buffers (delq (current-buffer) fanyi-shr--buffers))
+  (unless fanyi-shr--buffers
+    (remove-hook 'post-command-hook #'fanyi-shr--post-command))
   (remove-hook 'window-size-change-functions #'fanyi-shr--window-change t)
   (remove-hook 'window-selection-change-functions #'fanyi-shr--window-change t)
   (remove-hook 'before-change-functions #'fanyi-shr--before-change t)
@@ -102,8 +110,10 @@
            fanyi-shr--regions))
     (unless fanyi-shr--regions (fanyi-shr--clear))))
 
-(defun fanyi-shr-insert (dom renderers)
-  "Insert DOM with RENDERERS and remember it for automatic width changes.
+(defun fanyi-shr-insert (dom renderers &optional style-function)
+  "Insert DOM with RENDERERS and remember it for automatic layout changes.
+STYLE-FUNCTION, when non-nil, receives the display window and returns a
+signature of provider settings that should trigger rendering when changed.
 The current buffer may already contain other dictionary results.  HTML text
 is marked with `fanyi-html', and its styling survives font-lock refreshes.
 Use the buffer's default font and character-based layout, with SHR's colors."
@@ -115,10 +125,12 @@ Use the buffer's default font and character-based layout, with SHR's colors."
     (when (> (point) start)
       (push (fanyi-shr--region-create
              :start (copy-marker start t) :end (copy-marker (point))
-             :dom dom :renderers renderers
-             :layout (and window (fanyi-shr--layout window)))
+             :dom dom :renderers renderers :style-function style-function
+             :layout (and window (fanyi-shr--layout window style-function)))
             fanyi-shr--regions)
       (setq fanyi-shr--window window)
+      (cl-pushnew (current-buffer) fanyi-shr--buffers)
+      (add-hook 'post-command-hook #'fanyi-shr--post-command)
       (add-hook 'window-size-change-functions #'fanyi-shr--window-change nil t)
       (add-hook 'window-selection-change-functions #'fanyi-shr--window-change nil t)
       (add-hook 'before-change-functions #'fanyi-shr--before-change nil t)
@@ -191,16 +203,19 @@ Use the buffer's default font and character-based layout, with SHR's colors."
 
 (defun fanyi-shr-reflow (&optional force)
   "Reflow saved HTML for its displayed window without fetching content.
-With FORCE, re-render even if the window width has not changed.  When several
-windows display the buffer, prefer its selected window, then its previous one."
+With FORCE, re-render even if the layout and provider styles have not changed.
+When several windows display the buffer, prefer its selected window, then its
+previous one."
   (interactive "P")
   (let ((window (fanyi-shr--window)))
     (when (and window fanyi-shr--regions (not fanyi-shr--updating))
-      (let* ((layout (fanyi-shr--layout window))
-             (regions (cl-remove-if
-                       (lambda (region)
-                         (and (not force) (equal layout (fanyi-shr--region-layout region))))
-                       fanyi-shr--regions)))
+      (let* ((updates
+              (cl-loop for region in fanyi-shr--regions
+                       for layout = (fanyi-shr--layout
+                                     window (fanyi-shr--region-style-function region))
+                       unless (and (not force) (equal layout (fanyi-shr--region-layout region)))
+                       collect (cons region layout)))
+             (regions (mapcar #'car updates)))
         (when regions
           (let ((position (fanyi-shr--anchor (point)))
                 (folds (fanyi-shr--outline-folds regions))
@@ -217,7 +232,8 @@ windows display the buffer, prefer its selected window, then its previous one."
                 (progn
                   ;; Measure all text while rendering, including folded bodies.
                   (dolist (fold folds) (delete-overlay (car fold)))
-                  (dolist (region regions) (fanyi-shr--replace region window layout))
+                  (dolist (update updates)
+                    (fanyi-shr--replace (car update) window (cdr update)))
                   (setq fanyi-shr--window window))
               (dolist (fold folds)
                 (move-overlay (car fold) (fanyi-shr--position (cadr fold))
@@ -239,6 +255,16 @@ windows display the buffer, prefer its selected window, then its previous one."
       (condition-case error-data
           (fanyi-shr-reflow)
         (error (message "Fanyi HTML reflow failed: %s" (error-message-string error-data)))))))
+
+(defun fanyi-shr--post-command ()
+  "Refresh visible cached HTML whose layout or provider settings changed."
+  (dolist (buffer (copy-sequence fanyi-shr--buffers))
+    (when (buffer-live-p buffer)
+      (with-current-buffer buffer
+        (let ((window (fanyi-shr--window)))
+          (when window
+            ;; Keep errors local to this buffer, as for window-change hooks.
+            (fanyi-shr--window-change window)))))))
 
 (provide 'fanyi-shr)
 ;;; fanyi-shr.el ends here

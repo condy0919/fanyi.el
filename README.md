@@ -120,12 +120,15 @@ is selected; rendering does not download images or other page resources.
 
 Longman renders with `shr-use-fonts` locally disabled, using the buffer's default
 font and character-based layout. It still respects `shr-use-colors`. HTML regions
-reflow from their saved DOM when the displayed window changes width, without another
-request. Reading position, folded headings, and other dictionaries are retained.
-When the buffer appears in several windows, its selected window determines the
-layout. Use `C-u M-x fanyi-shr-reflow` to force a refresh after changing fonts or
-styles. Fanyi's text-formatting rules do not reinterpret the HTML body as
-Markdown-style emphasis.
+reflow from their saved DOM when the displayed window changes width or Longman's
+styles and glyph settings change, without another request. Visible results are
+checked after each command; asynchronous setting changes are picked up by the next
+command or window event. Unchanged settings do not trigger rendering. SVG badges
+follow the window's font size, including text scaling. Reading position, folded
+headings, and other dictionaries are retained. When the buffer appears in several
+windows, its selected window determines the layout. `C-u M-x fanyi-shr-reflow`
+still forces a refresh. Fanyi's text-formatting rules do not reinterpret the HTML
+body as Markdown-style emphasis.
 
 Etymonline displays an `Open in browser` button immediately, without making an
 HTTP request or parsing its pages. Click it to read the current entry in your
