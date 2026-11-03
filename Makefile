@@ -8,7 +8,8 @@ compile:
 
 test:
 	$(CASK) exec $(EMACS) -Q -batch \
-	-L . -l test/fanyi-tests.el -l test/fanyi-base-tests.el \
+	-L . -L test -l test/fanyi-tests.el -l test/fanyi-base-tests.el \
+	-l test/fanyi-config-tests.el \
 	-f ert-run-tests-batch-and-exit
 
 .PHONY: compile test

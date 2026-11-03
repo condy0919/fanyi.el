@@ -61,6 +61,21 @@
 (eieio-declare-slots :entries)
 (eieio-declare-slots :entry :explain)
 
+(cl-defmethod fanyi-set-query-word ((this fanyi-youdao-thesaurus-service) query)
+  "Set QUERY on THIS using the current result limit."
+  (cl-call-next-method this query)
+  (let* ((url (url-generic-parse-url (oref this url)))
+         (path (url-filename url))
+         (limit (format "num=%d" fanyi-youdao-thesaurus-max-count)))
+    ;; Preserve custom endpoints and other parameters on service instances.
+    (setf (url-filename url)
+          (if (string-match-p "[?&]num=" path)
+              (replace-regexp-in-string
+               "[?&]num=[^&]*"
+               (lambda (match) (concat (substring match 0 1) limit)) path t t)
+            (concat path (if (string-match-p "?" path) "&" "?") limit)))
+    (oset this url (url-recreate-url url))))
+
 (cl-defmethod fanyi-parse-from ((this fanyi-youdao-thesaurus-service) js)
   "Complete the fields of THIS from JS json.
 A \='not-found exception will be thrown if there is no result."
@@ -133,8 +148,7 @@ before calling this method."
 
 (defconst fanyi-youdao-thesaurus-provider
   (fanyi-youdao-thesaurus-service :word "dummy"
-                                  :url (concat "https://dict.youdao.com/suggest?q=%s&doctype=json&num="
-                                               (int-to-string fanyi-youdao-thesaurus-max-count))
+                                  :url "https://dict.youdao.com/suggest?q=%s&doctype=json"
                                   :sound-url "unused"
                                   :api-type 'json)
   "Youdao thesaurus service instance.")

@@ -43,7 +43,8 @@ If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim`, `fanyi-dwim2` and
 (setq read-extended-command-predicate #'command-completion-default-include-p)
 ```
 
-**CAUTIOUS**: Don't customize `fanyi-providers` via `setq`, use the custom system instead.
+Set `fanyi-providers` with `setq`, Customize, or `use-package`. Changes take
+effect on the next query; dictionary modules are loaded when needed.
 
 ``` emacs-lisp
 ;; If you want English-English dictionary only.
@@ -67,11 +68,13 @@ If you want <kbd>M-x fanyi</kbd> to list only `fanyi-dwim`, `fanyi-dwim2` and
                      fanyi-longman-provider)))
 
 ;; For non-`use-package' users
-(custom-set-variables
- '(fanyi-providers '(fanyi-haici-provider
-                     fanyi-youdao-thesaurus-provider
-                     fanyi-etymon-provider
-                     fanyi-longman-provider)))
+(setq fanyi-providers '(fanyi-haici-provider
+                        fanyi-youdao-thesaurus-provider
+                        fanyi-etymon-provider
+                        fanyi-longman-provider))
+
+;; Also takes effect on the next query, without reloading the package.
+(setq fanyi-youdao-thesaurus-max-count 15)
 ```
 
 By default, `M-x fanyi-dwim` will move the point to the new created `*fanyi* `buffer.
