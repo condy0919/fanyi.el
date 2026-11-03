@@ -28,6 +28,7 @@
 ;;; Code:
 
 (require 'fanyi-base)
+(require 'fanyi-shr)
 
 (require 'subr-x)
 (require 'dom)
@@ -49,7 +50,7 @@
   :group 'fanyi)
 
 (defface fanyi-longman-example-face
-  '((t :inherit font-lock-doc-face))
+  '((t :foreground "#808080"))
   "Face used for examples."
   :group 'fanyi)
 
@@ -60,33 +61,114 @@
   :group 'fanyi)
 
 (defface fanyi-longman-grammar-face
-  '((t :foreground "green" :weight bold))
+  '((t :foreground "#008000" :weight bold))
   "Face used for grammar."
   :group 'fanyi)
 
 (defface fanyi-longman-dot-face
-  '((t :foreground "red"))
+  '((t :foreground "red" :height 1.2))
   "Face used for level dots."
   :group 'fanyi)
 
 (defface fanyi-longman-registerlab-face
-  '((t :foreground "purple" :slant italic))
+  '((t :foreground "#800080" :slant italic))
   "Face used for register labels."
   :group 'fanyi)
 
 (defface fanyi-longman-geo-face
-  '((t :foreground "#364395" :slant italic))
+  '((t :foreground "#364395"))
   "Face used for geographical labels."
   :group 'fanyi)
 
+(defface fanyi-longman-headword-face
+  '((t :foreground "red" :weight bold :height 1.6))
+  "Face used for the displayed headword."
+  :group 'fanyi)
+
+(defface fanyi-longman-body-face
+  '((((background light)) :foreground "#333333")
+    (((background dark)) :foreground "#dddddd"))
+  "Face used for ordinary dictionary text."
+  :group 'fanyi)
+
+(defface fanyi-longman-pos-face
+  '((t :foreground "#008000" :weight bold))
+  "Face used for parts of speech."
+  :group 'fanyi)
+
+(defface fanyi-longman-dictionary-face
+  '((t :foreground "white" :background "#35a3ff" :weight normal :extend t))
+  "Face used for the dictionary source heading."
+  :group 'fanyi)
+
+(defface fanyi-longman-heading-face
+  '((((background light)) :foreground "#333333" :weight bold :height 1.1)
+    (((background dark)) :foreground "#eeeeee" :weight bold :height 1.1))
+  "Face used for supplementary section headings."
+  :group 'fanyi)
+
+(defface fanyi-longman-topic-face
+  '((t :foreground "red" :underline t))
+  "Face used for related topics."
+  :group 'fanyi)
+
+(defface fanyi-longman-definition-link-face
+  '((t :underline (:color "gray" :style line)))
+  "Face used for links within definitions and examples."
+  :group 'fanyi)
+
+(defconst fanyi-longman--class-styles
+  '(("dictionary_intro" :tag fanyi-heading)
+    ("asset_intro" :tag fanyi-heading)
+    ("Head" :tag fanyi-line :space t)
+    ("Sense" :tag fanyi-sense)
+    ("Crossref" :tag fanyi-line :space t)
+    ("topics_container" :tag div)
+    ("EXAMPLE" :tag fanyi-example)
+    ("exa" :tag fanyi-example)
+    ("title" :tag span :face bold)
+    ("headword" :tag span :face bold)
+    ("HYPHENATION" :face fanyi-longman-headword-face)
+    ("HWD" :face bold)
+    ("PHRVBHWD" :face fanyi-longman-headword-face)
+    ("POS" :face (fanyi-longman-pos-face fanyi-pos-face) :space t)
+    ("pos" :face (fanyi-longman-pos-face fanyi-pos-face) :space t)
+    ("GRAM" :face fanyi-longman-grammar-face :space t)
+    ("LEVEL" :face fanyi-longman-dot-face :space t)
+    ("REGISTERLAB" :face fanyi-longman-registerlab-face :space t)
+    ("GEO" :face fanyi-longman-geo-face :space t)
+    ("GLOSS" :face fanyi-longman-geo-face)
+    ("NodeW" :face bold)
+    ("sensenum" :face bold :space t)
+    ("LEXUNIT" :face bold :space t)
+    ("LEXVAR" :face bold :space t)
+    ("REFHWD" :face bold)
+    ("PronCodes" :space t)
+    ("FREQ" :space t)
+    ("AC" :space t)
+    ("DEF" :space t)
+    ("DATE" :space t)
+    ("CENTURY" :space t)
+    ("LANG" :space t)
+    ("Etymon" :space t)
+    ("ORIGIN" :space t)
+    ("TRAN" :space t))
+  "Small subset of Longman's CSS expressed as SHR layout and Emacs faces.
+The source is the user-saved dragon page; see test/fixtures/README.md.
+Source and corpus headings, hidden signposts, buttons and Origin badges
+retain Fanyi's requested presentation.  This is not a CSS interpreter.")
+
 (defclass fanyi-longman-service (fanyi-base-service)
   ((content :initform nil :type list
-            :documentation "Selected dictionary DOM, prepared for shr."))
+            :documentation "Selected original dictionary DOM."))
   "The Longman dictionary service.")
 
 (eieio-declare-slots :content)
 (declare-function fanyi-dwim "fanyi")
 (autoload 'eww "eww")
+
+(define-button-type 'fanyi-longman-button
+  'face nil)
 
 (defun fanyi-longman-svg-tag-make (text face)
   "Create a rounded SVG label displaying TEXT with FACE."
@@ -98,7 +180,8 @@
                    :rx fanyi-longman-svg-border-radius
                    :fill (face-attribute face :background nil t))
     (svg-text svg text :x padding :y (* height 0.75)
-              :font-family (face-attribute 'default :family nil t)
+              :font-family (face-attribute (if shr-use-fonts 'variable-pitch 'default)
+                                           :family nil t)
               :font-size (* height 0.75)
               :fill (face-attribute face :foreground nil t))
     (svg-image svg :ascent 'center)))
@@ -139,20 +222,32 @@
                    (dom-by-tag node 'a)))
        (fanyi-longman--nodes entry "Crossref"))))
 
-(defun fanyi-longman--join-headings (children)
-  "Join an asset heading and its following title in CHILDREN."
+(defun fanyi-longman--asset-heading (node)
+  "Copy NODE, joining its asset label and nested title into one heading."
+  (let* ((copy (copy-tree node))
+         (intro (car (fanyi-longman--nodes copy "asset_intro")))
+         (title (car (fanyi-longman--nodes copy "title"))))
+    (when (and intro title (not (memq title (fanyi-longman--nodes intro "title"))))
+      (dom-remove-node copy title)
+      (dom-append-child intro " ")
+      (dom-append-child intro title))
+    copy))
+
+(defun fanyi-longman--group-assets (children)
+  "Group an asset label with its following assetlink in CHILDREN.
+The saved page puts the corpus label and title in sibling containers."
   (let (result)
     (while children
-      (let ((node (pop children)))
-        (when (and (consp node) (eq (dom-tag node) 'fanyi-heading))
-          (while (and (stringp (car children))
-                      (string-empty-p (string-trim (car children))))
-            (pop children))
-          (when (and (consp (car children))
-                     (or (fanyi-longman--class-p (car children) "title")
-                         (fanyi-longman--class-p (car children) "headword")))
-            (setq node (append node (list " " (pop children))))))
-        (push node result)))
+      (let ((node (pop children)) (rest children))
+        (while (and (stringp (car rest)) (string-empty-p (string-trim (car rest))))
+          (setq rest (cdr rest)))
+        (if (and (consp node) (fanyi-longman--class-p node "asset")
+                 (consp (car rest)) (fanyi-longman--class-p (car rest) "assetlink")
+                 (fanyi-longman--nodes (car rest) "title"))
+            (progn
+              (push `(span ((class . "asset")) ,node ,(car rest)) result)
+              (setq children (cdr rest)))
+          (push node result))))
     (nreverse result)))
 
 (defun fanyi-longman--prepare-node (node base &optional context)
@@ -161,8 +256,15 @@ CONTEXT records word-family, headword and origin sections enclosing NODE.
 Keep ordinary HTML and unfamiliar inline markup for shr to render."
   (if (stringp node)
       node
-    (let* ((tag (dom-tag node))
-           (classes (split-string (or (dom-attr node 'class) "")))
+    (let* ((classes (split-string (or (dom-attr node 'class) "")))
+           (node (if (cl-intersection classes '("asset" "corpus") :test #'equal)
+                     (fanyi-longman--asset-heading node)
+                   node))
+           (tag (dom-tag node))
+           (style (apply #'append
+                         (mapcar (lambda (rule)
+                                   (when (member (car rule) classes) (cdr rule)))
+                                 fanyi-longman--class-styles)))
            (context (append
                      (when (member "wordfams" classes) '(family))
                      (when (member "etym" classes) '(origin))
@@ -173,26 +275,18 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
       (unless (or (memq tag '(script style iframe form input img svg
                                      object embed audio video source link meta base))
                   (and (eq tag 'button) (not (dom-attr node 'data-src-mp3)))
-                  (cl-intersection classes '("FIELD" "SIGNPOST") :test #'equal)
+                  (cl-intersection classes '("FIELD" "ACTIV" "SIGNPOST") :test #'equal)
                   (and (memq 'hyphenated context) (member "HWD" classes))
                   (dom-attr node 'hidden)
                   (equal (dom-attr node 'aria-hidden) "true")
                   (string-match-p "display[ \t]*:[ \t]*none"
                                   (or (dom-attr node 'style) "")))
         (let* ((attributes (copy-tree (dom-attributes node)))
-               (children (fanyi-longman--join-headings
-                          (delq nil (mapcar (lambda (child)
-                                              (fanyi-longman--prepare-node child base context))
-                                            (dom-children node)))))
+               (children (delq nil (mapcar (lambda (child)
+                                             (fanyi-longman--prepare-node child base context))
+                                           (fanyi-longman--group-assets (dom-children node)))))
                (audio (fanyi-longman--http-url (dom-attr node 'data-src-mp3) base))
-               (face (cdr (seq-find
-                           (lambda (item) (member (car item) classes))
-                           '(("POS" . fanyi-pos-face) ("pos" . fanyi-pos-face)
-                             ("GRAM" . fanyi-longman-grammar-face)
-                             ("LEVEL" . fanyi-longman-dot-face)
-                             ("REGISTERLAB" . fanyi-longman-registerlab-face)
-                             ("GEO" . fanyi-longman-geo-face)
-                             ("GLOSS" . font-lock-string-face))))))
+               (face (plist-get style :face)))
           ;; URL normalization avoids relying on shr's document-local base URL.
           (when (eq tag 'a)
             (setf (alist-get 'href attributes)
@@ -210,28 +304,12 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
               (push '(fanyi-origin-label nil "Origin") children)))
            ((and (memq 'origin context) (member "asset_intro" classes))
             (setq tag 'fanyi-origin-label))
-           (face
-            (setq tag 'fanyi-face)
-            (setf (alist-get 'face attributes) face))
            ((memq 'origin context)
             ;; Keep emphasis and links while laying out the origin inline.
             (when (memq tag '(div p h1 h2 h3 h4 h5 h6 br))
               (setq tag 'span)))
-           ((cl-intersection classes '("dictionary_intro" "asset_intro") :test #'equal)
-            (setq tag 'fanyi-heading))
-           ((cl-intersection classes '("EXAMPLE" "exa") :test #'equal)
-            (setq tag 'fanyi-example))
-           ((member "Head" classes) (setq tag 'p))
-           ((cl-intersection classes '("Sense" "Crossref") :test #'equal)
-            (setq tag 'fanyi-line))
-           ((cl-intersection classes '("title" "headword") :test #'equal)
-            (setq tag 'span))
-           ((or (member "HYPHENATION" classes) (member "LEXUNIT" classes))
-            (setq tag 'b)))
-          (when (cl-intersection classes '("PronCodes" "LEVEL" "FREQ" "AC" "GRAM"
-                                           "REGISTERLAB" "GEO" "pos" "POS" "Head"
-                                           "LEXUNIT" "DEF" "Crossref" "sensenum"
-                                           "DATE" "LANG" "Etymon" "GLOSS") :test #'equal)
+           ((plist-get style :tag) (setq tag (plist-get style :tag))))
+          (when (plist-get style :space)
             (setq children (append '(" ") children '(" "))))
           (when (member "SYN" classes)
             (setq children
@@ -239,7 +317,10 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
                                               (string-trim (dom-texts node "")))
                               '(" ") '(" SYN "))
                           children '(" "))))
-          (cons tag (cons attributes children)))))))
+          (let ((prepared (cons tag (cons attributes children))))
+            ;; Styling wraps the node so anchors and native emphasis keep
+            ;; their own rendering semantics.
+            (if face `(fanyi-face ((face . ,face)) ,prepared) prepared)))))))
 
 (defun fanyi-longman--sections (node)
   "Select nonoverlapping dictionary sections under NODE in document order."
@@ -252,34 +333,55 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
   "Select usable dictionary content from DOM for THIS."
   (let* ((base (format (oref this url) (oref this word)))
          (dictionary (car (fanyi-longman--nodes dom "dictionary")))
-         (content (and dictionary (fanyi-longman--prepare-node dictionary base)))
          (sections (seq-filter
                     (lambda (node)
                       (or (not (fanyi-longman--class-p node "dictentry"))
-                          (fanyi-longman--entry-p node base)))
-                    (fanyi-longman--sections content))))
+                          (fanyi-longman--entry-p
+                           (fanyi-longman--prepare-node node base) base)))
+                    (fanyi-longman--sections dictionary))))
     (unless (seq-some (lambda (node) (fanyi-longman--class-p node "dictentry")) sections)
       (signal 'fanyi-parse-error '("Longman response contains no usable dictionary entries")))
-    (oset this content `(div nil ,@sections))))
+    (oset this content (copy-tree `(div nil ,@sections)))))
 
 (defun fanyi-longman--shr-heading (dom)
   "Render DOM as a Fanyi outline heading."
   (shr-ensure-paragraph)
-  (insert "## ")
-  (shr-generic dom)
+  (let ((start (point)))
+    (insert "## ")
+    (shr-generic dom)
+    ;; Include the line break so the source banner extends to the window edge.
+    (shr-ensure-newline)
+    (add-face-text-property
+     start (point)
+     (list (if (fanyi-longman--class-p dom "dictionary_intro")
+               'fanyi-longman-dictionary-face
+             'fanyi-longman-heading-face)
+           'fanyi-sub-headline-face)
+     nil))
   (shr-ensure-paragraph))
 
 (defun fanyi-longman--shr-face (dom)
   "Render DOM with its semantic face."
   (let ((start (point)))
     (shr-generic dom)
-    (add-face-text-property start (point) (dom-attr dom 'face) t)))
+    (let ((face (dom-attr dom 'face)))
+      ;; Semantic sizes/colors take precedence over SHR's base font.
+      ;; The document default is deliberately the lowest-priority face.
+      (add-face-text-property start (point) face
+                              (eq face 'fanyi-longman-body-face)))))
 
 (defun fanyi-longman--shr-line (dom)
   "Render DOM on a separate line."
   (shr-ensure-newline)
   (shr-generic dom)
   (shr-ensure-newline))
+
+(defun fanyi-longman--shr-sense (dom)
+  "Render DOM with the site's sense indentation and paragraph spacing."
+  (shr-ensure-newline)
+  (let ((shr-indentation (+ shr-indentation (if shr-use-fonts 20 2))))
+    (shr-generic dom))
+  (shr-ensure-paragraph))
 
 (defun fanyi-longman--shr-origin-label (dom)
   "Render DOM as an Origin badge, with a text fallback."
@@ -303,6 +405,7 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
   "Insert a pronunciation button for DOM without starting playback."
   (shr-insert " ")
   (insert-button "🔊"
+                 'type 'fanyi-longman-button
                  'action #'fanyi-play-sound
                  'button-data (dom-attr dom 'src)
                  'face (cond ((fanyi-longman--class-p dom "brefile") 'fanyi-female-speaker-face)
@@ -326,7 +429,21 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
     (shr-generic dom)
     (when (and url (> (point) start))
       (shr-urlify start url)
+      (let ((position start) next faces
+            (style (if (fanyi-longman--class-p dom "topic")
+                       'fanyi-longman-topic-face
+                     'fanyi-longman-definition-link-face)))
+        ;; Replace SHR's link color, preserving emphasis within the anchor.
+        (while (< position (point))
+          (setq next (next-single-property-change position 'face nil (point))
+                faces (get-text-property position 'face))
+          (unless (and (listp faces) (not (keywordp (car faces))))
+            (setq faces (list faces)))
+          (put-text-property position next 'face
+                             (cons style (remq 'shr-link (copy-sequence faces))))
+          (setq position next)))
       (make-text-button start (point)
+                        'type 'fanyi-longman-button
                         'action (cond (word #'fanyi-dwim)
                                       ((member (url-host (url-generic-parse-url url))
                                                '("ldoceonline.com" "www.ldoceonline.com"))
@@ -339,53 +456,37 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
 (defun fanyi-longman--shr-example (dom)
   "Render DOM as an indented example."
   (shr-ensure-newline)
-  (let ((shr-indentation (if (fanyi-longman--class-p dom "exa")
-                             shr-indentation
-                           (+ shr-indentation fanyi-longman-example-indent)))
+  (let ((shr-indentation (+ shr-indentation
+                            (if (fanyi-longman--class-p dom "exa")
+                                (if shr-use-fonts 15 2)
+                              (* fanyi-longman-example-indent
+                                 (if shr-use-fonts (frame-char-width) 1)))))
         (start (point)))
     (when (and (fanyi-longman--class-p dom "exa")
                (not (string-prefix-p "•" (string-trim-left (dom-texts dom "")))))
       (shr-insert "• "))
     (shr-generic dom)
-    (add-face-text-property start (point) 'fanyi-longman-example-face t)
+    (add-face-text-property start (point) 'fanyi-longman-example-face)
     (shr-ensure-newline)))
-
-(defun fanyi-longman--preserve-faces ()
-  "Keep SHR's styling when Fanyi's font-lock clears and rebuilds `face'."
-  (let ((start (point-min)) end)
-    (while (< start (point-max))
-      (setq end (next-single-property-change start 'face nil (point-max)))
-      (when (get-text-property start 'face)
-        (put-text-property start end 'font-lock-face
-                           (get-text-property start 'face)))
-      (setq start end))))
 
 (cl-defmethod fanyi-render ((this fanyi-longman-service))
   "Render THIS with shr, adapting only Fanyi headings and actions."
   (fanyi-with-fanyi-buffer
     (insert "# Longman\n\n")
-    (let ((shr-use-fonts nil)
-          (shr-use-colors nil)
-          (shr-inhibit-images t)
-          (shr-external-rendering-functions
-           '((a . fanyi-longman--shr-link)
-             (fanyi-query . fanyi-longman--shr-link)
-             (fanyi-audio . fanyi-longman--shr-audio)
-             (fanyi-heading . fanyi-longman--shr-heading)
-             (fanyi-face . fanyi-longman--shr-face)
-             (fanyi-line . fanyi-longman--shr-line)
-             (fanyi-example . fanyi-longman--shr-example)
-             (fanyi-origin . fanyi-longman--shr-origin)
-             (fanyi-origin-label . fanyi-longman--shr-origin-label)))
-          (hscroll (window-hscroll)))
-      (unwind-protect
-          (save-restriction
-            ;; shr's filling and text properties must not affect earlier sources.
-            (narrow-to-region (point) (point))
-            (shr-insert-document (oref this content))
-            (delete-trailing-whitespace (point-min) (point-max))
-            (fanyi-longman--preserve-faces))
-        (set-window-hscroll nil hscroll)))
+    (fanyi-shr-insert
+     `(fanyi-face ((face . fanyi-longman-body-face))
+                  ,(fanyi-longman--prepare-node
+                    (oref this content) (format (oref this url) (oref this word))))
+     '((a . fanyi-longman--shr-link)
+       (fanyi-query . fanyi-longman--shr-link)
+       (fanyi-audio . fanyi-longman--shr-audio)
+       (fanyi-heading . fanyi-longman--shr-heading)
+       (fanyi-face . fanyi-longman--shr-face)
+       (fanyi-line . fanyi-longman--shr-line)
+       (fanyi-sense . fanyi-longman--shr-sense)
+       (fanyi-example . fanyi-longman--shr-example)
+       (fanyi-origin . fanyi-longman--shr-origin)
+       (fanyi-origin-label . fanyi-longman--shr-origin-label)))
     (goto-char (point-max))
     (unless (bolp) (insert "\n"))
     (insert "\n")))

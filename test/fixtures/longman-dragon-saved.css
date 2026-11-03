@@ -1,0 +1,40 @@
+/* Relevant rules from the user's saved Longman common.css, 2026-11-03.
+ * Open longman-dragon-saved.html locally for the browser reference.
+ * The original page chrome, advertising and remote fonts are excluded.
+ */
+body { font-family: Arial, Helvetica, sans-serif; font-size: 16px; color: #333; }
+a { color: inherit; text-decoration: inherit; }
+.dictionary .defRef { border-bottom: thin dotted gray; }
+.dictentry { display: block; margin-bottom: 25px; }
+.dictionary_intro {
+  display: block; background-color: #35a3ff; color: #fff;
+  padding-left: 10px; margin: 5px 0 10px -7px;
+}
+.asset_intro {
+  border: solid 1px #f1d600; background-color: #f1d600; color: #fff;
+  font-weight: normal; border-radius: 5px; padding-left: 3px; padding-right: 3px;
+}
+.yellow_box { margin-top: 22px; display: table; }
+.ldoceEntry .HWD, .ldoceEntry .ACTIV, .ldoceEntry .FIELD { display: none; }
+.ldoceEntry .HYPHENATION { font-weight: bold; font-size: 160%; color: red; }
+.ldoceEntry .POS { color: green; font-weight: bold; margin: 0 0 0 10px; }
+.ldoceEntry .GRAM { color: green; font-weight: bold; margin: 0 5px 10px 3px; }
+.ldoceEntry .LEVEL { color: red; font-size: 120%; }
+.ldoceEntry .Sense { display: block; margin-left: 20px; margin-bottom: 15px; }
+.ldoceEntry .sensenum { font-style: normal; font-weight: bold; color: black; }
+.ldoceEntry .REFHWD { font-weight: bold; }
+.ldoceEntry .EXAMPLE { display: block; margin-left: 20px; color: gray; }
+.exaGroup .title {
+  font-size: 110%; font-weight: bold; color: black;
+  display: block; margin-left: 5px; margin-top: 15px;
+}
+.exaGroup .exa { display: block; color: gray; margin-left: 15px; }
+.exaGroup .NodeW { font-weight: bold; }
+.asset { margin-top: 30px; }
+.Entry .topics_container { display: table; }
+.Entry .related_topics {
+  padding: 0 4px 1px 0; font-size: 16px;
+  font-family: Tahoma, Arial, Helvetica; color: #000;
+}
+.Entry .topic { color: red; text-decoration: underline; }
+.etym .Head { font-weight: bold; }

@@ -101,14 +101,26 @@ without usable dictionary content are reported as parsing failures; an explicit
 empty result from Youdao is reported as no results found.
 
 Longman uses Emacs's built-in `shr` renderer for dictionary HTML. Definitions,
-lists, and inline formatting follow the document structure, with Fanyi headings,
-separate example lines, and persistent highlighting for parts of speech and
-grammar. Duplicate headwords, field codes, and signpost labels are omitted.
+lists, and inline formatting follow the document structure. A small set of
+Longman class rules supplies headword sizes, colors, headings and example
+indentation, based on a saved page and its CSS. This preserves native HTML
+emphasis and persistent highlighting for parts of speech and grammar; it does
+not implement a general CSS engine. Duplicate headwords and hidden field labels
+are omitted, along with signpost labels.
 Audio buttons play pronunciations, dictionary links start Fanyi queries, and
 related-topic links open in Emacs's EWW browser. The Origin label uses an SVG
 badge when supported (controlled by `fanyi-use-glyphs` and
 `fanyi-longman-svg-border-radius`), with a text fallback. Only dictionary content
 is selected; rendering does not download images or other page resources.
+
+Longman respects `shr-use-fonts` and `shr-use-colors`; graphical Emacs can use
+proportional fonts, while terminals use fixed-width layout. HTML regions reflow
+from their saved DOM when the displayed window changes width, without another
+request. Reading position, folded headings, and other dictionaries are retained.
+When the buffer appears in several windows, its selected window determines the
+layout. Use `C-u M-x fanyi-shr-reflow` to force a refresh after changing fonts or
+styles. Fanyi's text-formatting rules do not reinterpret the HTML body as
+Markdown-style emphasis.
 
 Etymonline displays an `Open in browser` button immediately, without making an
 HTTP request or parsing its pages. Click it to read the current entry and

@@ -343,25 +343,40 @@ BROWSER-URL offers an external browser action for blocked requests."
   "ElDoc for `fanyi-mode'."
   (get-char-property (point) 'help-echo))
 
+(defun fanyi--font-lock-search (regexp limit)
+  "Search for REGEXP before LIMIT outside rendered HTML.
+HTML providers supply their own semantic `font-lock-face' properties.
+Confining each search to one text region also prevents matches from
+crossing into HTML and consuming delimiters in a later dictionary."
+  (let (found)
+    (while (and (< (point) limit) (not found))
+      (let ((end (next-single-property-change (point) 'fanyi-html nil limit)))
+        (if (get-text-property (point) 'fanyi-html)
+            (goto-char end)
+          (setq found (re-search-forward regexp end t))
+          (unless found (goto-char end)))))
+    found))
+
 (defvar fanyi-mode-font-lock-keywords
-  '(;; Dictionary name
-    ("^# .*" 0 (list 'face 'fanyi-dict-face
-                     'keymap fanyi-mode-cycle-map))
-    ;; Sub headline
-    ("^## .*" 0 (list 'face 'fanyi-sub-headline-face
+  (append
+   '(;; Dictionary name
+     ("^# .*" 0 (list 'face 'fanyi-dict-face
                       'keymap fanyi-mode-cycle-map))
-    ;; Quotes
-    ("^> .*" . 'fanyi-quote-face)
-    ;; List
-    ("^-" . 'fanyi-list-face)
-    ;; Part of speech
-    ("(\\([a-z\.]+?\\))" . 'fanyi-pos-face)
-    ;; Italic
-    ("/\\([^/]+?\\)/" . 'italic)
-    ;; Bold
-    ("\\*\\([^\\*]+?\\)\\*" . 'bold)
-    ;; Underline
-    ("_\\([^_]+?\\)_" . 'underline))
+     ;; Keep HTML heading styles and the common folding keymap.
+     ("^## .*" 0 (list 'face
+                       (unless (and (get-text-property (match-beginning 0) 'fanyi-html)
+                                    (get-text-property (match-beginning 0) 'font-lock-face))
+                         'fanyi-sub-headline-face)
+                       'keymap fanyi-mode-cycle-map)))
+   (mapcar (lambda (rule)
+             (list (apply-partially #'fanyi--font-lock-search (car rule))
+                   0 (list 'quote (cdr rule))))
+           '(("^> .*" . fanyi-quote-face)
+             ("^-" . fanyi-list-face)
+             ("(\\([a-z\.]+?\\))" . fanyi-pos-face)
+             ("/\\([^/]+?\\)/" . italic)
+             ("\\*\\([^\\*]+?\\)\\*" . bold)
+             ("_\\([^_]+?\\)_" . underline))))
   "Keywords to highlight in `fanyi-mode'.")
 
 (defvar fanyi-mode-map

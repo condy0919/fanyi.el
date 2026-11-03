@@ -15,6 +15,9 @@ test:
 	-l test/fanyi-response-tests.el \
 	-l test/fanyi-etymon-tests.el \
 	-l test/fanyi-shr-tests.el \
+	-l test/fanyi-font-lock-tests.el \
+	-l test/fanyi-shr-reflow-tests.el \
+	-l test/fanyi-longman-style-tests.el \
 	-l test/fanyi-challenge-tests.el \
 	-f ert-run-tests-batch-and-exit
 
