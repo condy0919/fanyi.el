@@ -6,7 +6,7 @@
 ;; Keywords: convenience, tools
 ;; URL: https://github.com/condy0919/fanyi.el
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.1") (s "1.12.0"))
+;; Package-Requires: ((emacs "29.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -29,7 +29,6 @@
 
 (require 'fanyi-base)
 
-(require 's)
 (require 'subr-x)
 (require 'cl-lib)
 
@@ -116,8 +115,8 @@ before calling this function."
              do (insert "- " ent "\n")
              do (insert (propertize
                          (fanyi-youdao-thesaurus--propertize-pos explain)
-                         'line-prefix (s-repeat fanyi-youdao-thesaurus-indent " ")
-                         'wrap-prefix (s-repeat fanyi-youdao-thesaurus-indent " ")))
+                         'line-prefix (make-string fanyi-youdao-thesaurus-indent ?\s)
+                         'wrap-prefix (make-string fanyi-youdao-thesaurus-indent ?\s)))
              do (insert "\n"))
     (insert "\n")))
 

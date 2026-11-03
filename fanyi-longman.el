@@ -220,8 +220,7 @@ A boxed FACE produces a transparent badge with a one-pixel outline."
                    :fill (if border "none" (face-attribute face :background nil t))
                    :stroke (or border "none") :stroke-width (if border 1 0))
     (svg-text svg text :x padding :y (* height 0.75)
-              :font-family (face-attribute (if shr-use-fonts 'variable-pitch 'default)
-                                           :family nil t)
+              :font-family (face-attribute 'default :family nil t)
               :font-size (* height 0.75)
               :font-weight (if (eq (face-attribute face :weight nil t) 'bold) "bold" "normal")
               :fill foreground)
@@ -497,7 +496,7 @@ The returned DOM is ready for SHR; DOM itself is not modified."
 (defun fanyi-longman--shr-sense (dom)
   "Render DOM with the site's sense indentation and paragraph spacing."
   (shr-ensure-newline)
-  (let ((shr-indentation (+ shr-indentation (if shr-use-fonts 20 2))))
+  (let ((shr-indentation (+ shr-indentation 2)))
     (shr-generic dom))
   (shr-ensure-paragraph))
 
@@ -580,9 +579,8 @@ The returned DOM is ready for SHR; DOM itself is not modified."
   (shr-ensure-newline)
   (let ((shr-indentation (+ shr-indentation
                             (if (fanyi-longman--class-p dom "exa")
-                                (if shr-use-fonts 15 2)
-                              (* fanyi-longman-example-indent
-                                 (if shr-use-fonts (frame-char-width) 1)))))
+                                2
+                              fanyi-longman-example-indent)))
         (start (point)))
     (when (and (fanyi-longman--class-p dom "exa")
                (not (string-prefix-p "•" (string-trim-left (dom-texts dom "")))))

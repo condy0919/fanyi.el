@@ -167,8 +167,9 @@ if your sound player can be launched with `your-sound-player url`. Otherwise it 
 
 ## Development
 
-Install development dependencies with `cask install`, then run `make test`
-for the ERT suite and `make compile` for byte compilation. CI runs both.
+Run `make test CASK=` for the ERT suite and `make compile CASK=` for byte
+compilation; no external Lisp packages are required. If using Cask, run
+`cask install`, then `make test` and `make compile`. CI runs both checks.
 Tests use mocked requests and the small HTML/JSON samples in `test/fixtures/`;
 they do not contact dictionary websites. The fixtures exercise parsing and
 rendering, but are not a check of the websites' current availability.

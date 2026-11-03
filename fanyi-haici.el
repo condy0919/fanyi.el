@@ -6,7 +6,7 @@
 ;; Keywords: convenience, tools
 ;; URL: https://github.com/condy0919/fanyi.el
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.1") (s "1.12.0"))
+;; Package-Requires: ((emacs "29.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -29,7 +29,6 @@
 
 (require 'fanyi-base)
 
-(require 's)
 (require 'subr-x)
 (require 'dom)
 (require 'seq)
@@ -117,15 +116,16 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
                    collect (list pos para)))
     (unless (fanyi-haici-result-paraphrases result)
       (signal 'fanyi-parse-error '("Haici response contains no usable definitions")))
-    ;; Syllable, could be nil.
-    (when-let* ((str (dom-attr (dom-by-class dom "keyword") 'tip))
-                (matches (s-match "\\([a-zA-Z·]+\\)" str)))
-      (setf (fanyi-haici-result-syllable result) (nth 1 matches)))
-    ;; Star and description, could be nil.
-    (when-let* ((str (dom-attr (dom-by-class dom "level-title") 'level))
-                (matches (s-match "\\([12345]\\)" str)))
-      (setf (fanyi-haici-result-star result) (string-to-number (nth 1 matches))
-            (fanyi-haici-result-star-desc result) str))
+    (save-match-data
+      ;; Syllable, could be nil.
+      (when-let* ((str (dom-attr (dom-by-class dom "keyword") 'tip)))
+        (when (string-match "\\([a-zA-Z·]+\\)" str)
+          (setf (fanyi-haici-result-syllable result) (match-string 1 str))))
+      ;; Star and description, could be nil.
+      (when-let* ((str (dom-attr (dom-by-class dom "level-title") 'level)))
+        (when (string-match "\\([12345]\\)" str)
+          (setf (fanyi-haici-result-star result) (string-to-number (match-string 1 str))
+                (fanyi-haici-result-star-desc result) str))))
     (setf (fanyi-haici-result-phonetics result)
           (cl-loop for item in (dom-non-text-children (dom-by-class dom "phonetic"))
                    for phonetic = (dom-search item (lambda (node) (dom-attr node 'lang)))
@@ -197,7 +197,7 @@ before calling this function."
     ;; Syllables and star/level description.
     (insert (fanyi-haici-result-syllable result)
             " "
-            (s-repeat (fanyi-haici-result-star result) "★")
+            (make-string (fanyi-haici-result-star result) ?★)
             " "
             (fanyi-haici-result-star-desc result)
             "\n\n")

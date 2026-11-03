@@ -159,7 +159,6 @@
              (expand-file-name invocation-name invocation-directory)
              nil t nil "-Q" "--batch"
              "-L" fanyi-test--project-directory
-             "-L" (file-name-directory (locate-library "s"))
              "--eval" (prin1-to-string form))))
       (ert-info ((buffer-string))
         (should (equal status 0))))))

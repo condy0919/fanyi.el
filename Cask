@@ -4,5 +4,4 @@
 (package-file "fanyi.el")
 
 (development
-  (depends-on "s")
   (depends-on "package-lint"))
