@@ -236,13 +236,17 @@ retain Fanyi's requested presentation.  This is not a CSS interpreter.")
 (define-button-type 'fanyi-longman-button
   'face nil)
 
+(defun fanyi-longman--label-color (face attribute &optional frame)
+  "Return FACE's color ATTRIBUTE on FRAME, using the dictionary text fallback."
+  (face-attribute face attribute frame '(fanyi-longman-body-face default)))
+
 (defun fanyi-longman-svg-tag-make (text face)
   "Create a rounded SVG label displaying TEXT with FACE.
 A boxed FACE produces a transparent badge with a one-pixel outline."
   (let* ((height (window-font-height))
          (padding (window-font-width))
          (width (* padding (+ (string-width text) 2)))
-         (foreground (face-attribute face :foreground nil t))
+         (foreground (fanyi-longman--label-color face :foreground))
          (box (face-attribute face :box nil t))
          (border (and box (not (eq box 'unspecified))
                       (or (and (stringp box) box)
@@ -252,7 +256,7 @@ A boxed FACE produces a transparent badge with a one-pixel outline."
          (svg (svg-create width height)))
     (svg-rectangle svg inset inset (- width (* 2 inset)) (- height (* 2 inset))
                    :rx fanyi-longman-svg-border-radius
-                   :fill (if border "none" (face-attribute face :background nil t))
+                   :fill (if border "none" (fanyi-longman--label-color face :background))
                    :stroke (or border "none") :stroke-width (if border 1 0))
     (svg-text svg text :x padding :y (* height 0.75)
               :font-family (face-attribute 'default :family nil t)
@@ -816,7 +820,10 @@ Keep the underlying text available for searching and copying."
           (face-attribute 'fanyi-longman-british-speaker-face :foreground frame 'default)
           (face-attribute 'fanyi-longman-american-speaker-face :foreground frame 'default)
           (mapcar (lambda (face)
-                    (mapcar (lambda (attribute) (face-attribute face attribute frame t))
+                    (mapcar (lambda (attribute)
+                              (if (memq attribute '(:foreground :background))
+                                  (fanyi-longman--label-color face attribute frame)
+                                (face-attribute face attribute frame t)))
                             '(:foreground :background :weight :box)))
                   '(fanyi-longman-frequency-face fanyi-longman-svg-asset-face
                                                  fanyi-longman-signpost-face

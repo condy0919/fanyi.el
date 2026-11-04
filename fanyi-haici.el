@@ -576,7 +576,7 @@ Children use the same word/url attributes as `fanyi-haici--shr-entries'."
              (height (window-font-height))
              (padding (window-font-width))
              (width (* padding (+ 2 (string-width text))))
-             (color (face-attribute 'fanyi-haici-label-face :foreground nil t))
+             (color (face-attribute 'fanyi-haici-label-face :foreground nil 'default))
              (svg (svg-create width height)))
         (svg-rectangle svg 0.5 0.5 (1- width) (1- height)
                        :rx 4 :fill "none" :stroke color :stroke-width 1)
@@ -680,7 +680,7 @@ Children use the same word/url attributes as `fanyi-haici--shr-entries'."
           (window-font-width window) (window-font-height window)
           (display-images-p frame)
           (face-attribute 'default :family frame t)
-          (face-attribute 'fanyi-haici-label-face :foreground frame t)
+          (face-attribute 'fanyi-haici-label-face :foreground frame 'default)
           (face-attribute 'fanyi-female-speaker-face :foreground frame 'default)
           (face-attribute 'fanyi-male-speaker-face :foreground frame 'default))))
 

@@ -3,6 +3,80 @@
 (require 'fanyi-test-support)
 (require 'fanyi-longman)
 
+(ert-deftest fanyi-longman-label-colors-follow-body-inheritance-and-defaults ()
+  (let ((states
+         (mapcar (lambda (face)
+                   (cons face (cl-loop for attribute in '(:foreground :background :inherit :box)
+                                       append (list attribute (face-attribute face attribute)))))
+                 '(default fanyi-longman-body-face fanyi-longman-frequency-face
+                           fanyi-longman-svg-asset-face font-lock-keyword-face)))
+        (render (symbol-function 'fanyi-shr--render)) (renders 0))
+    (unwind-protect
+        (cl-letf (((symbol-function 'create-image) #'fanyi-test--create-svg-image)
+                  ((symbol-function 'display-images-p) (lambda (&rest _) t))
+                  ((symbol-function 'image-type-available-p) (lambda (type) (eq type 'svg)))
+                  ((symbol-function 'url-retrieve) (lambda (&rest _) (ert-fail "No network")))
+                  ((symbol-function 'fanyi-shr--render)
+                   (lambda (&rest args) (cl-incf renders) (apply render args))))
+          (set-face-attribute 'default nil :foreground "#112233" :background "#eeeeee")
+          (set-face-attribute 'fanyi-longman-body-face nil
+                              :foreground "#334455" :background "#dddddd" :inherit nil)
+          (set-face-attribute 'font-lock-keyword-face nil :foreground "#556677")
+          (dolist (face '(fanyi-longman-frequency-face fanyi-longman-svg-asset-face))
+            (set-face-attribute face nil :foreground 'unspecified :background 'unspecified
+                                :inherit nil :box (and (eq face 'fanyi-longman-frequency-face)
+                                                       '(:line-width 1))))
+          (fanyi-test--with-result-buffer
+            (save-window-excursion
+              (set-window-buffer nil (current-buffer))
+              (let ((fanyi-use-glyphs t) (shr-width 80) (inhibit-read-only t))
+                (fanyi-longman-render
+                 '(div nil (fanyi-label ((class . "FREQ")) "S2")
+                       (fanyi-asset-label nil "Origin")) nil)
+                (cl-labels
+                    ((colors (label)
+                       (save-excursion
+                         (goto-char (point-min))
+                         (search-forward label)
+                         (let* ((display (get-text-property (match-beginning 0) 'display))
+                                (data (plist-get (cdr display) :data))
+                                (svg (with-temp-buffer
+                                       (insert data)
+                                       (libxml-parse-xml-region (point-min) (point-max)))))
+                           (should-not (string-match-p "unspecified" data))
+                           (list (dom-attr (car (dom-by-tag svg 'text)) 'fill)
+                                 (dom-attr (car (dom-by-tag svg 'rect)) 'fill)
+                                 (dom-attr (car (dom-by-tag svg 'rect)) 'stroke))))))
+                  ;; Default changes are irrelevant while the body supplies
+                  ;; its own colors.  Face inheritance still precedes the body.
+                  (dolist (case
+                           '((nil nil "#334455" "#334455" "#334455" "#dddddd" 1)
+                             (default (:foreground "#010203") "#334455" "#334455" "#334455" "#dddddd" 1)
+                             (fanyi-longman-body-face (:foreground "#445566") "#445566" "#445566" "#445566" "#dddddd" 2)
+                             (fanyi-longman-body-face (:background "#aaaabb") "#445566" "#445566" "#445566" "#aaaabb" 3)
+                             (fanyi-longman-body-face (:foreground unspecified :background unspecified)
+                                                      "#010203" "#010203" "#010203" "#eeeeee" 4)
+                             (default (:foreground "#778899" :background "#f0f0f0")
+                                      "#778899" "#778899" "#778899" "#f0f0f0" 5)
+                             (fanyi-longman-frequency-face (:inherit font-lock-keyword-face)
+                                                           "#556677" "#556677" "#778899" "#f0f0f0" 6)
+                             (font-lock-keyword-face (:foreground "#123456")
+                                                     "#123456" "#123456" "#778899" "#f0f0f0" 7)
+                             (fanyi-longman-frequency-face (:box (:line-width 1 :color "#654321"))
+                                                           "#123456" "#654321" "#778899" "#f0f0f0" 8)
+                             (fanyi-longman-svg-asset-face (:foreground "#abcdef" :background "#fedcba")
+                                                           "#123456" "#654321" "#abcdef" "#fedcba" 9)))
+                    (pcase-let ((`(,face ,attributes ,foreground ,stroke ,asset-foreground ,background ,count) case))
+                      (when face (apply #'set-face-attribute face nil attributes))
+                      (run-hooks 'post-command-hook)
+                      (should (= renders count))
+                      (should (equal (colors "S2") (list foreground "none" stroke)))
+                      (should (equal (colors "Origin") (list asset-foreground background "none")))
+                      (run-hooks 'post-command-hook)
+                      (should (= renders count)))))))))
+      (dolist (state states)
+        (apply #'set-face-attribute (car state) nil (cdr state))))))
+
 (ert-deftest fanyi-longman-saved-page-keeps-source-and-renders-real-structure ()
   (let* ((dom (fanyi-test--read-fixture "longman-dragon-saved.html"))
          (before (copy-tree dom))
