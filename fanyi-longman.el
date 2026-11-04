@@ -354,6 +354,7 @@ The saved page puts the corpus label and title in sibling containers."
 (defun fanyi-longman--node-context (node classes context)
   "Extend CONTEXT with the semantic sections introduced by NODE and CLASSES."
   (append (when (member "wordfams" classes) '(family))
+          (when (eq (dom-tag node) 'a) '(link))
           (when (member "etym" classes) '(origin))
           (when (member "Sense" classes) '(sense))
           (when (member "F2NBox" classes) '(note))
@@ -459,6 +460,73 @@ renderer.  Use the class tag only when no contextual branch applies."
      ((plist-get style :tag) (setq tag (plist-get style :tag))))
     (plist-put style :tag tag)))
 
+(defun fanyi-longman--association-link (children)
+  "Make a local query from an unambiguous term in prepared CHILDREN.
+Keep leading badges and punctuation outside the button, retaining inline
+markup inside it.  Existing links, lists, qualifiers and prose remain intact.
+Only alphabetic terms of up to four words, without and/or, are inferred."
+  (let ((body (copy-sequence children)) prefix suffix)
+    (while (and body
+                (let ((node (car body)))
+                  (cond
+                   ((and (stringp node) (string-match "\\`[^[:alnum:]]+" node))
+                    (push (match-string 0 node) prefix)
+                    (setcar body (substring node (match-end 0)))
+                    (when (string-empty-p (car body)) (setq body (cdr body)))
+                    t)
+                   ((and (not (stringp node))
+                         (or (eq (dom-tag node) 'fanyi-synopp)
+                             (and (not (dom-by-tag node 'a))
+                                  (not (string-match-p "[[:alnum:]]" (dom-texts node ""))))))
+                    (push (pop body) prefix)
+                    t)))))
+    (when (and (stringp (car (last body)))
+               (string-match "[[:space:],.;:!?]+\\'" (car (last body))))
+      (setq suffix (list (match-string 0 (car (last body)))))
+      (setcar (last body) (substring (car (last body)) 0 (match-beginning 0))))
+    (let* ((dom `(span nil ,@body))
+           (word (replace-regexp-in-string "[[:space:]]+" " "
+                                           (string-trim (dom-texts dom "")))))
+      (if (and (string-match-p
+                "\\`[[:alpha:]][[:alpha:]’'-]*\\(?: [[:alpha:]][[:alpha:]’'-]*\\)\\{0,3\\}\\'" word)
+               (not (string-match-p "\\b\\(?:and\\|or\\)\\b" word))
+               (not (dom-search
+                     dom (lambda (node)
+                           (or (not (memq (dom-tag node)
+                                          '(span fanyi-face b strong i em u s del)))
+                               (cl-intersection
+                                (split-string (or (dom-attr node 'class) ""))
+                                '("GEO" "REGISTERLAB" "POS" "GRAM") :test #'equal))))))
+          (append (nreverse prefix) (list `(fanyi-query ((word . ,word)) ,@body)) suffix)
+        children))))
+
+(defun fanyi-longman--association-children (children classes linked)
+  "Prepare association CHILDREN with CLASSES as labeled local queries.
+If LINKED is non-nil, preserve the enclosing anchor without nesting a query."
+  (let* ((label (seq-find (lambda (class) (member class classes)) '("SYN" "OPP")))
+         (children (copy-sequence children))
+         embedded-label)
+    (when (and label (not (dom-by-tag `(span nil ,@children) 'fanyi-synopp)))
+      ;; Some responses supply the label as plain text, or omit it entirely.
+      (while (and (stringp (car children)) (string-blank-p (car children)))
+        (setq children (cdr children)))
+      (cond
+       ((and (stringp (car children))
+             (string-match (concat "\\`[[:space:]]*" label "\\(?:[[:space:]]+\\|\\'\\)")
+                           (car children)))
+        (setcar children (substring (car children) (match-end 0))))
+       ((and (consp (car children))
+             (equal (string-trim (dom-texts (car children) "")) label))
+        (setq children (cdr children)))
+       ((string-match-p (concat "\\`" label "\\(?:[[:space:]]\\|\\'\\)")
+                        (string-trim (dom-texts `(span nil ,@children) "")))
+        ;; Do not duplicate a label buried in unfamiliar inline markup.
+        (setq embedded-label t)))
+      (unless embedded-label (push `(fanyi-synopp ((class . "synopp")) ,label) children)))
+    (unless (or linked embedded-label)
+      (setq children (fanyi-longman--association-link children)))
+    (if label (append '(" ") children '(" ")) children)))
+
 (defun fanyi-longman--prepare-node (node base &optional context)
   "Copy NODE into a reusable SHR DOM, resolving URLs against BASE.
 CONTEXT records the semantic sections enclosing NODE.
@@ -488,13 +556,8 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
             (push '(fanyi-origin-label nil "Origin") children))
           (when (plist-get style :space)
             (setq children (append '(" ") children '(" "))))
-          (when (member "SYN" classes)
-            (setq children
-                  (append (if (or (fanyi-longman--nodes node "synopp")
-                                  (string-match-p "\\`SYN\\(?:[[:space:]]\\|\\'\\)"
-                                                  (string-trim (dom-texts node ""))))
-                              '(" ") '(" SYN "))
-                          children '(" "))))
+          (when (cl-intersection classes '("SYN" "OPP" "RELATEDWD") :test #'equal)
+            (setq children (fanyi-longman--association-children children classes (memq 'link context))))
           (let ((prepared (cons tag (cons attributes children))))
             ;; Styling wraps the node so anchors and native emphasis keep
             ;; their own rendering semantics.

@@ -141,7 +141,7 @@
      'href "https://example.invalid/help")
     (fanyi-test--with-rendered-response fanyi-longman-provider dom
       (should (string-match-p "used for testing" (buffer-string)))
-      (should (equal (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query)) '("part"))))))
+      (should (equal (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query)) '("part" "specimen"))))))
 
 (ert-deftest fanyi-longman-preserves-nested-crossref-only-entries ()
   (let ((dom (fanyi-test--longman-html
@@ -183,7 +183,93 @@
       (setcdr (cdr synonym) (list text))
       (fanyi-test--with-rendered-response fanyi-longman-provider dom
         (should (= (how-many "\\bSYN\\b" (point-min) (point-max)) 1))
-        (should (string-match-p "SYN specimen" (buffer-string)))))))
+        (should (string-match-p "SYN specimen" (buffer-string)))
+        (should (member "specimen" (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query))))))))
+
+(ert-deftest fanyi-longman-associations-retain-emphasis-labels-and-punctuation ()
+  (dolist (case '(("SYN" "<span class='synopp'>SYN</span> <b>blow</b> up." "blow up" "SYN" bold ".")
+                  ("RELATEDWD" "<span class='neutral'>, → </span><strong>explosion</strong>!" "explosion" "→" bold "!")
+                  ("OPP" "<span class='neutral'>OPP</span> <em>shrink</em>;" "shrink" "OPP" italic ";")
+                  ("OPP" "OPP contract" "contract" "OPP" nil nil)))
+    (pcase-let ((`(,class ,html ,word ,label ,face ,punctuation) case))
+      (let* ((dom (fanyi-test--longman-html
+                   (concat "<div class='dictionary'><div class='dictentry'>"
+                           "<span class='DEF'>A definition.</span><span class='" class "'>"
+                           html "</span></div></div>")))
+             (before (copy-tree dom)) queries)
+        (fanyi-test--with-rendered-response fanyi-longman-provider dom
+          (should (equal dom before))
+          (fanyi-test--fontify)
+          (should (equal (mapcar #'car (fanyi-test--button-data #'fanyi-longman--query)) (list word)))
+          (goto-char (point-min))
+          (search-forward label)
+          (should-not (button-at (match-beginning 0)))
+          (when (member class '("SYN" "OPP"))
+            (should (fanyi-test--longman-style-has-face-p
+                     (get-char-property (match-beginning 0) 'face) 'fanyi-longman-synopp-face)))
+          (search-forward word)
+          (let ((button (button-at (match-beginning 0))))
+            (should (equal (button-get button 'button-data)
+                           (cons word (concat "https://www.ldoceonline.com/dictionary/" (url-hexify-string word)))))
+            (when face
+              (should (fanyi-test--longman-style-has-face-p
+                       (get-char-property (match-beginning 0) 'face) face)))
+            (when punctuation
+              (should (looking-at-p (regexp-quote punctuation)))
+              (should-not (button-at (point))))
+            (cl-letf (((symbol-function 'fanyi-dwim) (lambda (target) (push target queries))))
+              (button-activate button)))
+          (should (equal queries (list word))))))))
+
+(ert-deftest fanyi-longman-associations-preserve-existing-anchors ()
+  (dolist (html '("<span class='SYN'><span class='synopp'>SYN</span> <a href='/dictionary/rocket#rocket__2'><b>rocket</b></a></span>"
+                  "<a href='/dictionary/rocket#rocket__2'><span class='SYN'><span class='synopp'>SYN</span> <b>rocket</b></span></a>"
+                  "<a class='SYN' href='/dictionary/rocket#rocket__2'><b>rocket</b></a>"
+                  "<span class='RELATEDWD'><span class='neutral'>→ </span>soar, <a href='/dictionary/rocket#rocket__2'><b>rocket</b></a></span>"))
+    (let ((dom (fanyi-test--longman-html
+                (concat "<div class='dictionary'><div class='dictentry'>"
+                        "<span class='DEF'>A definition.</span>" html "</div></div>"))))
+      (fanyi-test--with-rendered-response fanyi-longman-provider dom
+        (should-not (dom-by-tag result 'fanyi-query))
+        (should (equal (fanyi-test--button-data #'fanyi-longman--query)
+                       '(("rocket" . "https://www.ldoceonline.com/dictionary/rocket#rocket__2"))))
+        (should (= (how-many "\\brocket\\b" (point-min) (point-max)) 1))))))
+
+(ert-deftest fanyi-longman-association-fallback-labels-use-svg ()
+  (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) t))
+            ((symbol-function 'image-type-available-p) (lambda (type) (eq type 'svg))))
+    (dolist (case '(("SYN" "rocket") ("SYN" "SYN rocket")
+                    ("OPP" "OPP shrink") ("OPP" "<span class='neutral'>OPP</span> shrink")))
+      (let* ((label (car case))
+             (dom (fanyi-test--longman-html
+                   (concat "<div class='dictionary'><div class='dictentry'>"
+                           "<span class='DEF'>A definition.</span><span class='" label "'>"
+                           (cadr case) "</span></div></div>"))))
+        (fanyi-test--with-rendered-response fanyi-longman-provider dom
+          (let ((fanyi-use-glyphs t) (inhibit-read-only t))
+            (erase-buffer)
+            (fanyi-render-result request result))
+          (should (= (how-many label (point-min) (point-max)) 1))
+          (goto-char (point-min))
+          (search-forward label)
+          (let ((display (get-char-property (match-beginning 0) 'display)))
+            (should (eq (car-safe display) 'image))
+            (should (string-match-p label (plist-get (cdr display) :data)))))))))
+
+(ert-deftest fanyi-longman-associations-do-not-infer-queries-from-ambiguous-text ()
+  (dolist (html '("rocket, soar" "rocket or soar" "rise and fall"
+                  "to suddenly increase in strength" "rise (informal)"
+                  "<span>SYN <b>rocket</b></span>"
+                  "rocket <span class='REGISTERLAB'>informal</span>"))
+    (let ((dom (fanyi-test--longman-html
+                (concat "<div class='dictionary'><div class='dictentry'>"
+                        "<span class='DEF'>A definition.</span><span class='SYN'>"
+                        html "</span></div></div>"))))
+      (fanyi-test--with-rendered-response fanyi-longman-provider dom
+        (should-not (dom-by-tag result 'fanyi-query))
+        (should-not (fanyi-test--button-data #'fanyi-longman--query))
+        (should (= (how-many "\\bSYN\\b" (point-min) (point-max)) 1))
+        (should (string-match-p "rocket\\|rise\\|increase" (buffer-string)))))))
 
 (ert-deftest fanyi-longman-validates-visible-prepared-content ()
   (let* ((dom (fanyi-test--longman-html

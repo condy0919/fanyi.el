@@ -173,7 +173,7 @@
             (fanyi-test--fontify)
             (fanyi-test--explode-check-badges (cl-every #'identity settings))))))))
 
-(ert-deftest fanyi-longman-explode-synonym-badges-keep-targets-as-text ()
+(ert-deftest fanyi-longman-explode-synonym-badges-and-local-query-buttons ()
   (let ((shr-width 1000))
     (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) t))
               ((symbol-function 'image-type-available-p) (lambda (type) (eq type 'svg))))
@@ -194,7 +194,13 @@
                        (get-char-property start 'face) 'fanyi-longman-synopp-face))
               (should-not (get-char-property (1- start) 'display))
               (should-not (get-char-property (+ start 3) 'display))
-              (should-not (get-char-property (+ start 4) 'display)))))))))
+              (should-not (get-char-property (+ start 4) 'display))
+              (should-not (button-at start))
+              (let ((button (button-at (+ start 4))) queries)
+                (should (equal (car (button-get button 'button-data)) target))
+                (cl-letf (((symbol-function 'fanyi-dwim) (lambda (word) (push word queries))))
+                  (button-activate button))
+                (should (equal queries (list target)))))))))))
 
 (ert-deftest fanyi-longman-explode-synonym-labels-do-not-depend-on-whitespace ()
   (dolist (separator '("" " " "\n\t"))
@@ -215,7 +221,28 @@
             (should (fanyi-test--longman-style-has-face-p
                      (get-char-property (match-beginning 0) 'face)
                      'fanyi-longman-synopp-face))
-            (should-not (button-at (+ (match-beginning 0) 4)))))))))
+            (should (equal (car (button-get (button-at (+ (match-beginning 0) 4)) 'button-data))
+                           target))))))))
+
+(ert-deftest fanyi-longman-explode-related-words-preserve-arrows-and-query ()
+  (let ((shr-width 1000))
+    (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-explode-saved.html"
+      (should (= (length (fanyi-longman--nodes result "RELATEDWD")) 3))
+      (dolist (node (fanyi-longman--nodes result "RELATEDWD"))
+        (let ((queries (dom-by-tag node 'fanyi-query)))
+          (should (= (length queries) 1))
+          (should (equal (dom-attr (car queries) 'word) "explosion"))))
+      (goto-char (point-min))
+      (let ((count 0))
+        ;; The fourth arrow belongs to an existing Crossref anchor.
+        (while (search-forward "→ explosion" nil t)
+          (should-not (button-at (match-beginning 0)))
+          (let ((button (button-at (1- (match-end 0)))))
+            (should (eq (button-get button 'action) #'fanyi-longman--query))
+            (should (equal (car (button-get button 'button-data)) "explosion")))
+          (cl-incf count))
+        (should (= count 4)))
+      (should (string-match-p "SYN rocket , → explosion" (buffer-string))))))
 
 (ert-deftest fanyi-longman-explode-register-and-thesaurus-layout-and-actions ()
   ;; Relative heights in inherited faces multiply; a note must remain body-sized.
