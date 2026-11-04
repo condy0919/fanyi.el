@@ -270,7 +270,8 @@ make test
 ```
 
 `make` defaults to `make test`. Run `make clean` first to remove generated
-bytecode when testing source files. The [CI workflow](.github/workflows/build.yml)
+bytecode when testing source files. `make compile` treats compiler warnings as
+errors, including obsolete API warnings. The [CI workflow](.github/workflows/build.yml)
 runs the sequence above on Emacs 29.1 and snapshot. Tests use mocked requests
 and local HTML/JSON fixtures; they do not contact dictionary websites. See
 [fixture documentation](test/fixtures/README.md) for saved-page references and

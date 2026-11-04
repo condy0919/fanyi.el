@@ -6,6 +6,7 @@ CASK ?= cask
 compile:
 	$(EMACS) -Q --batch \
 	-L . \
+	--eval '(setq byte-compile-error-on-warn t)' \
 	-f batch-byte-compile *.el
 
 test:
