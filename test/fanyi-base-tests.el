@@ -10,6 +10,7 @@
   `(let ((fanyi--sound-task nil)
          (fanyi-sound-timeout 15)
          (fanyi-sound-player "test-player")
+         (fanyi-sound-player-options nil)
          (fanyi-sound-player-support-https nil)
          (fanyi-log nil)
          (fanyi-verbose nil)
@@ -107,6 +108,38 @@
         (with-current-buffer buffer (funcall callback nil))
         (should (equal command '("chosen-player" "-" "--stream")))
         (should-not (buffer-live-p buffer))))))
+
+(ert-deftest fanyi-audio-custom-options-extend-defaults-and-survive-download ()
+  (fanyi-test--with-audio
+    (let ((fanyi-sound-player "/usr/bin/mplayer")
+          (fanyi-sound-player-options (list (copy-sequence "-volume") "35"))
+          command)
+      (cl-letf (((symbol-function 'make-process)
+                 (lambda (&rest args)
+                   (setq command (plist-get args :command))
+                   'test-player)))
+        (fanyi-play-sound "https://example.invalid/audio")
+        (aset (car fanyi-sound-player-options) 0 ?X)
+        (setq fanyi-sound-player-options '("-volume" "99"))
+        (with-current-buffer buffer (funcall callback nil))
+        (should (equal command '("/usr/bin/mplayer" "-" "-cache" "1024"
+                                 "-volume" "35")))))))
+
+(ert-deftest fanyi-audio-ffplay-uses-audio-only-one-shot-playback ()
+  (fanyi-test--with-audio
+    (let ((fanyi-sound-player "/usr/bin/ffplay")
+          (fanyi-sound-player-support-https t)
+          (fanyi-sound-player-options '("-volume" "35"))
+          command)
+      (cl-letf (((symbol-function 'make-process)
+                 (lambda (&rest args)
+                   (setq command (plist-get args :command))
+                   'test-player)))
+        (fanyi-play-sound "https://example.invalid/audio")
+        (should (equal command '("/usr/bin/ffplay" "https://example.invalid/audio"
+                                 "-nodisp" "-autoexit" "-loglevel" "quiet"
+                                 "-volume" "35")))
+        (should-not callback)))))
 
 (ert-deftest fanyi-audio-player-exit-reports-only-failure-once ()
   (let ((shell (executable-find "sh")))

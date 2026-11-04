@@ -36,9 +36,20 @@
 (defcustom fanyi-sound-player
   (or (executable-find "mpv")
       (executable-find "mplayer")
-      (executable-find "mpg123"))
-  "Program to play sound."
-  :type 'string
+      (executable-find "mpg123")
+      (executable-find "ffplay"))
+  "Program to play sound, or nil when no player is configured."
+  :type '(choice (const :tag "None" nil)
+                 (file :tag "Executable path")
+                 (string :tag "Executable name"))
+  :group 'fanyi)
+
+(defcustom fanyi-sound-player-options nil
+  "Additional command-line arguments for `fanyi-sound-player'.
+These follow the player's built-in options, such as mplayer's stream cache
+or ffplay's audio-only playback options.  Each string is a separate argument;
+no shell quoting is needed.  Changes apply to the next pronunciation."
+  :type '(repeat string)
   :group 'fanyi)
 
 (defcustom fanyi-sound-player-support-https nil
@@ -123,6 +134,8 @@ static char* speaker_xpm[] = {
   (pcase player
     ((pred (string-match-p "mplayer"))
      '("-cache" "1024"))
+    ((pred (string-match-p "ffplay"))
+     '("-nodisp" "-autoexit" "-loglevel" "quiet"))
     (_ nil)))
 
 (defun fanyi--cleanup-response (buffer)
@@ -266,7 +279,9 @@ if playback starts synchronously, otherwise nil."
   (let* ((program (copy-sequence fanyi-sound-player))
          (task (fanyi--make-sound-task
                 :program program
-                :options (mapcar #'copy-sequence (fanyi--sound-player-options program)))))
+                :options (mapcar #'copy-sequence
+                                 (append (fanyi--sound-player-options program)
+                                         fanyi-sound-player-options)))))
     (fanyi-stop-sound)
     (setq fanyi--sound-task task)
     (condition-case err
