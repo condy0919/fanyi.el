@@ -603,9 +603,9 @@ Record every accepted query in `fanyi-history', with the most recent first."
 No prompt if the region is active or `thing-at-point' returns
 non-nil."
   (interactive)
-  (if-let ((word (if (use-region-p)
-                     (buffer-substring-no-properties (region-beginning) (region-end))
-                   (thing-at-point 'word t))))
+  (if-let* ((word (if (use-region-p)
+                      (buffer-substring-no-properties (region-beginning) (region-end))
+                    (thing-at-point 'word t))))
       (fanyi-dwim word)
     (call-interactively #'fanyi-dwim)))
 

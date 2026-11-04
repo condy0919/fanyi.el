@@ -139,7 +139,7 @@ static char* speaker_xpm[] = {
 
 (defun fanyi-haici--text (node)
   "Return NODE's text with HTML whitespace collapsed."
-  (string-trim (replace-regexp-in-string "[ \t\r\n]+" " " (dom-texts node ""))))
+  (string-trim (replace-regexp-in-string "[ \t\r\n]+" " " (fanyi-shr-dom-text node))))
 
 (defun fanyi-haici--syllable (dom)
   "Read the complete syllabified headword from DOM, or its visible keyword."
@@ -331,8 +331,8 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
     ;; Locate elements rather than depending on whitespace or a final dummy li.
     (setf (fanyi-haici-result-paraphrases result)
           (cl-loop for item in (dom-by-tag (dom-by-class dom "dict-basic-ul") 'li)
-                   for pos = (string-trim (dom-texts (dom-child-by-tag item 'span) ""))
-                   for para = (string-trim (dom-texts (dom-child-by-tag item 'strong) ""))
+                   for pos = (string-trim (fanyi-shr-dom-text (dom-child-by-tag item 'span)))
+                   for para = (string-trim (fanyi-shr-dom-text (dom-child-by-tag item 'strong)))
                    when (fanyi-haici--present-p para)
                    collect (list pos para)))
     (setf (fanyi-haici-result-content result) (fanyi-haici--content dom request))
@@ -357,8 +357,9 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
     (setf (fanyi-haici-result-phonetics result)
           (cl-loop for item in (dom-non-text-children (dom-by-class dom "phonetic"))
                    for phonetic = (dom-search item (lambda (node) (dom-attr node 'lang)))
-                   for pronunciation = (string-trim (dom-texts phonetic ""))
-                   for label-text = (string-trim (dom-text item))
+                   for pronunciation = (string-trim (fanyi-shr-dom-text phonetic))
+                   for label-text = (string-trim
+                                     (mapconcat #'identity (seq-filter #'stringp (dom-children item)) " "))
                    for lang = (downcase (or (dom-attr phonetic 'lang) ""))
                    for label = (cond ((string-match-p "\\`\\(?:英\\|UK\\|British\\)" label-text) "英")
                                      ((string-match-p "\\`\\(?:美\\|US\\|American\\)" label-text) "美")
@@ -383,7 +384,7 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
     (setf (fanyi-haici-result-related result)
           (cl-loop for (label word)
                    in (seq-partition
-                       (mapcar (lambda (node) (string-trim (dom-texts node "")))
+                       (mapcar (lambda (node) (string-trim (fanyi-shr-dom-text node)))
                                (dom-non-text-children (dom-by-class dom "shape")))
                        2)
                    when (and (fanyi-haici--present-p label)
@@ -393,7 +394,7 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
            (items (or (dom-by-tag section 'li) (dom-by-tag section 'p))))
       (setf (fanyi-haici-result-etymons result)
             (cl-loop for item in items
-                     for text = (string-trim (dom-texts item ""))
+                     for text = (string-trim (fanyi-shr-dom-text item))
                      when (fanyi-haici--present-p text)
                      collect text)))
     result))
@@ -459,7 +460,7 @@ the layout directly so SHR does not collapse alignment spaces."
          (explanation-padding (make-string explanation-indent ?\s)))
     (dolist (entry entries)
       (let ((word (dom-attr entry 'word))
-            (explanation (string-trim (dom-texts entry ""))))
+            (explanation (string-trim (fanyi-shr-dom-text entry))))
         (insert padding)
         (fanyi-haici--insert-word
          entry (if columns word

@@ -113,8 +113,8 @@ Allow subsequent text on the line when PREFIX is non-nil."
                  (get-char-property (point) 'face) 'bold))))
     ;; Each collocation's example survives on a more deeply indented line.
     (dolist (node (dom-by-class result "^Collocate$"))
-      (let* ((phrase (dom-texts (car (dom-by-class node "\\bCOLLOC\\b")) ""))
-             (example (dom-texts (car (dom-by-class node "^EXAMPLE$")) ""))
+      (let* ((phrase (fanyi-shr-dom-text (car (dom-by-class node "\\bCOLLOC\\b"))))
+             (example (fanyi-shr-dom-text (car (dom-by-class node "^EXAMPLE$"))))
              (phrase-start (fanyi-test--sun-line phrase t))
              (phrase-indent (current-indentation))
              (example-start (fanyi-test--sun-line example)))

@@ -12,7 +12,19 @@
 
 (require 'cl-lib)
 (require 'button)
+(require 'dom)
 (require 'shr)
+
+(defun fanyi-shr-dom-text (node)
+  "Return NODE's descendant text without adding separators.
+Ignore scripts and comments.  Use `dom-inner-text' when available, with
+equivalent text extraction on Emacs 29 and 30."
+  (cond
+   ((memq (dom-tag node) '(script comment)) "")
+   ((fboundp 'dom-inner-text) (dom-inner-text node))
+   (t (mapconcat (lambda (child)
+                   (if (stringp child) child (fanyi-shr-dom-text child)))
+                 (dom-children node) ""))))
 
 (cl-defstruct (fanyi-shr--region (:constructor fanyi-shr--region-create))
   start end dom renderers style-function layout failed-layout sections)

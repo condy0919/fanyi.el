@@ -284,8 +284,8 @@
     (should (equal dom before))
     ;; A face wrapper around the surviving entry must not hide its identity.
     (should (= (length (fanyi-longman--nodes result "dictentry")) 1))
-    (should (string-match-p "Visible definition" (dom-texts result "")))
-    (should-not (string-match-p "Hidden" (dom-texts result "")))))
+    (should (string-match-p "Visible definition" (fanyi-shr-dom-text result)))
+    (should-not (string-match-p "Hidden" (fanyi-shr-dom-text result)))))
 
 (ert-deftest fanyi-longman-prepares-once-and-reuses-result ()
   (let* ((dom (fanyi-test--read-fixture "longman-sun-saved.html"))

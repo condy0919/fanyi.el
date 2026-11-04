@@ -40,6 +40,18 @@
       (should-not (fanyi-test--button-data #'fanyi-play-sound))
       (should (string-match-p "样本；例子" (buffer-string))))))
 
+(ert-deftest fanyi-haici-reads-phonetic-label-from-direct-text-only ()
+  (let* ((response (fanyi-test--read-fixture "haici.html"))
+         (phonetics (car (dom-by-class response "phonetic")))
+         (british (car (dom-non-text-children phonetics))))
+    ;; The explicit label takes precedence over a conflicting language hint,
+    ;; even when pronunciation markup appears before the label.
+    (setcdr (cdr british) '((span ((lang . "en-US")) "[sample]") " UK "))
+    (fanyi-test--with-rendered-response fanyi-haici-provider response
+      (should (equal (car (fanyi-haici-result-phonetics result))
+                     '("英" "[sample]" nil nil)))
+      (should (string-match-p (regexp-quote "英 [sample]") (buffer-string))))))
+
 (ert-deftest fanyi-haici-keeps-last-definition-without-whitespace-or-placeholder ()
   (let ((response
          (with-temp-buffer

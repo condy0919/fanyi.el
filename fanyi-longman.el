@@ -312,12 +312,12 @@ A boxed FACE produces a transparent badge with a one-pixel outline."
 
 (defun fanyi-longman--entry-p (entry base)
   "Return non-nil if ENTRY has a definition or usable cross-reference."
-  (or (seq-some (lambda (node) (not (string-empty-p (string-trim (dom-texts node "")))))
+  (or (seq-some (lambda (node) (not (string-empty-p (string-trim (fanyi-shr-dom-text node)))))
                 (fanyi-longman--nodes entry "DEF"))
       (seq-some
        (lambda (node)
          (seq-some (lambda (link)
-                     (and (not (string-empty-p (string-trim (dom-texts link ""))))
+                     (and (not (string-empty-p (string-trim (fanyi-shr-dom-text link))))
                           (fanyi-longman--crossref-target
                            (fanyi-longman--http-url (dom-attr link 'href) base))))
                    (dom-by-tag node 'a)))
@@ -403,7 +403,7 @@ A word-family anchor without a URL becomes a query link in CONTEXT."
                   (word (fanyi-longman--crossref-target href)))
         (let ((title (string-trim (or (dom-attr node 'title) "")))
               (label (replace-regexp-in-string "[ \t\r\n]+" " "
-                                               (string-trim (dom-texts node "")))))
+                                               (string-trim (fanyi-shr-dom-text node)))))
           (setf (alist-get 'word attributes)
                 (cond ((not (string-empty-p title)) title)
                       ((equal (replace-regexp-in-string " " "-" (downcase label)) word) label)
@@ -413,7 +413,7 @@ A word-family anchor without a URL becomes a query link in CONTEXT."
           (setf (alist-get 'fanyi-local-anchor attributes) t)))
       (when (and (memq 'family context) (not (dom-attr node 'href)))
         (setq tag 'fanyi-query)
-        (setf (alist-get 'word attributes) (string-trim (dom-texts node "")))))
+        (setf (alist-get 'word attributes) (string-trim (fanyi-shr-dom-text node)))))
     (cons tag attributes)))
 
 (defun fanyi-longman--class-style (classes)
@@ -477,7 +477,7 @@ Only alphabetic terms of up to four words, without and/or, are inferred."
                    ((and (not (stringp node))
                          (or (eq (dom-tag node) 'fanyi-synopp)
                              (and (not (dom-by-tag node 'a))
-                                  (not (string-match-p "[[:alnum:]]" (dom-texts node ""))))))
+                                  (not (string-match-p "[[:alnum:]]" (fanyi-shr-dom-text node))))))
                     (push (pop body) prefix)
                     t)))))
     (when (and (stringp (car (last body)))
@@ -486,7 +486,7 @@ Only alphabetic terms of up to four words, without and/or, are inferred."
       (setcar (last body) (substring (car (last body)) 0 (match-beginning 0))))
     (let* ((dom `(span nil ,@body))
            (word (replace-regexp-in-string "[[:space:]]+" " "
-                                           (string-trim (dom-texts dom "")))))
+                                           (string-trim (fanyi-shr-dom-text dom)))))
       (if (and (string-match-p
                 "\\`[[:alpha:]][[:alpha:]’'-]*\\(?: [[:alpha:]][[:alpha:]’'-]*\\)\\{0,3\\}\\'" word)
                (not (string-match-p "\\b\\(?:and\\|or\\)\\b" word))
@@ -516,10 +516,10 @@ If LINKED is non-nil, preserve the enclosing anchor without nesting a query."
                            (car children)))
         (setcar children (substring (car children) (match-end 0))))
        ((and (consp (car children))
-             (equal (string-trim (dom-texts (car children) "")) label))
+             (equal (string-trim (fanyi-shr-dom-text (car children))) label))
         (setq children (cdr children)))
        ((string-match-p (concat "\\`" label "\\(?:[[:space:]]\\|\\'\\)")
-                        (string-trim (dom-texts `(span nil ,@children) "")))
+                        (string-trim (fanyi-shr-dom-text `(span nil ,@children))))
         ;; Do not duplicate a label buried in unfamiliar inline markup.
         (setq embedded-label t)))
       (unless embedded-label (push `(fanyi-synopp ((class . "synopp")) ,label) children)))
@@ -788,7 +788,7 @@ Keep the underlying text available for searching and copying."
                               fanyi-longman-example-indent)))
         (start (point)))
     (when (and (fanyi-longman--class-p dom "exa")
-               (not (string-prefix-p "•" (string-trim-left (dom-texts dom "")))))
+               (not (string-prefix-p "•" (string-trim-left (fanyi-shr-dom-text dom)))))
       (shr-insert "• "))
     (shr-generic dom)
     (add-face-text-property start (point) 'fanyi-longman-example-face)

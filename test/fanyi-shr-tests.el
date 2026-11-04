@@ -4,6 +4,23 @@
 (require 'fanyi-longman)
 (require 'shr)
 
+(ert-deftest fanyi-shr-dom-text-preserves-inline-text-on-old-and-new-emacs ()
+  (let ((native (and (fboundp 'dom-inner-text) (symbol-function 'dom-inner-text))))
+    (dolist (implementation (if native (list native nil) '(nil)))
+      (cl-letf (((symbol-function 'dom-inner-text) implementation))
+        (dolist (case '((nil "")
+                        ((p nil) "")
+                        ((script nil "unwanted") "")
+                        ((comment nil "unwanted") "")
+                        ((p nil "sun" (b nil "light") " "
+                            (script nil "unwanted") (comment nil "unwanted")
+                            (em nil "café") "\n") "sunlight café\n")
+                        (((span nil "first") (span nil "second")) "first")))
+          (pcase-let* ((`(,node ,expected) case)
+                       (before (copy-tree node t)))
+            (should (equal (fanyi-shr-dom-text node) expected))
+            (should (equal node before))))))))
+
 (defun fanyi-test--rendered-text ()
   "Return current buffer text with insignificant whitespace normalized."
   (replace-regexp-in-string "[ \t\r\n]+" " " (buffer-string)))
