@@ -266,6 +266,35 @@ Other hidden elements and browser controls are omitted."
               `(fanyi-haici-face ((face . ,face) (block . ,block)) ,@children)
             `(,tag ,attributes ,@children)))))))
 
+(defun fanyi-haici--item-count (node)
+  "Count nonempty outer entries in prepared NODE, excluding nested lists."
+  (cond
+   ((stringp node) 0)
+   ((memq (dom-tag node) '(li entry fanyi-haici-example))
+    (if (or (fanyi-haici--present-p (dom-attr node 'word))
+            (fanyi-haici--present-p (fanyi-haici--text node))) 1 0))
+   (t (cl-loop for child in (dom-children node)
+               sum (fanyi-haici--item-count child)))))
+
+(defun fanyi-haici--section-count (body context)
+  "Count usable entries in prepared BODY for known tab CONTEXT.
+Return nil when the structure does not provide a reliable item count."
+  (when context
+    (let ((count (fanyi-haici--item-count body)))
+      (when (zerop count)
+        (setq count
+              (pcase context
+                ("etm" (cl-count-if
+                        (lambda (node)
+                          (and (eq (dom-tag node) 'p)
+                               (fanyi-haici--present-p (fanyi-haici--text node))))
+                        (dom-non-text-children body)))
+                ("nwd" (cl-count-if
+                        (lambda (node) (fanyi-haici--present-p (dom-attr node 'word)))
+                        (dom-by-tag body 'a)))
+                (_ 0))))
+      (when (> count 0) count))))
+
 (defun fanyi-haici--content (dom request)
   "Extract all dictionary tabs from DOM for REQUEST in document order."
   (let (groups)
@@ -284,8 +313,7 @@ Other hidden elements and browser controls are omitted."
                           (dom-by-tag body 'entry))
                   (push `(fanyi-haici-section ((title . ,(or title "更多释义"))
                                                (kind . ,(and context (intern context)))
-                                               (count . ,(length (or (dom-by-tag node 'li)
-                                                                     (dom-by-tag node 'a))))
+                                               (count . ,(fanyi-haici--section-count body context))
                                                (class . ,(dom-attr node 'class)))
                                               ,body)
                         tabs)))

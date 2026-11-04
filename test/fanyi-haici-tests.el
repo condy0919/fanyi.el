@@ -413,5 +413,47 @@
       (dom-remove-node response keyword)
       (should (equal (fanyi-haici-result-syllable (fanyi-haici-parse response request)) "query")))))
 
+(ert-deftest fanyi-haici-counts-only-visible-outer-definition-items ()
+  (let* ((response (fanyi-test--read-fixture "haici-dragon-saved.html"))
+         (detail (car (dom-by-class response "layout detail")))
+         (list (car (dom-by-tag detail 'ol))))
+    (dom-append-child (car (dom-by-tag list 'li))
+                      '(ul nil (li nil "Nested illustration.")))
+    (dom-append-child list '(li ((style . "display:none")) "Hidden meaning."))
+    (dom-append-child list '(li nil (script nil "Advertising script.")))
+    (dom-append-child list '(li nil " \t "))
+    (fanyi-test--with-rendered-response fanyi-haici-provider response
+      (should (string-match-p "详尽释义 · 13" (buffer-string)))
+      (should (string-match-p "Nested illustration\\." (buffer-string)))
+      (should-not (string-match-p "Hidden meaning\\|Advertising script" (buffer-string))))))
+
+(ert-deftest fanyi-haici-counts-origin-paragraphs-and-omits-uncertain-counts ()
+  (let ((response (fanyi-test--read-fixture "haici.html")))
+    (dom-append-child
+     (dom-by-tag response 'body)
+     '(div ((class . "section rel"))
+           (h3 nil "词源解说")
+           (div ((class . "layout etm"))
+                (p nil "First origin.") (p nil "Second origin.")
+                (p nil " ") (p ((hidden . "")) "Hidden origin.")
+                (a ((class . "unfold")) "收起"))
+           (h3 nil "词语辨析")
+           (div ((class . "layout extra"))
+                (p nil "Useful prose.") (a ((class . "fold")) "查看更多"))))
+    (fanyi-test--with-rendered-response fanyi-haici-provider response
+      (should (string-match-p "词源解说 · 2" (buffer-string)))
+      (should (string-match-p "词语辨析\n" (buffer-string)))
+      (should-not (string-match-p "词语辨析 ·" (buffer-string)))
+      (should (string-match-p "Useful prose\\." (buffer-string))))))
+
+(ert-deftest fanyi-haici-counts-queryable-nearby-words-after-filtering-controls ()
+  (let* ((response (fanyi-test--read-fixture "haici-dragon-saved.html"))
+         (nearby (car (dom-by-class response "layout nwd"))))
+    (dom-append-child nearby '(a ((class . "fold") (href . "javascript:;")) "查看更多"))
+    (dom-append-child nearby '(a ((hidden . "") (href . "/hidden")) "Hidden word"))
+    (fanyi-test--with-rendered-response fanyi-haici-provider response
+      (should (string-match-p "临近单词 · 12" (buffer-string)))
+      (should (= (length (fanyi-test--button-data #'fanyi-dwim)) 36)))))
+
 (provide 'fanyi-haici-tests)
 ;;; fanyi-haici-tests.el ends here
