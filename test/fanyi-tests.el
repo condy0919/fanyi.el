@@ -806,5 +806,26 @@
               (when selected
                 (should (equal selected (buffer-substring-no-properties (mark) (window-point other-window))))))))))))
 
+(ert-deftest fanyi-query-header-escapes-percent-after-truncation-without-changing-query ()
+  (dolist (case '(("100% of %b %p %% %Z" 30 "100%% of %%b %%p %%%% %%Z")
+                  ("%" 30 "%%")
+                  ("%%" 30 "%%%%")
+                  ("ab%cd" 3 "ab%%...")
+                  ("%b suffix" 1 "%%...")))
+    (let ((word (nth 0 case))
+          (fanyi-headline-max-length (nth 1 case))
+          (displayed (nth 2 case)))
+      (fanyi-test--with-query
+        (fanyi-dwim word)
+        (with-current-buffer fanyi-buffer-name
+          (should (equal (substring-no-properties (fanyi-format-header-line))
+                         (concat "Translating " displayed " 1 0 0")))
+          (should (equal fanyi-current-word word))
+          (should (equal (fanyi-request-word (fanyi--task-request (car fanyi--tasks)))
+                         (downcase word)))
+          (should (equal (fanyi-request-url (fanyi--task-request (car fanyi--tasks)))
+                         (concat "https://example.invalid/" (url-hexify-string (downcase word))))))
+        (should (equal fanyi-history (list word)))))))
+
 (provide 'fanyi-tests)
 ;;; fanyi-tests.el ends here

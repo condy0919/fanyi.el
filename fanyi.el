@@ -452,7 +452,10 @@ Nil disables the timeout."
                        (concat (substring fanyi-current-word 0 fanyi-headline-max-length) "...")
                      (or fanyi-current-word ""))))
     (concat "Translating "
-            (propertize truncated 'face 'fanyi-word-face)
+            ;; Header strings returned by :eval still interpret percent forms.
+            ;; Escape only the displayed text, after applying the query limit.
+            (propertize (replace-regexp-in-string "%" "%%" truncated t t)
+                        'face 'fanyi-word-face)
             " "
             (propertize (number-to-string (cl-count-if-not #'fanyi--task-done fanyi--tasks)) 'face 'fanyi-tasks-pending-face)
             " "
