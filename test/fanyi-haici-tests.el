@@ -343,7 +343,9 @@
                   (should (invisible-p (fanyi-haici-test--position "Dragonair")))
                   (should (equal audio (fanyi-test--button-data #'fanyi-play-sound)))
                   (should (equal words (fanyi-test--button-data #'fanyi-dwim)))
-                  (should (<= (fanyi-shr-test--max-line-width) (1+ width)))
+                  ;; SHR keeps final CJK punctuation on the preceding line;
+                  ;; snapshot's deeper block indentation can need two columns.
+                  (should (<= (fanyi-shr-test--max-line-width) (+ width 2)))
                   (when (= width 34)
                     (should (string-match-p "dragon boat race\n[ ]+龙舟竞赛" (buffer-string)))))))))))))
 
