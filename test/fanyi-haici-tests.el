@@ -105,6 +105,83 @@
       (should-error (fanyi-parse-response (fanyi-make-request fanyi-haici-provider "sample") response)
                     :type 'fanyi-parse-error))))
 
+(ert-deftest fanyi-haici-filters-hidden-basic-definitions-before-extraction ()
+  (dolist (attribute '((hidden . "") (aria-hidden . "true")
+                       (style . "color:red; DISPLAY:\n none !important;")))
+    (dolist (target '(strong li ul div))
+      (let ((hidden (copy-tree '(div nil (ul ((class . "dict-basic-ul"))
+                                             (li nil (span nil "n.")
+                                                 (strong nil "Hidden meaning"))))))
+            (visible '(li nil (span nil "v.")
+                          (strong nil "Visible " (b ((hidden . "")) "unwanted ") "meaning"))))
+        (dom-set-attribute (car (dom-by-tag hidden target)) (car attribute) (cdr attribute))
+        ;; Hidden summaries alone cannot make an otherwise empty page usable.
+        (should-error (fanyi-parse-response (fanyi-make-request fanyi-haici-provider "sample") hidden)
+                      :type 'fanyi-parse-error)
+        (let* ((response
+                (if (memq target '(strong li))
+                    (progn
+                      (dom-append-child (car (dom-by-tag hidden 'ul)) visible)
+                      `(html nil (body nil ,hidden)))
+                  `(html nil (body nil ,hidden (ul ((class . "dict-basic-ul")) ,visible)))))
+               (before (copy-tree response t)))
+          (fanyi-test--with-rendered-response fanyi-haici-provider response
+            (should (equal response before))
+            (should (equal (fanyi-haici-result-paraphrases result) '(("v." "Visible meaning"))))
+            (should-not (string-match-p "Hidden\\|unwanted" (buffer-string)))))))))
+
+(ert-deftest fanyi-haici-filters-hidden-sections-and-their-ancestors ()
+  (dolist (attribute '((hidden . "") (aria-hidden . "true") (style . "display:none")))
+    (dolist (target '(section ancestor))
+      (let* ((section (copy-tree '(div ((class . "section def"))
+                                       (h3 nil "Hidden title")
+                                       (div ((class . "layout detail") (style . "display:none"))
+                                            (ol nil (li nil "Hidden detailed meaning"))))))
+             (hidden `(div nil ,section))
+             (request (fanyi-make-request fanyi-haici-provider "sample")))
+        (dom-set-attribute (if (eq target 'section) section hidden) (car attribute) (cdr attribute))
+        (should-error (fanyi-parse-response request hidden) :type 'fanyi-parse-error)
+        (let* ((response `(html nil (body nil ,hidden
+                                          (ul ((class . "dict-basic-ul"))
+                                              (li nil (strong nil "Visible summary"))))))
+               (before (copy-tree response t)))
+          (fanyi-test--with-rendered-response fanyi-haici-provider response
+            (should (equal response before))
+            (should-not (dom-by-tag (fanyi-haici-result-content result) 'fanyi-haici-section))
+            (should (string-match-p "Visible summary" (buffer-string)))
+            (should-not (string-match-p "Hidden" (buffer-string)))))))))
+
+(ert-deftest fanyi-haici-keeps-inactive-tabs-without-exempting-hidden-layouts ()
+  (let* ((response
+          '(html nil
+                 (body nil
+                       (div ((class . "section def"))
+                            (h3 nil "Inactive definition")
+                            (div ((class . "extra layout detail") (style . "display:none"))
+                                 (ol nil (li nil "Visible definition"
+                                             (div ((class . "layout") (style . "display:none"))
+                                                  "Hidden nested layout"))))
+                            (h3 nil "Unknown tab")
+                            (div ((class . "layout struc") (style . "display:none"))
+                                 (p nil "Visible unfamiliar content"))
+                            (h3 nil "Hidden tab")
+                            (div ((class . "layout detail") (hidden . ""))
+                                 (ol nil (li nil "Hidden tab definition")))
+                            (h3 nil "Hidden accessible tab")
+                            (div ((class . "layout detail") (aria-hidden . "true"))
+                                 (ol nil (li nil "Hidden accessible definition"))))
+                       (div ((class . "layout") (style . "display:none"))
+                            (div ((class . "section def"))
+                                 (div ((class . "layout detail"))
+                                      (ol nil (li nil "Hidden fake tab"))))))))
+         (before (copy-tree response t)))
+    (fanyi-test--with-rendered-response fanyi-haici-provider response
+      (should (equal response before))
+      (should (= (length (dom-by-tag (fanyi-haici-result-content result) 'fanyi-haici-section)) 2))
+      (should (string-match-p "Visible definition" (buffer-string)))
+      (should (string-match-p "Visible unfamiliar content" (buffer-string)))
+      (should-not (string-match-p "Hidden" (buffer-string))))))
+
 (ert-deftest fanyi-haici-ignores-malformed-optional-sections ()
   (dolist (chart '("{broken" "[1,2]" "{\"1\":{\"percent\":\"bad\",\"sense\":\"noun\"}}"))
     (let ((response (fanyi-test--read-fixture "haici.html")))

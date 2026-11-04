@@ -113,6 +113,25 @@ detail is expanded instead.  Existing reader folds survive reflow."
   "Return non-nil if NODE has the exact CLASS token."
   (member class (split-string (or (dom-attr node 'class) ""))))
 
+(defun fanyi-haici--visible-dom (node &optional parent-section-p)
+  "Copy visible NODE while preserving inactive dictionary tabs.
+PARENT-SECTION-P means NODE is a direct child of a dictionary section.
+Only its layout tabs may ignore display:none; hidden and aria-hidden
+always hide the complete subtree, including otherwise visible descendants."
+  (cond
+   ((stringp node) node)
+   ((consp node)
+    (unless (or (assq 'hidden (dom-attributes node))
+                (equal (dom-attr node 'aria-hidden) "true")
+                (and (not (and parent-section-p (fanyi-haici--class-p node "layout")))
+                     (string-match-p
+                      "\\(?:\\`\\|;\\)[ \t\r\n]*display[ \t\r\n]*:[ \t\r\n]*none\\(?:[ \t\r\n]*[;!]\\|[ \t\r\n]*\\'\\)"
+                      (downcase (or (dom-attr node 'style) "")))))
+      `(,(dom-tag node) ,(copy-tree (dom-attributes node))
+        ,@(delq nil (mapcar (lambda (child)
+                              (fanyi-haici--visible-dom child (fanyi-haici--class-p node "section")))
+                            (dom-children node))))))))
+
 (defun fanyi-haici--text (node)
   "Return NODE's text with HTML whitespace collapsed."
   (string-trim (replace-regexp-in-string "[ \t\r\n]+" " " (fanyi-shr-dom-text node))))
@@ -167,9 +186,8 @@ Return nil for mixed or unfamiliar markup, which keeps normal HTML rendering."
        items))))
 
 (defun fanyi-haici--prepare-node (node request context)
-  "Copy NODE into a reusable SHR DOM for REQUEST and tab CONTEXT.
-Inactive layout tabs are dictionary content, even with display:none.
-Other hidden elements and browser controls are omitted."
+  "Copy visible NODE into a reusable SHR DOM for REQUEST and tab CONTEXT.
+Browser controls are omitted; visibility is resolved before extracting tabs."
   (if (stringp node)
       (replace-regexp-in-string "[ \t\r\n]+" " " node)
     (let* ((tag (dom-tag node))
@@ -179,12 +197,7 @@ Other hidden elements and browser controls are omitted."
                   (cl-intersection classes '("fold" "unfold" "dict-chart" "wordbook"
                                              "newflag" "wtip") :test #'equal)
                   (dom-attr node 'slot)
-                  (string-prefix-p "div-gpt-ad-" (or (dom-attr node 'id) ""))
-                  (and (not (member "layout" classes))
-                       (or (assq 'hidden (dom-attributes node))
-                           (equal (dom-attr node 'aria-hidden) "true")
-                           (string-match-p "display[ \t]*:[ \t]*none"
-                                           (downcase (or (dom-attr node 'style) ""))))))
+                  (string-prefix-p "div-gpt-ad-" (or (dom-attr node 'id) "")))
         (let ((children (delq nil (mapcar (lambda (child)
                                             (fanyi-haici--prepare-node child request context))
                                           (dom-children node))))
@@ -303,7 +316,8 @@ Return nil when the structure does not provide a reliable item count."
 (defun fanyi-haici-parse (dom request)
   "Parse DOM, preserving definitions when optional data is absent.
 Signal `fanyi-parse-error' when no usable definitions can be extracted."
-  (let ((result (make-fanyi-haici-result)))
+  (let ((dom (fanyi-haici--visible-dom dom))
+        (result (make-fanyi-haici-result)))
     ;; Locate elements rather than depending on whitespace or a final dummy li.
     (setf (fanyi-haici-result-paraphrases result)
           (cl-loop for item in (dom-by-tag (dom-by-class dom "dict-basic-ul") 'li)
