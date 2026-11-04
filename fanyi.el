@@ -807,38 +807,73 @@ Example audio is never selected.  Point and folding remain unchanged."
             :sections (mapcar (lambda (task)
                                 (mapcar #'fanyi-shr--section-closed
                                         (fanyi--reader-sections task)))
-                              fanyi--tasks)))))
+                              fanyi--tasks)
+            :failures (mapcar #'fanyi--task-failure fanyi--tasks)))))
+
+(defun fanyi--reader-failed-range-p (start end failures)
+  "Whether anchors START and END span a newly failed task in FAILURES."
+  (and failures
+       (or (assq (car start) failures)
+           (let ((begin (fanyi--reader-position start))
+                 (finish (fanyi--reader-position end)))
+             (seq-some (lambda (entry)
+                         (let ((task (cdr entry)))
+                           (and (fanyi--task-start task)
+                                (< (fanyi--task-start task) finish)
+                                (> (fanyi--task-end task) begin))))
+                       failures)))))
 
 (defun fanyi--restore-reader (view)
   "Restore the saved reader VIEW after rendering the cached dictionaries."
-  (cl-mapc (lambda (task states)
-             (cl-mapc #'fanyi-shr--section-set-closed
-                      (fanyi--reader-sections task) states))
-           fanyi--tasks (plist-get view :sections))
-  (dolist (fold (plist-get view :outline))
-    (outline-flag-region (fanyi--reader-position (car fold))
-                         (fanyi--reader-position (cdr fold)) t))
-  (let ((position (fanyi--reader-position (plist-get view :point)))
-        (mark (and (plist-get view :mark)
-                   (fanyi--reader-position (plist-get view :mark))))
-        (bounds (plist-get view :bounds))
-        (windows (mapcar (lambda (state)
-                           (cons (car state) (mapcar #'fanyi--reader-position (cdr state))))
-                         (plist-get view :windows))))
-    (when bounds
-      (narrow-to-region (fanyi--reader-position (car bounds))
-                        (fanyi--reader-position (cdr bounds))))
-    (goto-char position)
-    (set-marker (mark-marker) mark)
-    (setq mark-active (and mark (plist-get view :active))
-          deactivate-mark nil)
-    ;; Window-list order rotates with focus.  Match surviving windows by token;
-    ;; new windows use the page's primary view, never an unrelated buffer's view.
-    (dolist (window (get-buffer-window-list (current-buffer) nil t))
-      (let ((state (assq (fanyi--window-identity window) windows)))
-        (set-window-point window (if state (nth 1 state) position))
-        (set-window-start window (if state (nth 2 state)
-                                  (or (nth 2 (car windows)) position)) t)))))
+  (let ((failures (cl-loop for task in fanyi--tasks for index from 0
+                           when (and (fanyi--task-failure task)
+                                     (not (equal (fanyi--task-failure task)
+                                                 (nth index (plist-get view :failures)))))
+                           collect (cons index task))))
+    (cl-labels ((position (anchor)
+                  (if-let* ((task (cdr (assq (car anchor) failures))))
+                      (marker-position (fanyi--task-start task))
+                    (fanyi--reader-position anchor))))
+      (cl-mapc (lambda (task states)
+                 (cl-mapc #'fanyi-shr--section-set-closed
+                          (fanyi--reader-sections task) states))
+               fanyi--tasks (plist-get view :sections))
+      (dolist (fold (plist-get view :outline))
+        (unless (fanyi--reader-failed-range-p (car fold) (cdr fold) failures)
+          (outline-flag-region (fanyi--reader-position (car fold))
+                               (fanyi--reader-position (cdr fold)) t)))
+      (let ((point (position (plist-get view :point)))
+            (mark (and (plist-get view :mark)
+                       (not (fanyi--reader-failed-range-p
+                             (plist-get view :point) (plist-get view :mark) failures))
+                       (not (fanyi--reader-failed-range-p
+                             (plist-get view :mark) (plist-get view :point) failures))
+                       (fanyi--reader-position (plist-get view :mark))))
+            (bounds (plist-get view :bounds))
+            (windows (mapcar (lambda (state)
+                               (let ((point (position (nth 1 state))))
+                                 (list (car state) point
+                                       (if (assq (car (nth 1 state)) failures) point
+                                         (position (nth 2 state))))))
+                             (plist-get view :windows))))
+        ;; Old offsets inside a replaced definition cannot describe its error.
+        ;; Keep that error and its retry button accessible instead of restoring
+        ;; narrowing or folds that may hide them at the end of the new text.
+        (when (and bounds
+                   (not (fanyi--reader-failed-range-p (car bounds) (cdr bounds) failures)))
+          (narrow-to-region (fanyi--reader-position (car bounds))
+                            (fanyi--reader-position (cdr bounds))))
+        (goto-char point)
+        (set-marker (mark-marker) mark)
+        (setq mark-active (and mark (plist-get view :active))
+              deactivate-mark nil)
+        ;; Window-list order rotates with focus.  Match surviving windows by token;
+        ;; new windows use the page's primary view, never an unrelated buffer's view.
+        (dolist (window (get-buffer-window-list (current-buffer) nil t))
+          (let ((state (assq (fanyi--window-identity window) windows)))
+            (set-window-point window (if state (nth 1 state) point))
+            (set-window-start window (if state (nth 2 state)
+                                      (or (nth 2 (car windows)) point)) t)))))))
 
 (defun fanyi--save-page ()
   "Snapshot this query's resolved requests, outcomes and reading state."
