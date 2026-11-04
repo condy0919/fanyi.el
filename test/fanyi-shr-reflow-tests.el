@@ -610,7 +610,7 @@
         ;; Mutating the same list must not mutate its saved signature.
         (setcar style 'changed)
         (with-temp-buffer (run-hooks 'post-command-hook))
-        (should (equal (list first-renders second-renders) '(2 1)))
+        (should (equal (list first-renders second-renders) '(1 1)))
         (run-hooks 'post-command-hook)
         (should (equal (list first-renders second-renders) '(2 1)))
         (fundamental-mode)
@@ -636,7 +636,7 @@
                  (lambda (_window) (if fail (error "Invalid style") state))))
               ;; The bad buffer is checked first; its error must not block good.
               (setq state 1 fail t)
-              (run-hooks 'post-command-hook)
+              (run-hook-with-args 'enable-theme-functions 'test-theme)
               (should (= renders 2))
               (should (memq #'fanyi-shr--post-command post-command-hook))
               (with-current-buffer bad
@@ -647,7 +647,7 @@
               (with-current-buffer bad
                 (cl-letf (((symbol-function 'message)
                            (lambda (&rest _) (ert-fail "Hidden buffers must not refresh"))))
-                  (run-hooks 'post-command-hook)))
+                  (run-hook-with-args 'disable-theme-functions 'test-theme)))
               (should (= renders 3))
               (kill-buffer bad)
               (should (equal fanyi-shr--buffers (list good)))
@@ -655,6 +655,54 @@
               (should-not fanyi-shr--buffers)
               (should-not (memq #'fanyi-shr--post-command post-command-hook)))))
       (when (buffer-live-p bad) (kill-buffer bad)))))
+
+(ert-deftest fanyi-shr-style-checks-ignore-unrelated-commands-and-follow-themes ()
+  (let ((fanyi-shr--buffers nil)
+        (post-command-hook nil)
+        (enable-theme-functions nil)
+        (disable-theme-functions nil))
+    (fanyi-shr-test--with-window
+      (let ((dictionary (current-buffer))
+            (dictionary-window (selected-window))
+            (style 0) (checks 0) (renders 0))
+        (fanyi-shr-insert
+         '(sample nil "Cached dictionary")
+         `((sample . ,(lambda (dom) (cl-incf renders) (shr-generic dom))))
+         (lambda (_window) (cl-incf checks) style))
+        (should (= checks 1))
+        (with-temp-buffer
+          (let ((other (split-window-right 35)))
+            (set-window-buffer other (current-buffer))
+            (select-window other)
+            (setq style 1)
+            (dotimes (_ 5) (run-hooks 'post-command-hook))
+            ;; Even a visible dictionary incurs no style work on these keys.
+            (should (= checks 1))
+            (should (= renders 1))
+            (run-hook-with-args 'enable-theme-functions 'test-theme)
+            (should (= checks 2))
+            (should (= renders 2))
+            (setq style 2)
+            (run-hook-with-args 'disable-theme-functions 'test-theme)
+            (should (= renders 3))
+            ;; Hidden dictionaries are updated when shown again.
+            (set-window-buffer dictionary-window (current-buffer))
+            (setq style 3)
+            (run-hook-with-args 'enable-theme-functions 'test-theme)
+            (should (= checks 3))
+            (should (= renders 3))
+            (set-window-buffer dictionary-window dictionary)
+            (fanyi-shr--window-change dictionary-window)
+            (should (= renders 4))))
+        (setq style 4)
+        (run-hooks 'text-scale-mode-hook)
+        (should (= renders 5))
+        (erase-buffer)
+        (should-not fanyi-shr--buffers)
+        (should-not (memq #'fanyi-shr--theme-change enable-theme-functions))
+        (should-not (memq #'fanyi-shr--theme-change disable-theme-functions))
+        (should-not (memq #'fanyi-shr--post-command post-command-hook))
+        (should-not (memq #'fanyi-shr--post-command text-scale-mode-hook))))))
 
 (provide 'fanyi-shr-reflow-tests)
 ;;; fanyi-shr-reflow-tests.el ends here

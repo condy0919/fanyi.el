@@ -168,7 +168,7 @@ Outside `fanyi-shr-insert', simply render the expanded content."
       section)))
 
 (defvar fanyi-shr--buffers nil
-  "Buffers with saved HTML regions checked after interactive commands.")
+  "Buffers with saved HTML regions to refresh after theme changes.")
 
 (defvar-local fanyi-shr--regions nil
   "Rendered HTML regions in the current buffer.")
@@ -269,7 +269,10 @@ SHR's own allowance for continuation glyphs and fringes."
   (setq fanyi-shr--regions nil fanyi-shr--window nil
         fanyi-shr--buffers (delq (current-buffer) fanyi-shr--buffers))
   (unless fanyi-shr--buffers
-    (remove-hook 'post-command-hook #'fanyi-shr--post-command))
+    (remove-hook 'enable-theme-functions #'fanyi-shr--theme-change)
+    (remove-hook 'disable-theme-functions #'fanyi-shr--theme-change))
+  (remove-hook 'post-command-hook #'fanyi-shr--post-command t)
+  (remove-hook 'text-scale-mode-hook #'fanyi-shr--post-command t)
   (remove-hook 'window-size-change-functions #'fanyi-shr--window-change t)
   (remove-hook 'window-selection-change-functions #'fanyi-shr--window-change t)
   (remove-hook 'before-change-functions #'fanyi-shr--before-change t)
@@ -316,7 +319,10 @@ Use the buffer's default font and character-based layout, with SHR's colors."
             fanyi-shr--regions)
       (setq fanyi-shr--window window)
       (cl-pushnew (current-buffer) fanyi-shr--buffers)
-      (add-hook 'post-command-hook #'fanyi-shr--post-command)
+      (add-hook 'post-command-hook #'fanyi-shr--post-command nil t)
+      (add-hook 'text-scale-mode-hook #'fanyi-shr--post-command nil t)
+      (add-hook 'enable-theme-functions #'fanyi-shr--theme-change)
+      (add-hook 'disable-theme-functions #'fanyi-shr--theme-change)
       (add-hook 'window-size-change-functions #'fanyi-shr--window-change nil t)
       (add-hook 'window-selection-change-functions #'fanyi-shr--window-change nil t)
       (add-hook 'before-change-functions #'fanyi-shr--before-change nil t)
@@ -529,14 +535,17 @@ previous one."
         (error (message "Fanyi HTML reflow failed: %s" (error-message-string error-data)))))))
 
 (defun fanyi-shr--post-command ()
-  "Refresh visible cached HTML whose layout or provider settings changed."
+  "Refresh the current buffer's displayed HTML after local commands."
+  (when-let* ((window (fanyi-shr--window)))
+    (fanyi-shr--window-change window)))
+
+(defun fanyi-shr--theme-change (&rest _)
+  "Refresh visible HTML after a theme is enabled or disabled."
   (dolist (buffer (copy-sequence fanyi-shr--buffers))
     (when (buffer-live-p buffer)
       (with-current-buffer buffer
-        (let ((window (fanyi-shr--window)))
-          (when window
-            ;; Keep errors local to this buffer, as for window-change hooks.
-            (fanyi-shr--window-change window)))))))
+        ;; The local refresh handler isolates errors in each buffer.
+        (fanyi-shr--post-command)))))
 
 (provide 'fanyi-shr)
 ;;; fanyi-shr.el ends here

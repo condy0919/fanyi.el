@@ -399,6 +399,8 @@ Allow subsequent text on the line when PREFIX is non-nil."
                     (should (= renders 0))
                     (set-face-attribute 'fanyi-longman-frequency-face nil :foreground "magenta")
                     (with-temp-buffer (run-hooks 'post-command-hook))
+                    (should (= renders 0))
+                    (run-hooks 'post-command-hook)
                     (should (= renders 1))
                     (should (string-match-p "magenta" (fanyi-test--sun-svg-data "S2")))
                     (set-face-attribute 'fanyi-longman-svg-asset-face nil :background "#123456")
