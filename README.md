@@ -234,6 +234,12 @@ accepts HTTPS URLs directly, enable:
 This option works across platforms. Audio is fetched or played only when a
 pronunciation button is activated.
 
+Starting another pronunciation cancels the previous audio download or player.
+Use `M-x fanyi-stop-sound` to stop playback or a pending download explicitly.
+Emacs-managed audio downloads time out after `fanyi-sound-timeout` seconds
+(default `15`); set it to `nil` to disable the timeout. When the player fetches
+HTTPS URLs directly, it handles its own network timeout.
+
 ## Troubleshooting
 
 - **Missing player or no sound:** check `fanyi-sound-player`. Enable

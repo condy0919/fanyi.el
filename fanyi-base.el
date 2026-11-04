@@ -50,6 +50,14 @@ Otherwise, `url-retrieve' first, the data will then be sent to
   :type 'boolean
   :group 'fanyi)
 
+(defcustom fanyi-sound-timeout 15
+  "Maximum seconds to wait for an audio download.
+Nil disables this timeout.  This does not limit playback duration or downloads
+handled directly by `fanyi-sound-player-support-https'."
+  :type '(choice (const :tag "No timeout" nil)
+                 (number :tag "Seconds"))
+  :group 'fanyi)
+
 (defcustom fanyi-use-glyphs t
   "Non-nil means use glyphs when available."
   :type 'boolean
@@ -104,80 +112,155 @@ explicitly delete their processes here."
     (when fanyi-verbose
       (message "Fanyi audio: %s" text))))
 
-(defun fanyi--start-sound-player (player options input report)
-  "Start PLAYER with OPTIONS to play INPUT, reporting failures through REPORT."
-  (make-process
-   :name "fanyi-player-process"
-   :buffer nil
-   :command (append (list player input) options)
-   :noquery t
-   :connection-type 'pipe
-   :coding 'binary
-   :sentinel
-   (lambda (process event)
-     (when (or (and (eq (process-status process) 'exit)
-                    (/= (process-exit-status process) 0))
-               (eq (process-status process) 'signal))
-       (funcall report (list 'error (format "Player %s %s" player
-                                            (string-trim event))))))))
+(cl-defstruct (fanyi--sound-task (:constructor fanyi--make-sound-task))
+  program options response process timer downloaded)
+
+(defvar fanyi--sound-task nil
+  "Current pronunciation download or player, superseded by the next click.")
+
+(defun fanyi--stop-sound-timer (task)
+  "Cancel TASK's download timeout."
+  (when (fanyi--sound-task-timer task)
+    (cancel-timer (fanyi--sound-task-timer task))
+    (setf (fanyi--sound-task-timer task) nil)))
+
+(defun fanyi--cancel-sound-task (task)
+  "Invalidate TASK and release its player, download and timeout."
+  (let ((inhibit-quit t))
+    ;; Invalidate first: cancelling an HTTP process may invoke its callback.
+    (when (eq task fanyi--sound-task) (setq fanyi--sound-task nil))
+    (fanyi--stop-sound-timer task)
+    (let ((process (fanyi--sound-task-process task))
+          (buffer (fanyi--sound-task-response task)) seen)
+      (setf (fanyi--sound-task-process task) nil
+            (fanyi--sound-task-response task) nil)
+      (when (processp process)
+        ;; User cancellation is not a playback failure.
+        (set-process-sentinel process #'ignore)
+        (when (process-live-p process) (delete-process process)))
+      (while (and (buffer-live-p buffer) (not (memq buffer seen)))
+        (push buffer seen)
+        (let ((next (buffer-local-value 'url-redirect-buffer buffer))
+              (connection (get-buffer-process buffer)))
+          (when connection (delete-process connection))
+          (when (buffer-live-p buffer) (kill-buffer buffer))
+          (setq buffer next))))))
+
+;;;###autoload
+(defun fanyi-stop-sound ()
+  "Stop the current pronunciation, including any pending download."
+  (interactive)
+  (when fanyi--sound-task (fanyi--cancel-sound-task fanyi--sound-task)))
+
+(defun fanyi--fail-sound (task err)
+  "Cancel current TASK and report ERR once, ignoring superseded tasks."
+  (when (eq task fanyi--sound-task)
+    (fanyi--cancel-sound-task task)
+    (fanyi--report-sound-error err))
+  nil)
+
+(defun fanyi--sound-timeout (task)
+  "Stop TASK if its audio download has not completed."
+  (when (and (eq task fanyi--sound-task) (not (fanyi--sound-task-downloaded task)))
+    (fanyi--fail-sound task '(error "Audio download timed out"))))
+
+(defun fanyi--start-sound-player (task input)
+  "Start TASK's player with INPUT, returning the player process."
+  (let* ((program (fanyi--sound-task-program task))
+         (process
+          (make-process
+           :name "fanyi-player-process"
+           :buffer nil
+           :command (append (list program input) (fanyi--sound-task-options task))
+           :noquery t
+           :connection-type 'pipe
+           :coding 'binary
+           :sentinel
+           (lambda (process event)
+             (when (and (eq task fanyi--sound-task)
+                        (memq (process-status process) '(exit signal)))
+               (if (and (eq (process-status process) 'exit)
+                        (zerop (process-exit-status process)))
+                   (setq fanyi--sound-task nil)
+                 (fanyi--fail-sound
+                  task (list 'error (format "Player %s %s" program (string-trim event))))))))))
+    (setf (fanyi--sound-task-process task) process)
+    ;; A synchronous process notification may already have ended this task.
+    (unless (eq task fanyi--sound-task) (fanyi--cancel-sound-task task))
+    process))
+
+(defun fanyi--handle-sound-response (task status)
+  "Play current TASK's downloaded response, given retrieval STATUS."
+  (let ((buffer (current-buffer))
+        (response (fanyi--sound-task-response task)))
+    ;; The HTTP exchange has ended; cancellation must no longer delete its
+    ;; possibly reusable connection when parsing or playback fails.
+    (setf (fanyi--sound-task-response task) nil)
+    (unwind-protect
+        (when (and (eq task fanyi--sound-task) (not (fanyi--sound-task-downloaded task)))
+          (setf (fanyi--sound-task-downloaded task) t)
+          (fanyi--stop-sound-timer task)
+          (condition-case err
+              (progn
+                (when (plist-member status :error)
+                  (error "Audio download failed: %S" (plist-get status :error)))
+                (unless (and (bound-and-true-p url-http-end-of-headers)
+                             (integer-or-marker-p url-http-end-of-headers)
+                             (<= (point-min) url-http-end-of-headers)
+                             (< url-http-end-of-headers (point-max)))
+                  (error "Invalid audio HTTP response"))
+                (goto-char (1+ url-http-end-of-headers))
+                (let ((process (fanyi--start-sound-player task "-")))
+                  (when (eq task fanyi--sound-task)
+                    (process-send-region process (point) (point-max))
+                    (when (and (eq task fanyi--sound-task) (process-live-p process))
+                      (process-send-eof process)))))
+            (error (fanyi--fail-sound task err))
+            (quit
+             (fanyi--cancel-sound-task task)
+             (signal (car err) (cdr err)))))
+      ;; Completed HTTP connections remain managed by url.el.
+      (let ((inhibit-quit t))
+        (fanyi--cleanup-response response)
+        (fanyi--cleanup-response buffer)))))
 
 (defun fanyi-play-sound (url)
-  "Play URL via external program.
-See `fanyi-sound-player'."
+  "Play URL, replacing the previous pronunciation or download.
+See `fanyi-sound-player' and `fanyi-sound-timeout'.  Return the player process
+if playback starts synchronously, otherwise nil."
   (unless fanyi-sound-player
     (user-error "Set `fanyi-sound-player' first"))
   (when (string-empty-p url)
     (user-error "No voice found"))
-  (let* ((player (copy-sequence fanyi-sound-player))
-         (options (mapcar #'copy-sequence (fanyi--sound-player-options player)))
-         reported
-         (report (lambda (err)
-                   ;; A failed player can also interrupt delivery to its pipe.
-                   (unless reported
-                     (setq reported t)
-                     (fanyi--report-sound-error err)))))
+  (let* ((program (copy-sequence fanyi-sound-player))
+         (task (fanyi--make-sound-task
+                :program program
+                :options (mapcar #'copy-sequence (fanyi--sound-player-options program)))))
+    (fanyi-stop-sound)
+    (setq fanyi--sound-task task)
     (condition-case err
         (if fanyi-sound-player-support-https
-            (fanyi--start-sound-player player options url report)
-          ;; Download first for players without HTTPS support.  "-" selects
-          ;; standard input; mplayer also needs a cache for this stream.
-          (let (response finished)
-            (setq response
-                  (url-retrieve
-                   url
-                   (lambda (status)
-                     (let ((buffer (current-buffer)))
-                       (unwind-protect
-                           (condition-case err
-                               (progn
-                                 (when (plist-member status :error)
-                                   (error "Audio download failed: %S"
-                                          (plist-get status :error)))
-                                 (goto-char (1+ url-http-end-of-headers))
-                                 (let ((proc (fanyi--start-sound-player
-                                              player options "-" report))
-                                       delivered)
-                                   (unwind-protect
-                                       (progn
-                                         (process-send-region proc (point) (point-max))
-                                         (when (process-live-p proc)
-                                           (process-send-eof proc))
-                                         (setq delivered t))
-                                     (unless delivered
-                                       ;; Cleanup after an error or quit is not a
-                                       ;; second playback failure.
-                                       (set-process-sentinel proc #'ignore)
-                                       (when (process-live-p proc)
-                                         (delete-process proc))))))
-                             (error (funcall report err)))
-                         (setq finished t)
-                         (fanyi--cleanup-response response)
-                         (fanyi--cleanup-response buffer))))
-                   nil t t))
-            ;; A synchronous callback can finish before RESPONSE is assigned.
-            (when finished
-              (fanyi--cleanup-response response))))
-      (error (funcall report err)))))
+            (fanyi--start-sound-player task url)
+          ;; "-" streams the downloaded bytes to the player's binary stdin.
+          (setf (fanyi--sound-task-response task)
+                (url-retrieve url (lambda (status) (fanyi--handle-sound-response task status))
+                              nil t t))
+          (cond
+           ((fanyi--sound-task-downloaded task)
+            ;; The callback can finish before url-retrieve returns its buffer.
+            (fanyi--cleanup-response (fanyi--sound-task-response task))
+            (setf (fanyi--sound-task-response task) nil))
+           ((not (eq task fanyi--sound-task)) (fanyi--cancel-sound-task task))
+           ((not (buffer-live-p (fanyi--sound-task-response task)))
+            (error "Could not start audio download"))
+           (fanyi-sound-timeout
+            (setf (fanyi--sound-task-timer task)
+                  (run-at-time fanyi-sound-timeout nil #'fanyi--sound-timeout task))))
+          (fanyi--sound-task-process task))
+      (error (fanyi--fail-sound task err))
+      (quit
+       (fanyi--cancel-sound-task task)
+       (signal (car err) (cdr err))))))
 
 (defconst fanyi-buffer-name "*fanyi*"
   "The default name of translation buffer.")
