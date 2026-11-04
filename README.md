@@ -125,7 +125,9 @@ character-based layout; semantic faces still supply highlighting and emphasis.
 SVG labels have searchable, copyable text underneath and a text fallback when
 images are disabled or unavailable.
 
-Resizing the displayed window reflows cached content without another request.
+Resizing the displayed window or scaling the buffer's text reflows cached content
+without another request. Automatic wrapping uses the actual character width;
+an explicit `shr-width` takes precedence over `shr-max-width`.
 Reflow preserves reading position, selections, narrowing and folded sections.
 When several windows show the same buffer, the selected one determines its
 layout, or the previous rendering window if none is selected. Use

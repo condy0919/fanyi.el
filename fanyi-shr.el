@@ -168,8 +168,19 @@ Outside `fanyi-shr-insert', simply render the expanded content."
   "Describe WINDOW's layout and provider state from STYLE-FUNCTION.
 Copy the style signature so later list mutations cannot change this snapshot."
   (list (window-body-width window t) shr-width shr-max-width
-        (frame-char-width (window-frame window)) shr-use-colors
+        (frame-char-width (window-frame window)) (window-font-width window)
+        shr-use-colors
         (when style-function (copy-tree (funcall style-function window) t))))
+
+(defun fanyi-shr--render-width ()
+  "Return the effective column width for the selected rendering window.
+Preserve explicit `shr-width' and the automatic `shr-max-width' limit.
+Use the buffer's remapped font width, including text scaling, while keeping
+SHR's own allowance for continuation glyphs and fringes."
+  (or shr-width
+      (let* ((columns (/ (window-body-width nil t) (max 1 (window-font-width))))
+             (reserved (- (window-body-width) (shr--window-width))))
+        (max 1 (min (or shr-max-width columns) (- columns reserved))))))
 
 (defun fanyi-shr--render (dom renderers window)
   "Insert DOM with RENDERERS, using WINDOW when it is displayed."
@@ -188,7 +199,11 @@ Copy the style signature so later list mutations cannot change this snapshot."
            (save-restriction
              (goto-char start)
              (narrow-to-region start start)
-             (shr-insert-document dom)
+             ;; SHR's automatic character width uses frame metrics.  Bind
+             ;; its public override only inside the actual rendering window
+             ;; so text scaling can both shrink and widen the line length.
+             (let ((shr-width (fanyi-shr--render-width)))
+               (shr-insert-document dom))
              (delete-trailing-whitespace (point-min) (point-max))
              ;; Font-lock owns `face'; keep HTML styling across refontify.
              (let ((position (point-min)) next)
