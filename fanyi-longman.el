@@ -761,6 +761,9 @@ Keep the underlying text available for searching and copying."
                       'type 'fanyi-longman-button
                       'action #'fanyi-play-sound
                       'button-data (dom-attr dom 'src)
+                      'fanyi-audio-kind (and speaker-face 'pronunciation)
+                      'fanyi-audio-dialect (cond ((fanyi-longman--class-p dom "brefile") 'british)
+                                                 ((fanyi-longman--class-p dom "amefile") 'american))
                       'face (or speaker-face 'fanyi-longman-example-face)
                       'display (and speaker-face (fanyi-speaker-image speaker-face))
                       'help-echo (cond ((fanyi-longman--class-p dom "brefile") "Play British pronunciation")

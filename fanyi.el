@@ -550,6 +550,96 @@ the visible button at point."
   (interactive "p")
   (fanyi-forward-button (- count)))
 
+(defun fanyi-next-heading (count)
+  "Move COUNT visible dictionary, outline or local section headings forward.
+Negative COUNT moves backward.  Leave point unchanged if there are too few
+headings in that direction, and respect the accessible buffer region."
+  (interactive "p")
+  (let ((origin (point)) headings)
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward "^#+ " nil t)
+        (unless (invisible-p (match-beginning 0))
+          (push (match-beginning 0) headings))))
+    (let ((position (point-min)))
+      (while (< position (point-max))
+        (when (and (get-text-property position 'fanyi-shr-section)
+                   (not (invisible-p position)))
+          (push position headings))
+        (setq position (next-single-property-change
+                        position 'fanyi-shr-section nil (point-max)))))
+    (setq headings (sort (delete-dups headings) (if (< count 0) #'> #'<)))
+    (dotimes (_ (abs count))
+      (setq origin (or (seq-find (lambda (position)
+                                   (if (< count 0) (< position origin) (> position origin)))
+                                 headings)
+                       (user-error "No %s visible heading" (if (< count 0) "previous" "next")))))
+    (goto-char origin)))
+
+(defun fanyi-previous-heading (count)
+  "Move COUNT visible dictionary, outline or local section headings backward."
+  (interactive "p")
+  (fanyi-next-heading (- count)))
+
+(defun fanyi-toggle-section ()
+  "Toggle the outline or local section heading at point."
+  (interactive)
+  (let ((button (button-at (point))))
+    (cond ((and button (button-get button 'fanyi-shr-section))
+           (button-activate button))
+          ((outline-on-heading-p t) (outline-cycle))
+          (t (user-error "Move to a heading to toggle its section")))))
+
+(defun fanyi-pronounce (&optional american)
+  "Play the query's British pronunciation, or American with AMERICAN non-nil.
+Prefer the current dictionary, then fall back to another dictionary.  If
+the preferred dialect is unavailable, use another word pronunciation.
+Example audio is never selected.  Point and folding remain unchanged."
+  (interactive "P")
+  (let ((dialect (if american 'american 'british))
+        (origin (point)) local others)
+    (save-excursion
+      (save-restriction
+        (widen)
+        (let ((start (progn
+                       (beginning-of-line)
+                       (if (or (looking-at-p "^# ") (re-search-backward "^# " nil t))
+                           (point) (point-min))))
+              (end (progn
+                     (goto-char origin)
+                     (forward-line 1)
+                     (if (re-search-forward "^# " nil t)
+                         (match-beginning 0) (point-max))))
+              (position (point-min)) button)
+          (while (setq button (next-button position t))
+            (when (eq (button-get button 'fanyi-audio-kind) 'pronunciation)
+              (if (<= start (button-start button) (1- end))
+                  (push button local)
+                (push button others)))
+            (setq position (button-end button))))
+        (setq local (nreverse local) others (nreverse others))
+        (let* ((preferred (lambda (button) (eq (button-get button 'fanyi-audio-dialect) dialect)))
+               (button (or (seq-find preferred local) (car local)
+                           (seq-find preferred others) (car others))))
+          (unless button (user-error "No word pronunciation available"))
+          (button-activate button))))))
+
+(defun fanyi-pronounce-american ()
+  "Play the query's American pronunciation when available."
+  (interactive)
+  (fanyi-pronounce t))
+
+(defvar fanyi--revisiting nil
+  "Non-nil means do not push browser history when refreshing or restoring.")
+
+(defun fanyi--revert-buffer (&optional _ignore-auto _noconfirm)
+  "Refresh the current query in its existing result buffer."
+  (unless (and (stringp fanyi-current-word) (not (string-empty-p fanyi-current-word)))
+    (user-error "No query to refresh"))
+  (let ((fanyi-buffer-name (buffer-name))
+        (fanyi--revisiting t))
+    (fanyi-dwim fanyi-current-word)))
+
 (defvar fanyi-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map [tab] #'fanyi-forward-button)
@@ -563,6 +653,15 @@ the visible button at point."
     (define-key map "s" #'fanyi-dwim)
     (define-key map "w" #'fanyi-copy-query-word)
     (define-key map "h" #'fanyi-from-history)
+    (define-key map "n" #'fanyi-next-heading)
+    (define-key map "p" #'fanyi-previous-heading)
+    (define-key map "v" #'fanyi-pronounce)
+    (define-key map "V" #'fanyi-pronounce-american)
+    (define-key map "g" #'revert-buffer)
+    (define-key map (kbd "C-c TAB") #'fanyi-toggle-section)
+    (define-key map (kbd "C-c <tab>") #'fanyi-toggle-section)
+    (define-key map (kbd "C-c C-n") #'fanyi-forward-button)
+    (define-key map (kbd "C-c C-p") #'fanyi-backward-button)
     map)
   "Keymap for `fanyi-mode'.")
 
@@ -590,6 +689,8 @@ the visible button at point."
 
   ;; `bookmark' integration.
   (setq-local bookmark-make-record-function #'fanyi-bookmark-make-record)
+
+  (setq-local revert-buffer-function #'fanyi--revert-buffer)
 
   ;; Better display
   (setq-local line-spacing 0.1)
@@ -625,7 +726,7 @@ Record every accepted query in `fanyi-history', with the most recent first."
   (unless (stringp word)
     (user-error "Query must be a string"))
   (setq word (string-trim (replace-regexp-in-string
-                          "[ \t\r\n]+" " " (substring-no-properties word))))
+                           "[ \t\r\n]+" " " (substring-no-properties word))))
   (when (string-empty-p word)
     (user-error "Query must not be empty"))
   (unless fanyi-providers

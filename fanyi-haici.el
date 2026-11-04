@@ -601,10 +601,12 @@ Children use the same word/url attributes as `fanyi-haici--shr-entries'."
   (let ((female (dom-attr dom 'female)))
     (fanyi-haici--insert-sound (dom-attr dom 'sound-url) (dom-attr dom 'audio)
                                (if female 'fanyi-female-speaker-face 'fanyi-male-speaker-face)
-                               (if female "女声版发音" "男声版发音"))))
+                               (if female "女声版发音" "男声版发音")
+                               (dom-attr dom 'pronunciation) (dom-attr dom 'dialect))))
 
-(defun fanyi-haici--insert-sound (sound-url audio face description)
-  "Insert an AUDIO button using SOUND-URL, FACE and DESCRIPTION when available."
+(defun fanyi-haici--insert-sound (sound-url audio face description &optional pronunciation dialect)
+  "Insert an AUDIO button using SOUND-URL, FACE and DESCRIPTION when available.
+PRONUNCIATION marks word audio, with optional DIALECT `british' or `american'."
   (when (fanyi-haici--present-p audio)
     (insert " ")
     (insert-text-button "🔊"
@@ -612,6 +614,8 @@ Children use the same word/url attributes as `fanyi-haici--shr-entries'."
                         'display (fanyi-speaker-image face)
                         'action #'fanyi-play-sound
                         'button-data (format sound-url audio)
+                        'fanyi-audio-kind (and pronunciation 'pronunciation)
+                        'fanyi-audio-dialect dialect
                         'face face
                         'font-lock-face face
                         'follow-link t
@@ -647,6 +651,10 @@ Children use the same word/url attributes as `fanyi-haici--shr-entries'."
                                                                collect `(fanyi-haici-audio
                                                                          ((audio . ,audio)
                                                                           (sound-url . ,(fanyi-request-sound-url request))
+                                                                          (pronunciation . t)
+                                                                          (dialect . ,(pcase label
+                                                                                        ("英" 'british)
+                                                                                        ("美" 'american)))
                                                                           (female . ,is-female)))))))))
         ,@(cl-loop for (pos text) in (fanyi-haici-result-paraphrases result)
                    collect `(fanyi-haici-line nil
