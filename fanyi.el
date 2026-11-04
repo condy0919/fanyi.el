@@ -640,13 +640,35 @@ headings in that direction, and respect the accessible buffer region."
   (interactive "p")
   (fanyi-next-heading (- count)))
 
+(defun fanyi--section-heading-button ()
+  "Return the visible local heading button on the current line, if any."
+  (let ((origin (point)) (end (line-end-position)))
+    (save-excursion
+      (beginning-of-line)
+      (skip-chars-forward " \t" end)
+      (when-let* ((button (button-at (point)))
+                  (section (button-get button 'fanyi-shr-section))
+                  (_ (not (invisible-p (point)))))
+        (when (or (<= origin (fanyi-shr--section-heading-end section))
+                  ;; Ignore trailing indentation, but do not interpret text
+                  ;; after a heading button as part of the heading itself.
+                  (progn
+                    (goto-char (fanyi-shr--section-heading-end section))
+                    (skip-chars-forward " \t" end)
+                    (= (point) end)))
+          button)))))
+
 (defun fanyi-toggle-section ()
-  "Toggle the outline or local section heading at point."
+  "Toggle the visible outline or local section heading on the current line."
   (interactive)
-  (let ((button (button-at (point))))
-    (cond ((and button (button-get button 'fanyi-shr-section))
-           (button-activate button))
-          ((outline-on-heading-p t) (outline-cycle))
+  (let ((button (fanyi--section-heading-button)))
+    (cond (button
+           ;; The title can be only partly visible through a narrowed view.
+           ;; Its styling and body overlay still span the complete section.
+           (save-restriction (widen) (button-activate button)))
+          ((and (not (invisible-p (line-beginning-position)))
+                (outline-on-heading-p t))
+           (outline-cycle))
           (t (user-error "Move to a heading to toggle its section")))))
 
 (defun fanyi-pronounce (&optional american)
