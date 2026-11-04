@@ -22,10 +22,13 @@ jobs:
       with:
         version: ${{ matrix.emacs_version }}
 
-    - uses: cask/setup-cask@master
-      with:
-        version: 0.8.7
+    - name: Test source
+      run: |
+        make clean
+        make test
 
-    - run: cask install
-    - run: make compile
-    - run: make test
+    - name: Compile
+      run: make compile
+
+    - name: Test byte-compiled code
+      run: make test

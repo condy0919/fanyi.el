@@ -257,18 +257,32 @@ HTTPS URLs directly, it handles its own network timeout.
 
 ## Development
 
-Run the checks without external Lisp packages:
+Run the source and byte-compiled checks with Emacs's built-in libraries:
 
 ```sh
-make test CASK=
-make compile CASK=
+make clean
+make test
+make compile
+make test
 ```
 
-Alternatively, run `cask install`, then `make test` and `make compile`. The
-[CI workflow](.github/workflows/build.yml) compiles and tests on Emacs 29.1 and
-snapshot. Tests use mocked requests and local HTML/JSON fixtures; they do not
-contact dictionary websites. See [fixture documentation](test/fixtures/README.md)
-for saved-page references and their coverage.
+`make` defaults to `make test`. Run `make clean` first to remove generated
+bytecode when testing source files. The [CI workflow](.github/workflows/build.yml)
+runs the sequence above on Emacs 29.1 and snapshot. Tests use mocked requests
+and local HTML/JSON fixtures; they do not contact dictionary websites. See
+[fixture documentation](test/fixtures/README.md) for saved-page references and
+coverage.
+
+Optional package metadata checks use `package-lint` through Cask. After
+installing Cask, install the development dependency and run lint explicitly:
+
+```sh
+cask install
+make lint
+```
+
+Cask and its package dependencies are used only by `make lint`; compilation
+and ERT tests run directly in Emacs.
 
 ### Source layout
 

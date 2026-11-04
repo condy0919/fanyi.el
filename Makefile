@@ -1,13 +1,15 @@
+.DEFAULT_GOAL := test
+
 EMACS ?= emacs
 CASK ?= cask
 
 compile:
-	$(CASK) exec $(EMACS) -Q -batch \
-	-L .							\
+	$(EMACS) -Q --batch \
+	-L . \
 	-f batch-byte-compile *.el
 
 test:
-	$(CASK) exec $(EMACS) -Q -batch \
+	$(EMACS) -Q --batch \
 	-L . -L test -l test/fanyi-tests.el -l test/fanyi-base-tests.el \
 	-l test/fanyi-retry-tests.el \
 	-l test/fanyi-config-tests.el \
@@ -28,4 +30,12 @@ test:
 	-l test/fanyi-longman-section-tests.el \
 	-f ert-run-tests-batch-and-exit
 
-.PHONY: compile test
+clean:
+	$(RM) *.elc test/*.elc
+
+lint:
+	$(CASK) exec $(EMACS) -Q --batch -L . -l package-lint \
+	--eval '(setq package-lint-main-file "fanyi.el")' \
+	-f package-lint-batch-and-exit *.el
+
+.PHONY: compile test clean lint
