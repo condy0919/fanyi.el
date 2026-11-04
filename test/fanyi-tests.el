@@ -379,7 +379,7 @@
   (fanyi-test--with-query
     (setq fanyi-providers (list (car fanyi-providers)
                                 (car fanyi-providers)))
-    (dolist (failure '(http json parse render not-found))
+    (dolist (failure '(http json parse render))
       (ert-info ((format "Failure stage: %S" failure))
         (setq fanyi-test--requests nil)
         (fanyi-dwim "word")
@@ -389,7 +389,6 @@
                      (lambda (&rest args)
                        (pcase failure
                          ('parse (error "Malformed dictionary response"))
-                         ('not-found (throw 'not-found nil))
                          (_ (apply parse args)))))
                     ((symbol-function 'fanyi-render-result)
                      (lambda (&rest args)

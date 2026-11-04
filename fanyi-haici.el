@@ -315,7 +315,8 @@ Return nil when the structure does not provide a reliable item count."
 
 (defun fanyi-haici-parse (dom request)
   "Parse DOM, preserving definitions when optional data is absent.
-Signal `fanyi-parse-error' when no usable definitions can be extracted."
+Throw `not-found' for Haici's explicit missing-entry page.  Signal
+`fanyi-parse-error' for other responses without usable definitions."
   (let ((dom (fanyi-haici--visible-dom dom))
         (result (make-fanyi-haici-result)))
     ;; Locate elements rather than depending on whitespace or a final dummy li.
@@ -333,7 +334,14 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
                                              (fanyi-haici--present-p (fanyi-haici--text item)))
                                            (dom-by-tag group 'li))))
                           (dom-non-text-children (fanyi-haici-result-content result))))
-      (signal 'fanyi-parse-error '("Haici response contains no usable definitions")))
+      ;; A missing definition alone could mean a changed page or an error.
+      ;; Require Haici's missing-entry title and its normal suggestion prompt.
+      (if (and (equal (fanyi-haici--text (car (dom-by-tag dom 'title)))
+                      "该词条未找到_海词词典")
+               (string-match-p "您要查找的是不是\\|Sorry，没有找到与此相符的结果"
+                               (fanyi-haici--text (car (dom-by-tag dom 'body)))))
+          (throw 'not-found nil)
+        (signal 'fanyi-parse-error '("Haici response contains no usable definitions"))))
     (setf (fanyi-haici-result-syllable result)
           (or (fanyi-haici--syllable dom) (fanyi-request-word request)))
     (setf (fanyi-haici-result-level-label result)

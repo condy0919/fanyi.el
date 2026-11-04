@@ -119,6 +119,8 @@ the original request settings and replaces only that dictionary's result; other
 results, reading position, selections and folds remain intact. Saved, renamed
 result buffers can retry independently of a newer query. Missing optional audio
 or pronunciation does not hide available definitions.
+Recognized empty results show `No results found` and count as completed, without
+a retry button. Unrecognized HTML and malformed responses still report errors.
 
 ## Dictionary display
 

@@ -158,7 +158,7 @@ Nil disables the timeout."
   "Original query text displayed in this result buffer.")
 
 (cl-defstruct (fanyi--task (:constructor fanyi--make-task))
-  query-id request result result-buffer buffer timer done failure start end)
+  query-id request result result-buffer buffer timer done failure not-found start end)
 
 (defun fanyi--task-active-p (task)
   "Return non-nil if TASK still belongs to the current pending query."
@@ -365,6 +365,16 @@ Nil disables the timeout."
      task (lambda () (fanyi-render-result (fanyi--task-request task) (fanyi--task-result task))))
     (fanyi--finish-task task)))
 
+(defun fanyi--render-not-found (task)
+  "Display TASK's normal empty result and mark it complete."
+  (when (fanyi--task-active-p task)
+    (fanyi--write-task
+     task (lambda ()
+            (insert "# " (fanyi-request-display-name (fanyi--task-request task))
+                    "\n\nNo results found.\n\n")))
+    (setf (fanyi--task-not-found task) t)
+    (fanyi--finish-task task)))
+
 (defun fanyi--handle-response (task url status)
   "Parse and render TASK's response from URL with retrieval STATUS."
   (let ((response-buffer (current-buffer))
@@ -387,12 +397,12 @@ Nil disables the timeout."
                                   ('xml (libxml-parse-html-region (point) (point-max) url))
                                   ('json (json-parse-buffer))
                                   (_ (error "Unsupported response format")))))
-                  (unless (catch 'not-found
-                            (setf (fanyi--task-result task)
-                                  (fanyi-parse-response request response))
-                            t)
-                    (error "No results found")))
-                (fanyi--render-task task))
+                  (if (catch 'not-found
+                        (setf (fanyi--task-result task)
+                              (fanyi-parse-response request response))
+                        t)
+                      (fanyi--render-task task)
+                    (fanyi--render-not-found task))))
             (error (fanyi--finish-task task (error-message-string err)))
             (quit (fanyi--quit-task task err))))
       (fanyi--cleanup-response response-buffer)

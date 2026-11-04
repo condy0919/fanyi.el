@@ -68,5 +68,74 @@
                     "specimen" "暂无释义"))
       (should (string-match-p (regexp-quote text) (buffer-string))))))
 
+(defun fanyi-provider-test--parse-html (provider html)
+  "Parse synthetic HTML with PROVIDER, preserving its source DOM."
+  (with-temp-buffer
+    (insert html)
+    (let* ((dom (libxml-parse-html-region (point-min) (point-max)))
+           (before (copy-tree dom)))
+      (unwind-protect
+          (fanyi-parse-response (fanyi-make-request provider "sample") dom)
+        (should (equal dom before))))))
+
+(ert-deftest fanyi-provider-recognizes-explicit-missing-entry-pages ()
+  ;; These are synthetic contracts, not complete downloaded pages.  Haici's
+  ;; title and prompt come from its indexed missing-entry pages.  Longman's
+  ;; didyoumean class is documented in the user-saved common CSS.
+  (dolist (html '("<html><head><title>该词条未找到_海词词典</title></head><body>Sorry，没有找到与此相符的结果。</body></html>"
+                  "<html><head><title> 该词条未找到_海词词典 </title></head><body><h2>您要查找的是不是：</h2><a href='/sample'>sample</a></body></html>"))
+    (should-not
+     (catch 'not-found
+       (fanyi-provider-test--parse-html fanyi-haici-provider html)
+       'unexpected-result)))
+  (dolist (href '("/dictionary/sample" "https://www.ldoceonline.com/dictionary/sample"))
+    (should-not
+     (catch 'not-found
+       (fanyi-provider-test--parse-html
+        fanyi-longman-provider
+        (format "<html><body><ul class='extra didyoumean'><li><a href='%s'>sample</a></li></ul></body></html>"
+                href))
+       'unexpected-result))))
+
+(ert-deftest fanyi-provider-does-not-confuse-broken-pages-with-missing-entries ()
+  (dolist (body '("" "Service unavailable" "<p hidden='hidden'>您要查找的是不是：</p>"
+                  "<div style='display:none'>Sorry，没有找到与此相符的结果。</div>"
+                  "<script>您要查找的是不是：</script>"))
+    (should-error
+     (fanyi-provider-test--parse-html
+      fanyi-haici-provider
+      (concat "<html><head><title>该词条未找到_海词词典</title></head><body>"
+              body "</body></html>"))
+     :type 'fanyi-parse-error))
+  (dolist (html '("<html><head><title>Just a moment...</title></head><body>您要查找的是不是：</body></html>"
+                  "<html><head><title>海词词典</title></head><body>Sorry，没有找到与此相符的结果。</body></html>"))
+    (should-error (fanyi-provider-test--parse-html fanyi-haici-provider html)
+                  :type 'fanyi-parse-error))
+  (dolist (html '("<div class='didyoumean'></div>"
+                  "<ul class='not-didyoumean'><li><a href='/dictionary/sample'>sample</a></li></ul>"
+                  "<ul class='didyoumean'><li><a href='/help'>Help</a></li></ul>"
+                  "<ul class='didyoumean'><li><a href='https://other.invalid/dictionary/sample'>sample</a></li></ul>"
+                  "<ul class='didyoumean'><li><a href='/dictionary/sample'> </a></li></ul>"
+                  "<ul class='didyoumean' hidden='hidden'><li><a href='/dictionary/sample'>sample</a></li></ul>"
+                  "<div style='display:none'><ul class='didyoumean'><li><a href='/dictionary/sample'>sample</a></li></ul></div>"
+                  "<div aria-hidden='true'><ul class='didyoumean'><li><a href='/dictionary/sample'>sample</a></li></ul></div>"
+                  "<script><ul class='didyoumean'><li><a href='/dictionary/sample'>sample</a></li></ul></script>"))
+    (should-error (fanyi-provider-test--parse-html fanyi-longman-provider html)
+                  :type 'fanyi-parse-error)))
+
+(ert-deftest fanyi-provider-usable-entries-take-precedence-over-suggestions ()
+  (should
+   (fanyi-haici-result-p
+    (fanyi-provider-test--parse-html
+     fanyi-haici-provider
+     (concat "<html><head><title>该词条未找到_海词词典</title></head><body>"
+             "<p>您要查找的是不是：</p><ul class='dict-basic-ul'>"
+             "<li><span>n.</span><strong>样本</strong></li></ul></body></html>"))))
+  (should
+   (fanyi-provider-test--parse-html
+    fanyi-longman-provider
+    (concat "<div class='dictionary'><div class='dictentry'><span class='DEF'>A sample.</span></div></div>"
+            "<ul class='didyoumean'><li><a href='/dictionary/other'>other</a></li></ul>"))))
+
 (provide 'fanyi-provider-tests)
 ;;; fanyi-provider-tests.el ends here

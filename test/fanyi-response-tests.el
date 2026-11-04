@@ -50,11 +50,29 @@
     (fanyi-dwim "sample")
     (fanyi-test--deliver (car fanyi-test--requests) nil
                          "{\"result\":{\"code\":200},\"data\":{\"entries\":[]}}")
-    (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 1))
-    (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 0))
+    (should (= (fanyi-test--query-state 'fanyi--tasks-failed) 0))
+    (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 1))
     (with-current-buffer fanyi-buffer-name
       (should (string-match-p "No results found" (buffer-string)))
+      (should (fanyi--task-not-found (car fanyi--tasks)))
+      (should-not (fanyi--task-timer (car fanyi--tasks)))
+      (should-not (fanyi-test--button-data #'fanyi--retry-task))
       (should-not (string-match-p "Could not parse" (buffer-string))))))
+
+(ert-deftest fanyi-retry-can-finish-with-an-empty-result ()
+  (fanyi-test--with-query
+    (setf (fanyi-provider-parse (car fanyi-providers))
+          (lambda (&rest _) (throw 'not-found nil)))
+    (fanyi-dwim "sample")
+    (fanyi-test--respond (car fanyi-test--requests) '(:error (error http 500)))
+    (with-current-buffer fanyi-buffer-name (fanyi--retry-task (car fanyi--tasks)))
+    (fanyi-test--respond (cadr fanyi-test--requests))
+    (fanyi-test--respond (cadr fanyi-test--requests))
+    (with-current-buffer fanyi-buffer-name
+      (should (= fanyi--tasks-failed 0))
+      (should (= fanyi--tasks-completed 1))
+      (should-not (fanyi-test--button-data #'fanyi--retry-task))
+      (should-not (fanyi--task-failure (car fanyi--tasks))))))
 
 (provide 'fanyi-response-tests)
 ;;; fanyi-response-tests.el ends here

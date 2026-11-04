@@ -586,7 +586,9 @@ Keep ordinary HTML and unfamiliar inline markup for shr to render."
 
 (defun fanyi-longman-parse (dom request)
   "Select, prepare and validate reusable dictionary DOM for REQUEST.
-The returned DOM is ready for SHR; DOM itself is not modified."
+The returned DOM is ready for SHR; DOM itself is not modified.
+Throw `not-found' for a recognizable spelling-suggestion page; other
+responses without usable entries signal `fanyi-parse-error'."
   (let* ((base (fanyi-request-url request))
          (dictionary (car (fanyi-longman--nodes dom "dictionary")))
          sections has-entry)
@@ -597,7 +599,19 @@ The returned DOM is ready for SHR; DOM itself is not modified."
           (when entry (setq has-entry t))
           (push prepared sections))))
     (unless has-entry
-      (signal 'fanyi-parse-error '("Longman response contains no usable dictionary entries")))
+      ;; Only a visible suggestion list with dictionary links establishes a
+      ;; normal missing entry.  Empty or unfamiliar pages remain parse errors.
+      ;; Preparing the whole tree here also rejects hidden ancestor elements.
+      (if (seq-some
+           (lambda (node)
+             (seq-some
+              (lambda (link)
+                (and (fanyi-longman--crossref-target (dom-attr link 'href))
+                     (not (string-empty-p (string-trim (fanyi-shr-dom-text link))))))
+              (dom-by-tag node 'a)))
+           (fanyi-longman--nodes (fanyi-longman--prepare-node dom base) "didyoumean"))
+          (throw 'not-found nil)
+        (signal 'fanyi-parse-error '("Longman response contains no usable dictionary entries"))))
     `(div nil ,@(nreverse sections))))
 
 (defun fanyi-longman--shr-heading (dom)
