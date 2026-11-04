@@ -40,6 +40,7 @@
 (require 'eldoc)
 
 (require 'fanyi-base)
+(require 'fanyi-shr)
 
 (defgroup fanyi nil
   "Not only English-Chinese translator for Emacs."
@@ -134,6 +135,22 @@ Nil disables the timeout."
                  (number :tag "Seconds"))
   :group 'fanyi)
 
+(defcustom fanyi-navigation-history-length 20
+  "Maximum cached lookups retained by the current result buffer.
+This bounds the total of past and future pages, excluding the current page.
+Zero disables caching.  Back/forward reuse parsed results; unfinished requests
+restart when revisited.  New queries discard the forward history."
+  :type 'natnum
+  :group 'fanyi)
+
+(defvar-local fanyi--back-history nil
+  "Previous result pages, nearest first.")
+(defvar-local fanyi--forward-history nil
+  "Next result pages, nearest first.")
+
+(cl-defstruct (fanyi--page (:constructor fanyi--page-create))
+  word tasks view)
+
 (defvar fanyi-history nil
   "History list for `fanyi-dwim' and `fanyi-dwim2'.")
 
@@ -158,7 +175,7 @@ Nil disables the timeout."
   "Original query text displayed in this result buffer.")
 
 (cl-defstruct (fanyi--task (:constructor fanyi--make-task))
-  query-id request result result-buffer buffer timer done failure not-found start end)
+  query-id request result result-buffer buffer timer done settled failure not-found start end)
 
 (defun fanyi--task-active-p (task)
   "Return non-nil if TASK still belongs to the current pending query."
@@ -341,6 +358,7 @@ Nil disables the timeout."
   "Settle TASK once, reporting FAILURE if non-nil."
   (when (fanyi--task-active-p task)
     (setf (fanyi--task-done task) t
+          (fanyi--task-settled task) t
           (fanyi--task-failure task) failure)
     (fanyi--stop-task-timer task)
     (with-current-buffer (fanyi--task-result-buffer task)
@@ -424,9 +442,15 @@ Nil disables the timeout."
         (cl-decf fanyi--tasks-failed)
         (set-marker (fanyi--task-start replacing) nil)
         (set-marker (fanyi--task-end replacing) nil)))
+    (fanyi--start-task task)))
+
+(defun fanyi--start-task (task)
+  "Start an already registered TASK, retaining its resolved request settings."
+  (let ((request (fanyi--task-request task)))
     (condition-case err
         (progn
-          (when replacing (fanyi--write-task-error task (fanyi--task-failure task)))
+          (when (fanyi--task-failure task)
+            (fanyi--write-task-error task (fanyi--task-failure task)))
           (if (eq (fanyi-request-api-type request) 'browser)
               (fanyi--render-task task)
             (let ((url (fanyi-request-url request))
@@ -653,6 +677,8 @@ Example audio is never selected.  Point and folding remain unchanged."
     (define-key map "s" #'fanyi-dwim)
     (define-key map "w" #'fanyi-copy-query-word)
     (define-key map "h" #'fanyi-from-history)
+    (define-key map "l" #'fanyi-back)
+    (define-key map "r" #'fanyi-forward)
     (define-key map "n" #'fanyi-next-heading)
     (define-key map "p" #'fanyi-previous-heading)
     (define-key map "v" #'fanyi-pronounce)
@@ -711,6 +737,189 @@ Example audio is never selected.  Point and folding remain unchanged."
   (setq imenu-generic-expression '(("Dict" "^# \\(.*\\)" 1)))
   (setq header-line-format '((:eval (fanyi-format-header-line)))))
 
+(defun fanyi--reader-anchor (position)
+  "Describe POSITION without retaining a marker in a historical buffer."
+  (let ((index (cl-position-if
+                (lambda (task)
+                  (and (fanyi--task-start task)
+                       (<= (fanyi--task-start task) position)
+                       (< position (fanyi--task-end task))))
+                fanyi--tasks)))
+    (list index
+          (fanyi-shr--text-offset
+           (if index (fanyi--task-start (nth index fanyi--tasks)) (point-min)) position)
+          (not (memq (char-after position) '(?\s ?\t ?\r ?\n))))))
+
+(defun fanyi--reader-position (anchor)
+  "Resolve a saved reader ANCHOR in the current widened result."
+  (let ((task (and (car anchor) (nth (car anchor) fanyi--tasks))))
+    (fanyi-shr--text-position
+     (or (and task (fanyi--task-start task)) (point-min))
+     (or (and task (fanyi--task-end task)) (point-max))
+     (nth 1 anchor) (nth 2 anchor))))
+
+(defun fanyi--reader-sections (task)
+  "Return TASK's local folding sections in a stable region order."
+  (cl-mapcan (lambda (region)
+               (when (and (fanyi--task-start task)
+                          (<= (fanyi--task-start task) (fanyi-shr--region-start region))
+                          (<= (fanyi-shr--region-end region) (fanyi--task-end task)))
+                 (copy-sequence (fanyi-shr--region-sections region))))
+             (sort (copy-sequence fanyi-shr--regions)
+                   (lambda (a b) (< (fanyi-shr--region-start a)
+                                    (fanyi-shr--region-start b))))))
+
+(defun fanyi--save-reader ()
+  "Capture reading position, selection, narrowing and folds without markers."
+  (let ((bounds (and (buffer-narrowed-p) (cons (point-min) (point-max)))))
+    (save-restriction
+      (widen)
+      (list :point (fanyi--reader-anchor (point))
+            :mark (and (mark t) (fanyi--reader-anchor (mark t)))
+            :active mark-active
+            :bounds (and bounds (cons (fanyi--reader-anchor (car bounds))
+                                      (fanyi--reader-anchor (cdr bounds))))
+            :windows (mapcar (lambda (window)
+                               (list (fanyi--reader-anchor (window-point window))
+                                     (fanyi--reader-anchor (window-start window))))
+                             (get-buffer-window-list (current-buffer) nil t))
+            :outline (cl-loop for overlay in (overlays-in (point-min) (point-max))
+                              when (eq (overlay-get overlay 'invisible) 'outline)
+                              collect (cons (fanyi--reader-anchor (overlay-start overlay))
+                                            (fanyi--reader-anchor (overlay-end overlay))))
+            :sections (mapcar (lambda (task)
+                                (mapcar #'fanyi-shr--section-closed
+                                        (fanyi--reader-sections task)))
+                              fanyi--tasks)))))
+
+(defun fanyi--restore-reader (view)
+  "Restore the saved reader VIEW after rendering the cached dictionaries."
+  (cl-mapc (lambda (task states)
+             (cl-mapc #'fanyi-shr--section-set-closed
+                      (fanyi--reader-sections task) states))
+           fanyi--tasks (plist-get view :sections))
+  (dolist (fold (plist-get view :outline))
+    (outline-flag-region (fanyi--reader-position (car fold))
+                         (fanyi--reader-position (cdr fold)) t))
+  (let ((position (fanyi--reader-position (plist-get view :point)))
+        (mark (and (plist-get view :mark)
+                   (fanyi--reader-position (plist-get view :mark))))
+        (bounds (plist-get view :bounds))
+        (windows (mapcar (lambda (state)
+                           (mapcar #'fanyi--reader-position state))
+                         (plist-get view :windows))))
+    (when bounds
+      (narrow-to-region (fanyi--reader-position (car bounds))
+                        (fanyi--reader-position (cdr bounds))))
+    (goto-char position)
+    (set-marker (mark-marker) mark)
+    (setq mark-active (and mark (plist-get view :active))
+          deactivate-mark nil)
+    ;; Window identities are deliberately not cached: only windows still
+    ;; displaying this buffer receive the saved views, in display order.
+    (cl-mapc (lambda (window state)
+               (set-window-point window (car state))
+               (set-window-start window (cadr state) t))
+             (get-buffer-window-list (current-buffer) nil t) windows)))
+
+(defun fanyi--save-page ()
+  "Snapshot this query's resolved requests, outcomes and reading state."
+  (fanyi--page-create
+   :word fanyi-current-word :view (fanyi--save-reader)
+   :tasks (mapcar
+           (lambda (task)
+             (list (fanyi--task-request task)
+                   (cond ((not (fanyi--task-done task)) 'pending)
+                         ((fanyi--task-failure task) 'failed)
+                         ((fanyi--task-not-found task) 'not-found)
+                         ((fanyi--task-settled task) 'completed)
+                         (t 'pending))
+                   (fanyi--task-result task) (fanyi--task-failure task)))
+           fanyi--tasks)))
+
+(defun fanyi--trim-navigation-history ()
+  "Bound the total number of cached past and future pages."
+  (let ((limit (max 0 fanyi-navigation-history-length)))
+    (setq fanyi--back-history (seq-take fanyi--back-history limit)
+          fanyi--forward-history
+          (seq-take fanyi--forward-history (- limit (length fanyi--back-history))))))
+
+(defun fanyi--begin-query (buffer word)
+  "Reset BUFFER for WORD, preserving its navigation stacks."
+  ;; Invalidate callbacks before cancellation can invoke process sentinels.
+  (cl-incf fanyi--query-id)
+  (when (buffer-live-p fanyi--active-buffer)
+    (with-current-buffer fanyi--active-buffer (fanyi--cancel-buffer-tasks)))
+  (with-current-buffer buffer
+    (unless (eq buffer fanyi--active-buffer) (fanyi--cancel-buffer-tasks))
+    (let ((back fanyi--back-history) (forward fanyi--forward-history)
+          (inhibit-read-only t))
+      (widen)
+      (remove-overlays (point-min) (point-max) 'invisible 'outline)
+      (erase-buffer)
+      (fanyi-mode)
+      (setq fanyi-current-word word
+            fanyi--buffer-query-id fanyi--query-id
+            fanyi--back-history back fanyi--forward-history forward)))
+  (setq fanyi--active-buffer buffer))
+
+(defun fanyi--restore-page (page)
+  "Display cached PAGE and restart only its unfinished requests."
+  (let ((buffer (current-buffer)) pending complete)
+    (fanyi--begin-query buffer (fanyi--page-word page))
+    ;; Register every task before rendering or starting any synchronous callback.
+    (setq fanyi--tasks
+          (mapcar (lambda (entry)
+                    (fanyi--make-task :query-id fanyi--buffer-query-id
+                                      :request (nth 0 entry) :result (nth 2 entry)
+                                      :failure (nth 3 entry) :result-buffer buffer))
+                  (fanyi--page-tasks page)))
+    (unwind-protect
+        (progn
+          (cl-mapc
+           (lambda (task entry)
+             (condition-case err
+                 (pcase (nth 1 entry)
+                   ('pending
+                    (push task pending)
+                    (when (fanyi--task-failure task)
+                      (fanyi--write-task-error task (fanyi--task-failure task))))
+                   ('failed (fanyi--finish-task task (fanyi--task-failure task)))
+                   ('not-found (fanyi--render-not-found task))
+                   (_ (fanyi--render-task task)))
+               (error (fanyi--finish-task task (error-message-string err)))))
+           (reverse fanyi--tasks) (reverse (fanyi--page-tasks page)))
+          (fanyi--restore-reader (fanyi--page-view page))
+          ;; Restore anchors before pending callbacks can add earlier sections.
+          (dolist (task (nreverse pending)) (fanyi--start-task task))
+          (setq complete t)
+          (force-mode-line-update t))
+      (unless complete (fanyi--cancel-buffer-tasks)))))
+
+(defun fanyi--navigate (backward)
+  "Visit the previous cached page if BACKWARD, or the next one otherwise."
+  (unless (derived-mode-p 'fanyi-mode) (user-error "Not in a Fanyi result buffer"))
+  (fanyi--trim-navigation-history)
+  (let ((page (car (if backward fanyi--back-history fanyi--forward-history))))
+    (unless page (user-error "No %s lookup" (if backward "previous" "next")))
+    (let ((current (fanyi--save-page)))
+      (if backward
+          (setq fanyi--back-history (cdr fanyi--back-history)
+                fanyi--forward-history (cons current fanyi--forward-history))
+        (setq fanyi--forward-history (cdr fanyi--forward-history)
+              fanyi--back-history (cons current fanyi--back-history))))
+    (fanyi--restore-page page)))
+
+(defun fanyi-back ()
+  "Return to the previous lookup using its cached results and reading position."
+  (interactive)
+  (fanyi--navigate t))
+
+(defun fanyi-forward ()
+  "Return to the next lookup using its cached results and reading position."
+  (interactive)
+  (fanyi--navigate nil))
+
 ;;;###autoload
 (defun fanyi-dwim (word)
   "Translate WORD after trimming and collapsing whitespace.
@@ -747,23 +956,16 @@ Record every accepted query in `fanyi-history', with the most recent first."
     (let ((history-delete-duplicates t))
       ;; Also remove duplicates restored from history by older versions.
       (add-to-history 'fanyi-history word nil t))
-    ;; Invalidate callbacks before cancelling requests, which can itself invoke
-    ;; process sentinels.  `url-retrieve' is already asynchronous; no threads are
-    ;; needed to start concurrent dictionary requests.
-    (cl-incf fanyi--query-id)
-    (when (buffer-live-p fanyi--active-buffer)
-      (with-current-buffer fanyi--active-buffer
-        (fanyi--cancel-buffer-tasks)))
-
     (let ((buf (get-buffer-create fanyi-buffer-name)))
-      (setq fanyi--active-buffer buf)
       (with-current-buffer buf
-        (let ((inhibit-read-only t))
-          ;; Clear the previous search result.
-          (erase-buffer)
-          (fanyi-mode)
-          (setq fanyi-current-word word
-                fanyi--buffer-query-id fanyi--query-id)))
+        ;; Capture unfinished states before cancellation marks their tasks done.
+        (unless fanyi--revisiting
+          (when (and (derived-mode-p 'fanyi-mode) fanyi-current-word
+                     (> fanyi-navigation-history-length 0))
+            (push (fanyi--save-page) fanyi--back-history))
+          (setq fanyi--forward-history nil))
+        (fanyi--trim-navigation-history))
+      (fanyi--begin-query buf word)
 
       (dolist (request requests)
         (fanyi--spawn request buf))
