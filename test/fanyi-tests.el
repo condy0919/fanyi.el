@@ -369,7 +369,7 @@
         (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 2))
         (should (equal (prin1-to-string provider) before))
         (with-current-buffer fanyi-buffer-name
-          (should (equal (buffer-string) "word: second result\nword: first result\n")))
+          (should (equal (buffer-string) "word: first result\nword: second result\n")))
         (with-temp-buffer
           (let ((fanyi-buffer-name (buffer-name)))
             (let ((inhibit-read-only t)) (fanyi-render-result (fanyi--task-request second) (fanyi--task-result second))))
@@ -610,6 +610,135 @@
     (fanyi-test--respond (cadr fanyi-test--requests) nil "retried")
     (with-current-buffer fanyi-buffer-name
       (should (equal (buffer-string) "word: retried\n")))))
+
+(ert-deftest fanyi-query-keeps-provider-order-for-all-response-orders ()
+  (dolist (empty '(nil empty quit))
+    (dolist (order '((0 1 2) (0 2 1) (1 0 2) (1 2 0) (2 0 1) (2 1 0)))
+      (fanyi-test--with-query
+        (setf (fanyi-provider-render (car fanyi-providers))
+              (lambda (result request)
+                (if (and empty (equal result "1"))
+                    (when (eq empty 'quit)
+                      (insert "PARTIAL\n")
+                      (signal 'quit '("Interrupted middle dictionary")))
+                  (fanyi-test--render result request))))
+        (setq fanyi-providers (list (car fanyi-providers) (car fanyi-providers) (car fanyi-providers)))
+        (fanyi-dwim "word")
+        (cl-loop for number in order
+                 for first = t then nil
+                 do (condition-case err
+                        (fanyi-test--respond (nth number fanyi-test--requests) nil (number-to-string number))
+                      (quit (should (eq empty 'quit)) (should (= number 1))))
+                 do (when first
+                      (with-current-buffer fanyi-buffer-name
+                        (should (= (point) (point-min))))))
+        (with-current-buffer fanyi-buffer-name
+          (should (equal (buffer-string) (if empty "word: 0\nword: 2\n" "word: 0\nword: 1\nword: 2\n")))
+          (cl-loop for task in (reverse fanyi--tasks)
+                   for number from 0
+                   do (if (and empty (= number 1))
+                          (progn (should-not (fanyi--task-start task)) (should-not (fanyi--task-end task)))
+                        (should (equal (buffer-substring (fanyi--task-start task) (fanyi--task-end task))
+                                       (format "word: %d\n" number))))))))))
+
+(ert-deftest fanyi-query-orders-browser-and-synchronous-network-results ()
+  (dolist (synchronous '(nil 1 2))
+    (fanyi-test--with-query
+      (setq fanyi-providers
+            (list (fanyi-test--provider)
+                  (fanyi-provider-create :url "https://browser.invalid/%s" :api-type 'browser
+                                         :render (lambda (_result request)
+                                                   (fanyi-test--render "browser" request)))
+                  (fanyi-test--provider)))
+      (cl-letf (((symbol-function 'url-retrieve)
+                 (lambda (&rest args)
+                   (let ((buffer (apply #'fanyi-test--retrieve args)))
+                     (when (equal (length fanyi-test--requests) synchronous)
+                       (fanyi-test--respond (car (last fanyi-test--requests)) nil
+                                            (if (= synchronous 1) "first" "last")))
+                     buffer))))
+        (fanyi-dwim "word"))
+      (with-current-buffer fanyi-buffer-name
+        (should (string-match-p "word: browser" (buffer-string)))
+        (should (= (point) (point-min))))
+      ;; The synchronous response may be repeated; it must still settle once.
+      (fanyi-test--respond (cadr fanyi-test--requests) nil "last")
+      (fanyi-test--respond (car fanyi-test--requests) nil "first")
+      (with-current-buffer fanyi-buffer-name
+        (should (= fanyi--tasks-completed 3))
+        (should (equal (buffer-string) "word: first\nword: browser\nword: last\n"))))))
+
+(ert-deftest fanyi-query-inserts-before-a-dictionary-without-moving-its-reader ()
+  (dolist (narrow '(nil t))
+    (dolist (direction '(cursor forward backward))
+      (fanyi-test--with-query
+        (setq fanyi-providers (list (car fanyi-providers) (car fanyi-providers)))
+        (fanyi-dwim "word")
+        (fanyi-test--respond (cadr fanyi-test--requests) nil "second")
+        (with-current-buffer fanyi-buffer-name
+          (save-window-excursion
+            (set-window-buffer nil (current-buffer))
+            (goto-char (point-min))
+            (when narrow (narrow-to-region (point-min) (1- (point-max))))
+            (pcase direction
+              ('forward (set-mark (point)) (forward-char 4))
+              ('backward (set-mark (+ (point) 4))))
+            (let ((mark-active (not (eq direction 'cursor)))
+                  (transient-mark-mode t) (deactivate-mark nil)
+                  (before (buffer-string)))
+              (set-window-start nil (point-min))
+              (fanyi-test--respond (car fanyi-test--requests) nil "first")
+              (let ((start (fanyi--task-start (car fanyi--tasks))))
+                (should (= (window-start) start))
+                (when narrow
+                  (should (equal (buffer-string) before))
+                  (should (= (point-min) start)))
+                (if (eq direction 'cursor)
+                    (should (= (point) start))
+                  (should (use-region-p))
+                  (should (equal (buffer-substring-no-properties (point) (mark)) "word")))))))))))
+
+(ert-deftest fanyi-query-insertion-does-not-expand-a-selection-ending-at-the-boundary ()
+  (dolist (direction '(forward backward))
+    (fanyi-test--with-query
+      (setq fanyi-providers (list (car fanyi-providers) (car fanyi-providers) (car fanyi-providers)))
+      (fanyi-dwim "word")
+      (fanyi-test--respond (car fanyi-test--requests) nil "first")
+      (fanyi-test--respond (nth 2 fanyi-test--requests) nil "last")
+      (with-current-buffer fanyi-buffer-name
+        (goto-char (fanyi--task-start (car fanyi--tasks)))
+        (set-mark (point-min))
+        (when (eq direction 'backward) (exchange-point-and-mark))
+        (let ((mark-active t) (transient-mark-mode t) (deactivate-mark nil))
+          (fanyi-test--respond (cadr fanyi-test--requests) nil "middle")
+          (should (use-region-p))
+          (should (equal (buffer-substring-no-properties (point) (mark)) "word: first\n")))))))
+
+(ert-deftest fanyi-query-insertion-preserves-a-preceding-narrowed-view ()
+  (dolist (position '(between end empty))
+    (fanyi-test--with-query
+      (setq fanyi-providers (list (car fanyi-providers) (car fanyi-providers) (car fanyi-providers)))
+      (fanyi-dwim "word")
+      (fanyi-test--respond (car fanyi-test--requests) nil "first")
+      (when (eq position 'between)
+        (fanyi-test--respond (nth 2 fanyi-test--requests) nil "last"))
+      (with-current-buffer fanyi-buffer-name
+        (let ((end (if (eq position 'between)
+                       (fanyi--task-start (car fanyi--tasks))
+                     (point-max))))
+          (narrow-to-region (pcase position
+                              ('between (point-min))
+                              ('empty end)
+                              (_ (1+ (point-min))))
+                            end))
+        (goto-char (point-max))
+        (let ((before (buffer-string)) (bounds (cons (point-min) (point-max))))
+          (fanyi-test--respond (cadr fanyi-test--requests) nil "middle")
+          (should (buffer-narrowed-p))
+          (should (equal (buffer-string) before))
+          (should (= (point-min) (car bounds)))
+          (should (= (point-max) (cdr bounds)))
+          (should (= (point) (point-max))))))))
 
 (provide 'fanyi-tests)
 ;;; fanyi-tests.el ends here

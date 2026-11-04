@@ -10,7 +10,9 @@ clickable cross-references, pronunciation buttons, folding sections and layouts
 that adapt to the window width.
 
 All four providers are enabled by default, in the configuration order below.
-Results appear as requests complete; Etymonline's browser button appears immediately.
+Results appear as requests complete and stay in `fanyi-providers` order.
+Etymonline's browser button appears immediately; earlier dictionaries are inserted
+before it when ready, preserving your reading position and selection.
 
 | Dictionary | Provider | Content |
 | --- | --- | --- |

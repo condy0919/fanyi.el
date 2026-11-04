@@ -144,7 +144,7 @@ Nil disables the timeout."
   "Query generation owned by this result buffer.")
 
 (defvar-local fanyi--tasks nil
-  "Tasks belonging to this result buffer's query.")
+  "Tasks belonging to this query, in reverse provider configuration order.")
 (defvar-local fanyi--tasks-failed 0)
 (defvar-local fanyi--tasks-completed 0)
 
@@ -221,19 +221,15 @@ Nil disables the timeout."
         (force-mode-line-update t))
     (signal (car condition) (cdr condition))))
 
-(defun fanyi--write-task (task writer)
-  "Call WRITER to replace only TASK's output, preserving other dictionaries."
+(defun fanyi--replace-task-region (task writer)
+  "Replace TASK's existing output region with WRITER's output atomically."
   (with-current-buffer (fanyi--task-result-buffer task)
     (save-excursion
       (save-restriction
         (widen)
-        (let* ((start (if (fanyi--task-start task)
-                          (marker-position (fanyi--task-start task)) (point-max)))
-               (end (if (fanyi--task-end task)
-                        (marker-position (fanyi--task-end task)) start))
-               (inhibit-read-only t)
-               (deactivate-mark deactivate-mark)
-               (mark-active mark-active))
+        (let ((start (marker-position (fanyi--task-start task)))
+              (end (marker-position (fanyi--task-end task)))
+              (inhibit-read-only t))
           (narrow-to-region start end)
           (condition-case err
               (atomic-change-group
@@ -243,17 +239,74 @@ Nil disables the timeout."
             ((error quit)
              ;; Undo restores text, but insertion-type markers need their
              ;; original boundaries before the failure can replace this area.
-             (when (fanyi--task-start task)
-               (set-marker (fanyi--task-start task) start)
-               (set-marker (fanyi--task-end task) end))
+             (set-marker (fanyi--task-start task) start)
+             (set-marker (fanyi--task-end task) end)
              (signal (car err) (cdr err))))
           (let ((inhibit-quit t))
-            (unless (fanyi--task-start task)
-              (setf (fanyi--task-start task) (make-marker)
-                    (fanyi--task-end task) (make-marker))
-              (set-marker-insertion-type (fanyi--task-start task) t))
             (set-marker (fanyi--task-start task) start)
             (set-marker (fanyi--task-end task) (point-max))))))))
+
+(defun fanyi--write-task (task writer)
+  "Write TASK's output in provider order, preserving other dictionaries."
+  (with-current-buffer (fanyi--task-result-buffer task)
+    (unless (fanyi--task-start task)
+      (save-restriction
+        (widen)
+        ;; Tasks are stored in reverse order.  The last rendered task before
+        ;; this one in that list is its nearest displayed successor.
+        (let ((following (cl-loop for other in fanyi--tasks
+                                  until (eq other task)
+                                  when (fanyi--task-start other)
+                                  collect (fanyi--task-start other))))
+          (let ((start (or (car (last following)) (point-max))))
+            (setf (fanyi--task-start task) (copy-marker start t)
+                  (fanyi--task-end task) (copy-marker start))))))
+    (let* ((end (marker-position (fanyi--task-end task)))
+           ;; A narrowed view ending before this output must not absorb it,
+           ;; including when a new dictionary is appended at the buffer end.
+           (preceding-bounds
+            (when (and (buffer-narrowed-p) (= (point-max) (fanyi--task-start task)))
+              (cons (copy-marker (point-min)) (copy-marker (point-max)))))
+           ;; Ordinary markers already follow edits elsewhere.  At the shared
+           ;; boundary, keep readers on the following text; a selection's upper
+           ;; endpoint stays before inserted text so its contents do not grow.
+           (boundary (and (< end (point-max)) (copy-marker end t)))
+           (point-follows (and boundary (= (point) end)
+                               (not (and mark-active (mark t) (< (mark) (point))))))
+           (mark-follows (and boundary mark-active (mark t)
+                              (= (mark) end) (<= (mark) (point))))
+           (lower-follows (and boundary (buffer-narrowed-p) (= (point-min) end)))
+           (windows (and boundary
+                         (mapcar (lambda (window)
+                                   (list window
+                                         (and (= (window-point window) end)
+                                              (or (not (eq window (selected-window))) point-follows))
+                                         (= (window-start window) end)))
+                                 (get-buffer-window-list (current-buffer) nil t))))
+           (deactivate-mark deactivate-mark)
+           (mark-active mark-active))
+      (unwind-protect
+          (fanyi--replace-task-region task writer)
+        (let ((inhibit-quit t))
+          ;; Empty output, including an interrupted initial render, owns no
+          ;; region.  Its coincident markers would split on the next insert.
+          (when (= (fanyi--task-start task) (fanyi--task-end task))
+            (set-marker (fanyi--task-start task) nil)
+            (set-marker (fanyi--task-end task) nil)
+            (setf (fanyi--task-start task) nil (fanyi--task-end task) nil))
+          (when preceding-bounds
+            (narrow-to-region (car preceding-bounds) (cdr preceding-bounds))
+            (set-marker (car preceding-bounds) nil)
+            (set-marker (cdr preceding-bounds) nil))
+          (when boundary
+            (when lower-follows (narrow-to-region boundary (point-max)))
+            (when point-follows (goto-char boundary))
+            (when mark-follows (set-marker (mark-marker) boundary))
+            (dolist (state windows)
+              (when (window-live-p (car state))
+                (when (nth 1 state) (set-window-point (car state) boundary))
+                (when (nth 2 state) (set-window-start (car state) boundary t))))
+            (set-marker boundary nil)))))))
 
 (defun fanyi--write-task-error (task description)
   "Replace TASK's output with DESCRIPTION and its current retry action."

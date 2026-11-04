@@ -186,5 +186,53 @@
               (should (= fanyi--tasks-completed 1))))
         (when (buffer-live-p saved) (kill-buffer saved))))))
 
+(ert-deftest fanyi-query-earlier-render-failure-preserves-following-html-and-reading-state ()
+  (dolist (failure '(error quit))
+    (fanyi-test--with-query
+      (setq fanyi-buffer-name (generate-new-buffer-name "fanyi-order-test"))
+      (let ((bad (fanyi-test--provider)) (fanyi-use-glyphs nil))
+        (setf (fanyi-provider-render bad)
+              (lambda (&rest _)
+                (fanyi-shr-insert '(p nil "PARTIAL HTML") nil)
+                (signal failure '("Interrupted first dictionary"))))
+        (setq fanyi-providers (list bad fanyi-longman-provider))
+        (fanyi-dwim "explode")
+        (fanyi-test--deliver
+         (cadr fanyi-test--requests) nil
+         (with-temp-buffer
+           (insert-file-contents (expand-file-name "longman-explode-saved.html" fanyi-test--fixture-directory))
+           (buffer-string)))
+        (with-current-buffer fanyi-buffer-name
+          (save-window-excursion
+            (set-window-buffer nil (current-buffer))
+            (button-activate (fanyi-test--longman-style-button "THESAURUS"))
+            (let* ((successor (car fanyi--tasks))
+                   (region (car fanyi-shr--regions))
+                   (section (car (fanyi-shr--region-sections region)))
+                   (html (buffer-string)))
+              (goto-char (point-min))
+              (set-mark (+ (point) 4))
+              (narrow-to-region (point-min) (1- (point-max)))
+              (let ((mark-active t) (transient-mark-mode t) (deactivate-mark nil)
+                    (selected (buffer-substring-no-properties (point) (mark)))
+                    (narrowed (buffer-string)))
+                (set-window-start nil (point-min))
+                (condition-case err
+                    (fanyi-test--respond (car fanyi-test--requests) nil "first")
+                  (quit (should (eq failure 'quit))))
+                (should (use-region-p))
+                (should (equal selected (buffer-substring-no-properties (point) (mark))))
+                (should (equal-including-properties narrowed (buffer-string)))
+                (should (= (point-min) (window-start)))
+                (widen)
+                (should (eq region (car fanyi-shr--regions)))
+                (should (= (length fanyi-shr--regions) 1))
+                (should (eq section (car (fanyi-shr--region-sections region))))
+                (should (fanyi-shr--section-closed section))
+                (should (overlay-buffer (fanyi-shr--section-overlay section)))
+                (should (equal-including-properties html
+                                                    (buffer-substring (fanyi--task-start successor)
+                                                                      (fanyi--task-end successor))))))))))))
+
 (provide 'fanyi-retry-tests)
 ;;; fanyi-retry-tests.el ends here
