@@ -103,6 +103,125 @@
                                  "https://example.invalid/sample-uk.mp3")
                                "https://example.invalid/sample-example.mp3"))))))))
 
+(defun fanyi-test--longman-audio-buttons ()
+  "Return Longman's pronunciation and example buttons in reading order."
+  (let ((position (point-min)) buttons button)
+    (while (setq button (next-button position t))
+      (when (eq (button-get button 'action) #'fanyi-play-sound)
+        (push button buttons))
+      (setq position (button-end button)))
+    (nreverse buttons)))
+
+(defun fanyi-test--longman-speaker-colors ()
+  "Return image foreground colors of the current Longman audio buttons."
+  (mapcar (lambda (button)
+            (cdr (assoc "color" (plist-get (cdr (button-get button 'display)) :color-symbols))))
+          (fanyi-test--longman-audio-buttons)))
+
+(ert-deftest fanyi-longman-pronunciation-images-use-regional-colors-and-actions ()
+  (let ((dom (fanyi-test--read-fixture "longman.html")) played)
+    ;; Match complete class tokens regardless of their order; example speakers
+    ;; with similar class names must retain their ordinary rendering.
+    (dom-set-attribute (car (dom-by-class dom "brefile")) 'class "audio brefile extra")
+    (dom-set-attribute (car (dom-by-class dom "amefile")) 'class "extra amefile audio")
+    (dom-set-attribute (car (dom-by-class dom "speaker")) 'class "speaker not-brefile amefile-extra")
+    (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) t))
+              ((symbol-function 'image-type-available-p) (lambda (type) (eq type 'xpm)))
+              ((symbol-function 'find-image)
+               (lambda (specs)
+                 (should (eq (plist-get (car specs) :type) 'xpm))
+                 (should (string-match-p "XPM" (plist-get (car specs) :data)))
+                 (cons 'image (car specs))))
+              ((symbol-function 'fanyi-play-sound) (lambda (url) (push url played))))
+      (fanyi-test--with-rendered-response fanyi-longman-provider dom
+        (let ((fanyi-use-glyphs t) (inhibit-read-only t))
+          (erase-buffer)
+          (fanyi-render-result request result))
+        (fanyi-test--fontify)
+        (should-not played)
+        (should (equal (fanyi-test--longman-speaker-colors) '("red" "blue" nil)))
+        (cl-loop for button in (fanyi-test--longman-audio-buttons)
+                 for face in '(fanyi-longman-british-speaker-face
+                               fanyi-longman-american-speaker-face
+                               fanyi-longman-example-face)
+                 for help in '("Play British pronunciation" "Play American pronunciation" "Play example")
+                 do (should (fanyi-test--longman-style-has-face-p
+                             (get-char-property (button-start button) 'face) face))
+                 do (should (equal (button-get button 'help-echo) help))
+                 do (should (button-get button 'follow-link))
+                 do (button-activate button))
+        (should (equal (nreverse played)
+                       '("https://example.invalid/sample-uk.mp3"
+                         "https://example.invalid/sample-us.mp3"
+                         "https://example.invalid/sample-example.mp3")))))))
+
+(ert-deftest fanyi-longman-pronunciation-images-fall-back-to-colored-text ()
+  (dolist (settings '((nil t t) (t nil t) (t t nil)))
+    (pcase-let ((`(,glyphs ,graphical ,backend) settings))
+      (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) graphical))
+                ((symbol-function 'image-type-available-p) (lambda (type) (and backend (eq type 'xpm))))
+                ((symbol-function 'find-image)
+                 (lambda (specs) (when backend (cons 'image (car specs))))))
+        (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman.html"
+          (let ((fanyi-use-glyphs glyphs) (inhibit-read-only t))
+            (erase-buffer)
+            (fanyi-render-result request result))
+          (fanyi-test--fontify)
+          (cl-loop for button in (fanyi-test--longman-audio-buttons)
+                   for face in '(fanyi-longman-british-speaker-face
+                                 fanyi-longman-american-speaker-face
+                                 fanyi-longman-example-face)
+                   do (should-not (button-get button 'display))
+                   do (should (equal (button-label button) "🔊"))
+                   do (should (fanyi-test--longman-style-has-face-p
+                               (get-char-property (button-start button) 'face) face)))
+          (should (equal (fanyi-test--button-data #'fanyi-play-sound)
+                         '("https://example.invalid/sample-uk.mp3"
+                           "https://example.invalid/sample-us.mp3"
+                           "https://example.invalid/sample-example.mp3"))))))))
+
+(ert-deftest fanyi-longman-pronunciation-images-refresh-colors-and-reflow-offline ()
+  (let ((faces (mapcar (lambda (face) (cons face (face-attribute face :foreground)))
+                       '(fanyi-longman-british-speaker-face fanyi-longman-american-speaker-face))))
+    (unwind-protect
+        (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) t))
+                  ((symbol-function 'image-type-available-p) (lambda (type) (eq type 'xpm)))
+                  ((symbol-function 'find-image) (lambda (specs) (cons 'image (car specs))))
+                  ((symbol-function 'url-retrieve) (lambda (&rest _) (ert-fail "Reflow must not fetch data")))
+                  ((symbol-function 'fanyi-play-sound) (lambda (&rest _) (ert-fail "Rendering must not play audio"))))
+          (fanyi-test--with-result-buffer
+            (save-window-excursion
+              (set-window-buffer nil (current-buffer))
+              (let* ((request (fanyi-make-request fanyi-longman-provider "sample"))
+                     (result (fanyi-parse-response request (fanyi-test--read-fixture "longman.html")))
+                     (fanyi-use-glyphs t) (shr-width 80) (inhibit-read-only t))
+                (fanyi-render-result request result)
+                (let ((render (symbol-function 'fanyi-shr--render))
+                      (audio (fanyi-test--button-data #'fanyi-play-sound))
+                      (queries (fanyi-test--button-data #'fanyi-longman--query))
+                      (renders 0))
+                  (cl-letf (((symbol-function 'fanyi-shr--render)
+                             (lambda (&rest args) (cl-incf renders) (apply render args))))
+                    (run-hooks 'post-command-hook)
+                    (should (= renders 0))
+                    (set-face-attribute 'fanyi-longman-british-speaker-face nil :foreground "#cc3344")
+                    (run-hooks 'post-command-hook)
+                    (should (= renders 1))
+                    (set-face-attribute 'fanyi-longman-american-speaker-face nil :foreground "#2255cc")
+                    (run-hooks 'post-command-hook)
+                    (should (= renders 2))
+                    (setq shr-width 30)
+                    (fanyi-shr-reflow)
+                    (should (= renders 3))
+                    (fanyi-test--fontify)
+                    (should (equal (fanyi-test--longman-speaker-colors) '("#cc3344" "#2255cc" nil)))
+                    (should (equal (fanyi-test--button-data #'fanyi-play-sound) audio))
+                    (should (equal (fanyi-test--button-data #'fanyi-longman--query) queries))
+                    (run-hooks 'post-command-hook)
+                    (should (= renders 3))))))))
+      (dolist (state faces)
+        (set-face-attribute (car state) nil :foreground (cdr state))))))
+
 (ert-deftest fanyi-longman-examples-without-audio-remain-readable ()
   (let ((dom (fanyi-test--read-fixture "longman.html")))
     (dom-remove-node dom (car (dom-by-class dom "speaker")))

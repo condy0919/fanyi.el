@@ -86,30 +86,6 @@ detail is expanded instead.  Existing reader folds survive reflow."
   "fanyi-haici-distribution-chart"
   "The default name of Haici distribution chart buffer.")
 
-(defconst fanyi-haici-speaker-xpm
-  "\
-/* XPM */
-static char* speaker_xpm[] = {
-\"13 14 3 1\",
-\" 	c None\",
-\".	c #000000\",
-\"+	s color\",
-\"        +++  \",
-\"       ++++  \",
-\"      +++++ +\",
-\"     +++++++ \",
-\"     ++++++  \",
-\"++++ ++++++  \",
-\"++++ ++++++++\",
-\"++++ ++++++  \",
-\"++++ ++++++  \",
-\"     ++++++  \",
-\"     +++++++ \",
-\"      +++++ +\",
-\"       ++++  \",
-\"        +++  \"};"
-  "The speaker xpm image.")
-
 ;; Silence compile warning.
 (declare-function fanyi-dwim "fanyi")
 
@@ -629,12 +605,7 @@ Children use the same word/url attributes as `fanyi-haici--shr-entries'."
     (insert " ")
     (insert-text-button "🔊"
                         'type 'fanyi-haici-button
-                        'display (when (fanyi-display-glyphs-p)
-                                   (find-image `((:type xpm
-                                                        :data ,fanyi-haici-speaker-xpm
-                                                        :ascent center
-                                                        :color-symbols
-                                                        (("color" . ,(face-attribute face :foreground nil 'default)))))))
+                        'display (fanyi-speaker-image face)
                         'action #'fanyi-play-sound
                         'button-data (format sound-url audio)
                         'face face

@@ -55,6 +55,16 @@
   "Face used for examples."
   :group 'fanyi)
 
+(defface fanyi-longman-british-speaker-face
+  '((t :foreground "red"))
+  "Face used for British pronunciation speakers."
+  :group 'fanyi)
+
+(defface fanyi-longman-american-speaker-face
+  '((t :foreground "blue"))
+  "Face used for American pronunciation speakers."
+  :group 'fanyi)
+
 (defface fanyi-longman-svg-asset-face
   '((((background light)) :foreground "white" :background "#f1d600")
     (((background dark)) :foreground "black" :background "#a6a7bd"))
@@ -723,7 +733,9 @@ Keep the underlying text available for searching and copying."
 (defun fanyi-longman--shr-audio (dom)
   "Insert a pronunciation button for DOM without starting playback."
   (shr-insert " ")
-  (let ((start (point)))
+  (let ((start (point))
+        (speaker-face (cond ((fanyi-longman--class-p dom "brefile") 'fanyi-longman-british-speaker-face)
+                            ((fanyi-longman--class-p dom "amefile") 'fanyi-longman-american-speaker-face))))
     ;; SHR must see the first character to mark this line for indentation
     ;; and wrapping, including examples that begin with a speaker button.
     (shr-insert "🔊")
@@ -731,9 +743,8 @@ Keep the underlying text available for searching and copying."
                       'type 'fanyi-longman-button
                       'action #'fanyi-play-sound
                       'button-data (dom-attr dom 'src)
-                      'face (cond ((fanyi-longman--class-p dom "brefile") 'fanyi-female-speaker-face)
-                                  ((fanyi-longman--class-p dom "amefile") 'fanyi-male-speaker-face)
-                                  (t 'fanyi-longman-example-face))
+                      'face (or speaker-face 'fanyi-longman-example-face)
+                      'display (and speaker-face (fanyi-speaker-image speaker-face))
                       'help-echo (cond ((fanyi-longman--class-p dom "brefile") "Play British pronunciation")
                                        ((fanyi-longman--class-p dom "amefile") "Play American pronunciation")
                                        (t "Play example"))
@@ -798,10 +809,12 @@ Keep the underlying text available for searching and copying."
   "Return the settings used to render Longman labels and examples in WINDOW."
   (let ((frame (window-frame window)))
     (list fanyi-use-glyphs fanyi-longman-svg-border-radius fanyi-longman-example-indent
-          (display-images-p frame) (image-type-available-p 'svg)
+          (display-images-p frame) (image-type-available-p 'svg) (image-type-available-p 'xpm)
           (window-font-width window) (window-font-height window)
           (face-attribute 'default :family frame t)
           (face-attribute 'fanyi-longman-body-face :background frame 'default)
+          (face-attribute 'fanyi-longman-british-speaker-face :foreground frame 'default)
+          (face-attribute 'fanyi-longman-american-speaker-face :foreground frame 'default)
           (mapcar (lambda (face)
                     (mapcar (lambda (attribute) (face-attribute face attribute frame t))
                             '(:foreground :background :weight :box)))

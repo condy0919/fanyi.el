@@ -83,9 +83,40 @@ handled directly by `fanyi-sound-player-support-https'."
   "Face used for male speaker button."
   :group 'fanyi)
 
+(defconst fanyi-speaker-xpm
+  "\
+/* XPM */
+static char* speaker_xpm[] = {
+\"13 14 3 1\",
+\" 	c None\",
+\".	c #000000\",
+\"+	s color\",
+\"        +++  \",
+\"       ++++  \",
+\"      +++++ +\",
+\"     +++++++ \",
+\"     ++++++  \",
+\"++++ ++++++  \",
+\"++++ ++++++++\",
+\"++++ ++++++  \",
+\"++++ ++++++  \",
+\"     ++++++  \",
+\"     +++++++ \",
+\"      +++++ +\",
+\"       ++++  \",
+\"        +++  \"};"
+  "Shared speaker image with a symbolic foreground color.")
+
 (defun fanyi-display-glyphs-p ()
   "Can we use glyphs instead of plain text?"
   (and fanyi-use-glyphs (display-images-p)))
+
+(defun fanyi-speaker-image (face)
+  "Return the shared speaker image colored with FACE, or nil for text display."
+  (when (fanyi-display-glyphs-p)
+    (find-image `((:type xpm :data ,fanyi-speaker-xpm :ascent center
+                         :color-symbols
+                         (("color" . ,(face-attribute face :foreground nil 'default))))))))
 
 (defun fanyi--sound-player-options (player)
   "Get the necessary options for PLAYER."

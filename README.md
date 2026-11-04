@@ -179,10 +179,11 @@ another window. Its default is `nil`.
 ### Longman
 
 Definitions and examples retain their structure, parts of speech, grammar labels
-and emphasis. Word family, Origin, frequency markers such as S2/W1, sense
-signposts and SYN/OPP labels use SVG badges when supported. Register notes keep
-their own heading and explanation. Thesaurus and collocation sections start
-expanded and can be folded individually.
+and emphasis. British pronunciation uses a red speaker icon, and American
+pronunciation uses a blue one. Word family, Origin, frequency markers such as
+S2/W1, sense signposts and SYN/OPP labels use SVG badges when supported. Register
+notes keep their own heading and explanation. Thesaurus and collocation sections
+start expanded and can be folded individually.
 
 Dictionary links query the word or phrase inside Emacs while retaining its
 original Longman URL. Related-topic links open in EWW. Links to anchors in the
