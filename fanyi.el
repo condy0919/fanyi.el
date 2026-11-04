@@ -788,10 +788,9 @@ Example audio is never selected.  Point and folding remain unchanged."
                        (<= (fanyi--task-start task) position)
                        (< position (fanyi--task-end task))))
                 fanyi--tasks)))
-    (list index
-          (fanyi-shr--text-offset
-           (if index (fanyi--task-start (nth index fanyi--tasks)) (point-min)) position)
-          (not (memq (char-after position) '(?\s ?\t ?\r ?\n))))))
+    (cons index (fanyi-shr--text-anchor
+                 (if index (fanyi--task-start (nth index fanyi--tasks)) (point-min))
+                 position))))
 
 (defun fanyi--reader-position (anchor)
   "Resolve a saved reader ANCHOR in the current widened result."
@@ -799,7 +798,7 @@ Example audio is never selected.  Point and folding remain unchanged."
     (fanyi-shr--text-position
      (or (and task (fanyi--task-start task)) (point-min))
      (or (and task (fanyi--task-end task)) (point-max))
-     (nth 1 anchor) (nth 2 anchor))))
+     (nth 1 anchor) (nth 2 anchor) (nth 3 anchor))))
 
 (defun fanyi--reader-sections (task)
   "Return TASK's local folding sections in a stable region order."

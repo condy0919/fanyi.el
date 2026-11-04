@@ -339,10 +339,24 @@ Use the buffer's default font and character-based layout, with SHR's colors."
         (cl-incf count (skip-chars-forward "^ \t\r\n" position)))
       count)))
 
-(defun fanyi-shr--text-position (start end offset content-p)
+(defun fanyi-shr--text-anchor (start position)
+  "Describe POSITION after START using text and whitespace offsets.
+The non-whitespace character count survives wrapping changes.  Keep the
+offset within the whitespace run as well, so unchanged layout restores
+positions inside spaces, indentation and blank lines exactly."
+  (list (fanyi-shr--text-offset start position)
+        (not (memq (char-after position) '(?\s ?\t ?\r ?\n)))
+        (save-excursion
+          (goto-char position)
+          (skip-chars-backward " \t\r\n" start)
+          (- position (point)))))
+
+(defun fanyi-shr--text-position (start end offset content-p &optional whitespace-offset)
   "Return the position at non-whitespace OFFSET between START and END.
 When CONTENT-P is non-nil, advance to the next non-whitespace character;
-otherwise stay at the end of the preceding word."
+otherwise move WHITESPACE-OFFSET characters into the following whitespace
+run, clamped to its new length.  A nil WHITESPACE-OFFSET stays at the end
+of the preceding word."
   (save-excursion
     (goto-char start)
     (while (> offset 0)
@@ -355,7 +369,12 @@ otherwise stay at the end of the preceding word."
             ;; Keep the last text boundary if the new document is shorter.
             (goto-char before)
             (setq offset 0)))))
-    (when content-p (skip-chars-forward " \t\r\n" end))
+    (cond
+     (content-p (skip-chars-forward " \t\r\n" end))
+     (whitespace-offset
+      (let ((begin (point)))
+        (skip-chars-forward " \t\r\n" end)
+        (goto-char (min (point) (+ begin whitespace-offset))))))
     (point)))
 
 (defun fanyi-shr--anchor (position)
@@ -367,9 +386,7 @@ otherwise stay at the end of the preceding word."
                  fanyi-shr--regions)))
     (if (not region)
         (copy-marker position t)
-      (list region
-            (fanyi-shr--text-offset (fanyi-shr--region-start region) position)
-            (not (memq (char-after position) '(?\s ?\t ?\r ?\n)))))))
+      (cons region (fanyi-shr--text-anchor (fanyi-shr--region-start region) position)))))
 
 (defun fanyi-shr--position (anchor)
   "Restore the position described by ANCHOR."
@@ -377,7 +394,7 @@ otherwise stay at the end of the preceding word."
       (prog1 (marker-position anchor) (set-marker anchor nil))
     (fanyi-shr--text-position (fanyi-shr--region-start (car anchor))
                               (fanyi-shr--region-end (car anchor))
-                              (cadr anchor) (nth 2 anchor))))
+                              (cadr anchor) (nth 2 anchor) (nth 3 anchor))))
 
 (defun fanyi-shr--replace (region window layout)
   "Re-render REGION for WINDOW and remember LAYOUT."
