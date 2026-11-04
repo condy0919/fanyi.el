@@ -236,9 +236,9 @@ retain Fanyi's requested presentation.  This is not a CSS interpreter.")
 (define-button-type 'fanyi-longman-button
   'face nil)
 
-(defun fanyi-longman--label-color (face attribute &optional frame)
-  "Return FACE's color ATTRIBUTE on FRAME, using the dictionary text fallback."
-  (face-attribute face attribute frame '(fanyi-longman-body-face default)))
+(defun fanyi-longman--label-color (face attribute &optional context)
+  "Return FACE's color ATTRIBUTE in CONTEXT, using the dictionary text fallback."
+  (fanyi-face-attribute face attribute context '(fanyi-longman-body-face default)))
 
 (defun fanyi-longman-svg-tag-make (text face)
   "Create a rounded SVG label displaying TEXT with FACE.
@@ -247,7 +247,7 @@ A boxed FACE produces a transparent badge with a one-pixel outline."
          (padding (window-font-width))
          (width (* padding (+ (string-width text) 2)))
          (foreground (fanyi-longman--label-color face :foreground))
-         (box (face-attribute face :box nil t))
+         (box (fanyi-face-attribute face :box))
          (border (and box (not (eq box 'unspecified))
                       (or (and (stringp box) box)
                           (and (listp box) (plist-get box :color))
@@ -259,9 +259,9 @@ A boxed FACE produces a transparent badge with a one-pixel outline."
                    :fill (if border "none" (fanyi-longman--label-color face :background))
                    :stroke (or border "none") :stroke-width (if border 1 0))
     (svg-text svg text :x padding :y (* height 0.75)
-              :font-family (face-attribute 'default :family nil t)
+              :font-family (fanyi-face-attribute 'default :family)
               :font-size (* height 0.75)
-              :font-weight (if (eq (face-attribute face :weight nil t) 'bold) "bold" "normal")
+              :font-weight (if (eq (fanyi-face-attribute face :weight) 'bold) "bold" "normal")
               :fill foreground)
     (svg-image svg :ascent 'center)))
 
@@ -832,15 +832,15 @@ Keep the underlying text available for searching and copying."
     (list fanyi-use-glyphs fanyi-longman-svg-border-radius fanyi-longman-example-indent
           (display-images-p frame) (image-type-available-p 'svg) (image-type-available-p 'xpm)
           (window-font-width window) (window-font-height window)
-          (face-attribute 'default :family frame t)
-          (face-attribute 'fanyi-longman-body-face :background frame 'default)
-          (face-attribute 'fanyi-longman-british-speaker-face :foreground frame 'default)
-          (face-attribute 'fanyi-longman-american-speaker-face :foreground frame 'default)
+          (fanyi-face-attribute 'default :family window)
+          (fanyi-face-attribute 'fanyi-longman-body-face :background window 'default)
+          (fanyi-face-attribute 'fanyi-longman-british-speaker-face :foreground window 'default)
+          (fanyi-face-attribute 'fanyi-longman-american-speaker-face :foreground window 'default)
           (mapcar (lambda (face)
                     (mapcar (lambda (attribute)
                               (if (memq attribute '(:foreground :background))
-                                  (fanyi-longman--label-color face attribute frame)
-                                (face-attribute face attribute frame t)))
+                                  (fanyi-longman--label-color face attribute window)
+                                (fanyi-face-attribute face attribute window)))
                             '(:foreground :background :weight :box)))
                   '(fanyi-longman-frequency-face fanyi-longman-svg-asset-face
                                                  fanyi-longman-signpost-face

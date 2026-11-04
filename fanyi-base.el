@@ -29,6 +29,7 @@
 
 (require 'url)
 (require 'cl-lib)
+(require 'face-remap)
 
 ;; Silence compile warning.
 (defvar url-http-end-of-headers)
@@ -122,12 +123,47 @@ static char* speaker_xpm[] = {
   "Can we use glyphs instead of plain text?"
   (and fanyi-use-glyphs (display-images-p)))
 
+(defun fanyi--filter-face (spec window)
+  "Resolve window-filtered face SPEC for WINDOW without changing it."
+  (cond
+   ((atom spec) spec)
+   ((eq (car spec) :filtered)
+    (pcase (cadr spec)
+      (`(:window ,parameter ,value)
+       (when-let* ((entry (assq parameter (window-parameters window)))
+                   (_ (eq (cdr entry) value)))
+         (fanyi--filter-face (nth 2 spec) window)))))
+   (t (cons (fanyi--filter-face (car spec) window)
+            (fanyi--filter-face (cdr spec) window)))))
+
+(defun fanyi-face-attribute (face attribute &optional context fallback)
+  "Return FACE's effective ATTRIBUTE in the current buffer.
+CONTEXT is a window or frame, defaulting to the selected window.  FALLBACK
+is an optional lower-priority face or list of faces.  Include buffer-local
+remapping, inherited faces and window filters, as for displayed text."
+  (let* ((window (cond ((windowp context) context)
+                       ((framep context) (frame-selected-window context))
+                       (t (selected-window))))
+         (frame (window-frame window)))
+    (if (null face-remapping-alist)
+        (face-attribute face attribute frame (or fallback t))
+      (let ((buffer (current-buffer))
+            (index (cl-position attribute internal-lisp-face-attributes)))
+        (unless index (error "Invalid face attribute: %S" attribute))
+        ;; Use the same native merger and attribute map as face-remap.el.
+        ;; It handles relative/base precedence, inheritance and named cycles.
+        ;; Its Lisp entry point has no window argument, so resolve filters first.
+        (with-selected-frame frame
+          (with-current-buffer buffer
+            (let ((face-remapping-alist (fanyi--filter-face face-remapping-alist window)))
+              (aref (face-attributes-as-vector (list face fallback)) index))))))))
+
 (defun fanyi-speaker-image (face)
   "Return the shared speaker image colored with FACE, or nil for text display."
   (when (fanyi-display-glyphs-p)
     (find-image `((:type xpm :data ,fanyi-speaker-xpm :ascent center
                          :color-symbols
-                         (("color" . ,(face-attribute face :foreground nil 'default))))))))
+                         (("color" . ,(fanyi-face-attribute face :foreground nil 'default))))))))
 
 (defun fanyi--sound-player-options (player)
   "Get the necessary options for PLAYER."
