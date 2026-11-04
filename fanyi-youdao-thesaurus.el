@@ -62,7 +62,9 @@ places explanations below their words."
   :group 'fanyi)
 
 (defcustom fanyi-youdao-thesaurus-indent 2
-  "Indentation of explanations in stacked entries."
+  "Preferred indentation of explanations in stacked entries.
+Reduce it in narrow windows to leave at least eight columns for text,
+or the full width when fewer than eight columns are available."
   :type 'natnum
   :group 'fanyi)
 
@@ -149,23 +151,19 @@ Keep semicolons within one meaning and unfamiliar labels as ordinary text."
 
 (defun fanyi-youdao-thesaurus--fill-explanation (text width)
   "Fill TEXT to WIDTH columns, keeping persistent part-of-speech faces."
-  (with-temp-buffer
-    (insert (if (equal text "NO EXPLANATION")
-                (propertize "暂无释义" 'face 'shadow)
-              (fanyi-youdao-thesaurus--propertize-pos text)))
-    (let ((fill-column (max 1 width))
-          (fill-prefix nil)
-          (adaptive-fill-mode nil)
-          (sentence-end-double-space nil))
-      (fill-region (point-min) (point-max)))
-    (buffer-string)))
+  (fanyi-youdao-thesaurus--fill-text
+   (if (equal text "NO EXPLANATION")
+       (propertize "暂无释义" 'face 'shadow)
+     (fanyi-youdao-thesaurus--propertize-pos text))
+   width))
 
-(defun fanyi-youdao-thesaurus--fill-word (word width)
-  "Wrap WORD to WIDTH columns, including words without breakable spaces.
-Keep all non-whitespace characters so cached reflow can restore text anchors."
+(defun fanyi-youdao-thesaurus--fill-text (text width)
+  "Wrap TEXT to WIDTH columns, including words without breakable spaces.
+Keep text properties and all non-whitespace characters so semantic faces
+and cached reflow anchors survive line wrapping."
   (let ((width (max 1 width)) lines)
     (with-temp-buffer
-      (insert word)
+      (insert text)
       (let ((fill-column width)
             (fill-prefix nil)
             (adaptive-fill-mode nil)
@@ -184,18 +182,19 @@ Keep all non-whitespace characters so cached reflow can restore text anchors."
 (defun fanyi-youdao-thesaurus--shr-entries (dom)
   "Render DOM's entries as aligned columns or stacked word blocks."
   (let* ((entries (dom-children dom))
-         (width (min shr-internal-width
-                     (/ (window-body-width nil t) (max 1 (window-font-width)))))
+         (width (max 1 (min shr-internal-width
+                            (/ (window-body-width nil t) (max 1 (window-font-width))))))
          (column (+ 2 (apply #'max 0
                              (mapcar (lambda (entry) (string-width (dom-attr entry 'word))) entries))))
          (columns (and (eq fanyi-youdao-thesaurus-layout 'columns)
                        (>= width (+ column 32))))
-         (indent (if columns column fanyi-youdao-thesaurus-indent))
+         (indent (if columns column
+                   (min fanyi-youdao-thesaurus-indent (max 0 (- width 8)))))
          (padding (make-string indent ?\s)))
     (dolist (entry entries)
       (let ((word (dom-attr entry 'word))
             (start (point)))
-        (insert (if columns word (fanyi-youdao-thesaurus--fill-word word width)))
+        (insert (if columns word (fanyi-youdao-thesaurus--fill-text word width)))
         (make-text-button start (point) :type 'fanyi-youdao-thesaurus-button
                           'button-data word
                           'help-echo (concat "Query " word))

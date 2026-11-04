@@ -170,5 +170,84 @@
                 (should (<= (fanyi-shr-test--max-line-width) width))
                 (should (equal (fanyi-test--button-data #'fanyi-dwim) (list word)))))))))))
 
+(ert-deftest fanyi-youdao-ui-bounds-long-explanations-and-large-indentation ()
+  (let* ((long-word "antidisestablishmentarianismabcdefghijklmnopqrstuvwxyz")
+         (chinese "一个需要在窄窗口中完整换行并保持词性高亮的中文释义。")
+         (entries `(("word" . ,(concat "n. " long-word "；vt. " chinese))
+                    ("missing" . "NO EXPLANATION")))
+         (before (copy-tree entries t)))
+    (dolist (layout '(columns stacked))
+      (dolist (width '(24 48))
+        (dolist (indent '(2 30))
+          (ert-info ((format "Layout %s, width %s, indentation %s" layout width indent))
+            (fanyi-test--with-result-buffer
+              (let ((fanyi-youdao-thesaurus-layout layout)
+                    (fanyi-youdao-thesaurus-indent indent)
+                    (shr-width width) (inhibit-read-only t))
+                (fanyi-youdao-thesaurus-render entries nil)
+                (fanyi-test--fontify)
+                (should (equal entries before))
+                (should (<= (fanyi-shr-test--max-line-width) width))
+                (should (equal (fanyi-test--button-data #'fanyi-dwim) '("word" "missing")))
+                (let ((region (car fanyi-shr--regions)))
+                  (should (equal
+                           (replace-regexp-in-string
+                            "[ \t\r\n]+" ""
+                            (buffer-substring-no-properties
+                             (fanyi-shr--region-start region) (fanyi-shr--region-end region)))
+                           (concat "wordn." long-word "vt." chinese "missing暂无释义"))))
+                (goto-char (point-min))
+                (dolist (label '("n." "vt."))
+                  (search-forward label)
+                  (should (eq (get-char-property (match-beginning 0) 'face) 'fanyi-pos-face)))
+                (search-forward "暂无释义")
+                (should (eq (get-char-property (match-beginning 0) 'face) 'shadow))
+                (if (and (eq layout 'columns) (= width 48))
+                    (should (string-match-p "^word[ ]+n\\." (buffer-string)))
+                  (should (string-match-p "^word\n[ ]+n\\." (buffer-string))))))))))))
+
+(ert-deftest fanyi-youdao-ui-reflows-explanations-with-faces-and-selection ()
+  (fanyi-test--with-result-buffer
+    (save-window-excursion
+      (set-window-buffer nil (current-buffer))
+      (let ((fanyi-youdao-thesaurus-layout 'columns)
+            (fanyi-youdao-thesaurus-indent 2)
+            (shr-width 48) (inhibit-read-only t))
+        (fanyi-youdao-thesaurus-render
+         '(("word" . "n. antidisestablishmentarianismabcdefghijklmnopqrstuvwxyz；vt. 中文释义")
+           ("missing" . "NO EXPLANATION")) nil)
+        (goto-char (point-min))
+        (search-forward "establishment")
+        (set-mark (match-beginning 0))
+        (let* ((region (car fanyi-shr--regions))
+               (dom (fanyi-shr--region-dom region))
+               (content (replace-regexp-in-string "[ \t\r\n]+" "" (buffer-string)))
+               (transient-mark-mode t) (mark-active t) (deactivate-mark nil))
+          (dolist (settings '((24 2 stacked) (24 30 stacked) (48 30 columns)
+                              (2 30 stacked) (48 2 columns)))
+            (pcase-let ((`(,shr-width ,fanyi-youdao-thesaurus-indent ,fanyi-youdao-thesaurus-layout)
+                         settings))
+              (fanyi-shr-reflow)
+              (fanyi-test--fontify)
+              (should (eq dom (fanyi-shr--region-dom region)))
+              (should (use-region-p))
+              (should (equal (replace-regexp-in-string
+                              "[ \t\r\n]+" "" (buffer-substring-no-properties (mark) (point)))
+                             "establishment"))
+              (should (equal (replace-regexp-in-string "[ \t\r\n]+" "" (buffer-string)) content))
+              (should (equal (fanyi-test--button-data #'fanyi-dwim) '("word" "missing")))
+              (save-restriction
+                (narrow-to-region (fanyi-shr--region-start region) (fanyi-shr--region-end region))
+                (should (<= (fanyi-shr-test--max-line-width) shr-width))
+                ;; Labels and the fallback may themselves wrap in two columns.
+                (dolist (expected '((fanyi-pos-face . "n.vt.") (shadow . "暂无释义")))
+                  (should
+                   (equal (apply #'string
+                                 (cl-loop for position from (point-min) below (point-max)
+                                          when (and (eq (get-text-property position 'font-lock-face) (car expected))
+                                                    (not (memq (char-after position) '(?\s ?\t ?\r ?\n))))
+                                          collect (char-after position)))
+                          (cdr expected))))))))))))
+
 (provide 'fanyi-youdao-ui-tests)
 ;;; fanyi-youdao-ui-tests.el ends here
