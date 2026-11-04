@@ -380,7 +380,8 @@ Allow subsequent text on the line when PREFIX is non-nil."
         (fanyi-longman-svg-border-radius 7)
         (fanyi-longman-example-indent 2))
     (unwind-protect
-        (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) t))
+        (cl-letf (((symbol-function 'create-image) #'fanyi-test--create-svg-image)
+                  ((symbol-function 'display-images-p) (lambda (&rest _) t))
                   ((symbol-function 'image-type-available-p) (lambda (type) (eq type 'svg))))
           (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-sun-saved.html"
             (let ((fanyi-use-glyphs t))

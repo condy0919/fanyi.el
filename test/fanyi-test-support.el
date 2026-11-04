@@ -12,6 +12,15 @@
 (require 'fanyi)
 (require 'fanyi-shr)
 
+(defun fanyi-test--create-svg-image (data type data-p &rest properties)
+  "Build an SVG image spec without requiring native image support.
+Use only in tests simulating SVG availability.  Keep the real SVG generation
+and XML serialization before `create-image' receives DATA and PROPERTIES."
+  (should (eq type 'svg))
+  (should data-p)
+  (should (stringp data))
+  `(image :type svg :data ,data ,@properties))
+
 (defun fanyi-test--parse (response _request)
   "Return the definition from the test RESPONSE."
   (gethash "definition" response))

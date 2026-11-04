@@ -236,7 +236,8 @@
         (should (= (how-many "\\brocket\\b" (point-min) (point-max)) 1))))))
 
 (ert-deftest fanyi-longman-association-fallback-labels-use-svg ()
-  (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) t))
+  (cl-letf (((symbol-function 'create-image) #'fanyi-test--create-svg-image)
+            ((symbol-function 'display-images-p) (lambda (&rest _) t))
             ((symbol-function 'image-type-available-p) (lambda (type) (eq type 'svg))))
     (dolist (case '(("SYN" "rocket") ("SYN" "SYN rocket")
                     ("OPP" "OPP shrink") ("OPP" "<span class='neutral'>OPP</span> shrink")))

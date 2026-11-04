@@ -163,7 +163,8 @@
   ;; Cover enabled SVG, the user switch, missing SVG support, and a text display.
   (dolist (settings '((t t t) (nil t t) (t nil t) (t t nil)))
     (ert-info ((format "Glyphs, SVG support, image display: %S" settings))
-      (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) (nth 2 settings)))
+      (cl-letf (((symbol-function 'create-image) #'fanyi-test--create-svg-image)
+                ((symbol-function 'display-images-p) (lambda (&rest _) (nth 2 settings)))
                 ((symbol-function 'image-type-available-p)
                  (lambda (type) (and (nth 1 settings) (eq type 'svg)))))
         (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-explode-saved.html"
@@ -175,7 +176,8 @@
 
 (ert-deftest fanyi-longman-explode-synonym-badges-and-local-query-buttons ()
   (let ((shr-width 1000))
-    (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) t))
+    (cl-letf (((symbol-function 'create-image) #'fanyi-test--create-svg-image)
+              ((symbol-function 'display-images-p) (lambda (&rest _) t))
               ((symbol-function 'image-type-available-p) (lambda (type) (eq type 'svg))))
       (fanyi-test--with-rendered-fixture fanyi-longman-provider "longman-explode-saved.html"
         (let ((fanyi-use-glyphs t))
@@ -268,7 +270,8 @@
         (default-background (face-attribute 'default :background))
         (shr-width 74) queries)
     (unwind-protect
-        (cl-letf (((symbol-function 'display-images-p) (lambda (&rest _) t))
+        (cl-letf (((symbol-function 'create-image) #'fanyi-test--create-svg-image)
+                  ((symbol-function 'display-images-p) (lambda (&rest _) t))
                   ((symbol-function 'image-type-available-p) (lambda (type) (eq type 'svg)))
                   ((symbol-function 'url-retrieve)
                    (lambda (&rest _) (ert-fail "Rendering must stay offline")))
