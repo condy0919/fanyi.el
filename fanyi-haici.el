@@ -627,20 +627,20 @@ Children use the same word/url attributes as `fanyi-haici--shr-entries'."
   "Insert an AUDIO button using SOUND-URL, FACE and DESCRIPTION when available."
   (when (fanyi-haici--present-p audio)
     (insert " ")
-    (insert-button "🔊"
-                   'type 'fanyi-haici-button
-                   'display (when (fanyi-display-glyphs-p)
-                              (find-image `((:type xpm
-                                                   :data ,fanyi-haici-speaker-xpm
-                                                   :ascent center
-                                                   :color-symbols
-                                                   (("color" . ,(face-attribute face :foreground)))))))
-                   'action #'fanyi-play-sound
-                   'button-data (format sound-url audio)
-                   'face face
-                   'font-lock-face face
-                   'follow-link t
-                   'help-echo description)))
+    (insert-text-button "🔊"
+                        'type 'fanyi-haici-button
+                        'display (when (fanyi-display-glyphs-p)
+                                   (find-image `((:type xpm
+                                                        :data ,fanyi-haici-speaker-xpm
+                                                        :ascent center
+                                                        :color-symbols
+                                                        (("color" . ,(face-attribute face :foreground)))))))
+                        'action #'fanyi-play-sound
+                        'button-data (format sound-url audio)
+                        'face face
+                        'font-lock-face face
+                        'follow-link t
+                        'help-echo description)))
 
 (defun fanyi-haici--show-distribution (distribution)
   "Display DISTRIBUTION, honoring the chart window preference."
