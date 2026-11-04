@@ -58,8 +58,9 @@ the front. The normalized query keeps its original case in the buffer and
 history, while requests use lowercase text.
 
 Results open in `*fanyi*`. The header shows the query followed by the counts of
-pending, completed and failed dictionaries. Each buffer retains its own query
-and request state, so you can rename a result buffer to keep an earlier lookup.
+pending, completed and failed dictionaries, with labels and hover hints. It
+changes from `Translating` to `Ready` when no requests remain. Each buffer retains
+its own query and request state, so you can rename it to keep an earlier lookup.
 Starting another query cancels pending requests from the previous lookup.
 
 ### Result-buffer keys
@@ -68,9 +69,15 @@ Starting another query cancels pending requests from the previous lookup.
 | --- | --- |
 | `s` | Start another query |
 | `h` | Look up a word from history |
+| `l` / `r` | Go back/forward through cached lookups |
+| `g` | Refresh the current query using the current provider configuration |
+| `n` / `p` | Jump to the next/previous visible heading |
+| `v` / `V` | Play British/American headword pronunciation, preferring the current dictionary |
 | `w` | Copy the current query |
 | `q` | Quit the result window |
 | `TAB` / `S-TAB` | Move to the next/previous visible button, wrapping at the ends |
+| `C-c C-n` / `C-c C-p` | Move between buttons even while on an outline heading |
+| `C-c TAB` | Toggle either an outline heading or a local folding section |
 | `RET` or mouse click on a button | Follow a word, play audio, toggle a section or activate another action |
 
 On outline headings beginning with `#` or `##`, `TAB` cycles that section and
@@ -79,13 +86,23 @@ collocation headings are separate folding buttons: navigate to them with `TAB`,
 then use `RET` to toggle their contents. Navigation skips buttons inside folded
 sections; searching can reveal folded content.
 
+Back/forward restores parsed results, reading position, selections, narrowing
+and folds without fetching completed dictionaries again. Only requests left
+unfinished are restarted, using their original settings. Each result buffer
+keeps at most `fanyi-navigation-history-length` cached pages (default `20`),
+shared between its back and forward stacks; set it to `0` to disable caching.
+A new query clears the forward stack. `g` refreshes the current page without
+adding a duplicate history entry. These in-memory pages disappear with the
+buffer; `h` still uses the separate query-word history and performs a fresh lookup.
+
 ### Imenu, bookmarks and Org links
 
 - `M-x imenu` jumps to a dictionary heading.
 - `C-x r m` creates a bookmark for the current query. Following it repeats the
   lookup, even if you rename the bookmark.
-- Load the optional Org integration with `(require 'ol-fanyi)`. Use
-  `org-store-link` in a result buffer and `org-insert-link` in an Org buffer.
+- Package autoloads register the optional Org integration when Org loads.
+  If loading the source directly without package autoloads, use `(require 'ol-fanyi)`.
+  Use `org-store-link` in a result buffer and `org-insert-link` in an Org buffer.
   Following `[[fanyi:happy][happy]]` with `C-c C-o` starts a lookup.
 
 ## Configuration
@@ -110,6 +127,7 @@ For English definitions and a browser link to etymology, use
 | `fanyi-auto-select` | `t` | Select the result window; use `nil` to keep focus in the current window |
 | `fanyi-request-timeout` | `15` | Timeout in seconds for each dictionary request; `nil` disables it |
 | `fanyi-headline-max-length` | `30` | Maximum query length displayed in the header |
+| `fanyi-navigation-history-length` | `20` | Maximum cached past and future lookups per buffer |
 | `fanyi-use-glyphs` | `t` | Use image-based labels and icons where supported |
 | `fanyi-verbose` | `nil` | Report errors in the echo area |
 | `fanyi-log` | `nil` | Record diagnostic messages in `*fanyi-log*` |
@@ -138,6 +156,11 @@ When several windows show the same buffer, the selected one determines its
 layout, or the previous rendering window if none is selected. Use
 `C-u M-x fanyi-shr-reflow` to force a refresh. Rendering does not fetch page
 scripts, images or other remote assets.
+
+Style checks run after commands in the result buffer, on window changes and
+when themes are enabled or disabled. Editing an unrelated buffer does not scan
+dictionary styles. After changing individual faces or options elsewhere,
+return to the result window or run `fanyi-shr-reflow` to update its display.
 
 If automatic reflow fails, the previous content remains available. Fanyi retries
 when the layout or rendering settings change, or when you force a refresh,
@@ -224,12 +247,18 @@ to stacked entries in narrow windows. Missing explanations appear as subdued
 
 Etymonline displays an `Open in browser` button without making an HTTP request
 or parsing the page. Activating it opens the entry in an external browser.
+It deliberately uses `browse-url-default-browser` so an EWW preference does not
+send the Cloudflare-protected page back into Emacs.
 
 ## Pronunciation
 
-Fanyi detects `mpv`, then `mplayer`, then `mpg123`. You can set
+Fanyi detects `mpv`, then `mplayer`, then `mpg123`, then `ffplay`. You can set
 `fanyi-sound-player` to an executable name or full path; it is not a shell command
-with arguments.
+with arguments. The option also accepts `nil` when no player is configured.
+Set `fanyi-sound-player-options` to a list of additional arguments, for example
+`'("--volume=50")` for mpv. Arguments are passed directly without shell quoting;
+changes apply to the next pronunciation. Built-in streaming/audio-only options
+are retained for mplayer and ffplay.
 
 By default, Fanyi downloads the audio and sends its bytes to the player's standard
 input through a binary pipe, passing `-` as the input argument. If your player
@@ -240,7 +269,7 @@ accepts HTTPS URLs directly, enable:
 ```
 
 This option works across platforms. Audio is fetched or played only when a
-pronunciation button is activated.
+pronunciation button or command is activated.
 
 Starting another pronunciation cancels the previous audio download or player.
 Use `M-x fanyi-stop-sound` to stop playback or a pending download explicitly.
@@ -277,7 +306,8 @@ make test
 `make` defaults to `make test`. Run `make clean` first to remove generated
 bytecode when testing source files. `make compile` treats compiler warnings as
 errors, including obsolete API warnings. The [CI workflow](.github/workflows/build.yml)
-runs the sequence above on Emacs 29.1 and snapshot. Tests use mocked requests
+runs the sequence above on Emacs 29.1, 30.2 and snapshot. `make test` discovers
+all `test/*-tests.el` suites automatically. Tests use mocked requests
 and local HTML/JSON fixtures; they do not contact dictionary websites. See
 [fixture documentation](test/fixtures/README.md) for saved-page references and
 coverage.
@@ -311,6 +341,8 @@ and ERT tests run directly in Emacs.
 Providers are `fanyi-provider` records created with `fanyi-provider-create`.
 `fanyi-providers` accepts the built-in symbols or provider records directly;
 `copy-fanyi-provider` can be used to customize an existing provider.
+The optional `:name` is captured in each request and used consistently for
+headings and errors; unnamed providers fall back to the request's URL host.
 
 Each lookup creates a separate `fanyi-request`, copying HTTP settings and
 capturing callbacks before optional request preparation. Results belong to the
