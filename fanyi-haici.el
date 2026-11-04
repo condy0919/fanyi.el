@@ -666,9 +666,10 @@ Children use the same word/url attributes as `fanyi-haici--shr-entries'."
 (defun fanyi-haici--render-style (window)
   "Return settings affecting Haici's layout in WINDOW."
   (let ((frame (window-frame window)))
-    (list fanyi-use-glyphs fanyi-haici-expanded-sections
+    (list fanyi-use-glyphs
           (window-font-width window) (window-font-height window)
           (display-images-p frame)
+          (image-type-available-p 'svg) (image-type-available-p 'xpm)
           (face-attribute 'default :family frame t)
           (face-attribute 'fanyi-haici-label-face :foreground frame 'default)
           (face-attribute 'fanyi-female-speaker-face :foreground frame 'default)

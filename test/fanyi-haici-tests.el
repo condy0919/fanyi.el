@@ -458,6 +458,33 @@
       (should-not (invisible-p (fanyi-haici-test--position "龙骑枪")))
       (should-not (string-match-p "双解释义" (buffer-string))))))
 
+(ert-deftest fanyi-haici-style-tracks-image-support-without-resetting-folds ()
+  (let ((fanyi-haici-expanded-sections '(dual sort anno nfo))
+        available)
+    (cl-letf (((symbol-function 'image-type-available-p)
+               (lambda (type) (and (memq type available) t))))
+      (fanyi-test--with-rendered-fixture fanyi-haici-provider "haici-dragon-saved.html"
+        (save-window-excursion
+          (set-window-buffer nil (current-buffer))
+          (fanyi-shr-reflow)
+          (button-activate (button-at (fanyi-haici-test--position "详尽释义")))
+          (let ((render (symbol-function 'fanyi-shr--render)) (renders 0))
+            (cl-letf (((symbol-function 'fanyi-shr--render)
+                       (lambda (&rest args) (cl-incf renders) (apply render args))))
+              ;; Initial fold preferences do not affect an existing query.
+              (setq fanyi-haici-expanded-sections nil)
+              (run-hooks 'post-command-hook)
+              (should (= renders 0))
+              (cl-loop for support in '((svg) (svg xpm) nil)
+                       for expected from 1
+                       do (setq available support)
+                       do (run-hooks 'post-command-hook)
+                       do (should (= renders expected))
+                       do (should-not (invisible-p (fanyi-haici-test--position "龙骑枪")))
+                       do (should (invisible-p (fanyi-haici-test--position "Dragonair")))
+                       do (run-hooks 'post-command-hook)
+                       do (should (= renders expected))))))))))
+
 (ert-deftest fanyi-haici-layout-aligns-vocabulary-and-reflows-complete-header ()
   (fanyi-test--with-result-buffer
     (save-window-excursion
