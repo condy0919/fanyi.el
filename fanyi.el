@@ -174,6 +174,9 @@ restart when revisited.  New queries discard the forward history."
 (defvar-local fanyi-current-word nil
   "Original query text displayed in this result buffer.")
 
+(defvar-local fanyi--font-lock-provider-keywords nil
+  "Provider keywords installed in this buffer's font-lock configuration.")
+
 (cl-defstruct (fanyi--task (:constructor fanyi--make-task))
   query-id request result result-buffer buffer timer done settled failure not-found start end)
 
@@ -699,6 +702,13 @@ Example audio is never selected.  Point and folding remain unchanged."
     map)
   "Keymap used by headlines of `fanyi-mode'.")
 
+(defun fanyi--update-provider-keywords ()
+  "Update provider highlighting without resetting user or derived-mode rules."
+  (unless (equal fanyi--font-lock-provider-keywords fanyi-mode-font-lock-keywords-extra)
+    (font-lock-remove-keywords nil fanyi--font-lock-provider-keywords)
+    (font-lock-add-keywords nil fanyi-mode-font-lock-keywords-extra 'append)
+    (setq fanyi--font-lock-provider-keywords (copy-tree fanyi-mode-font-lock-keywords-extra))))
+
 (define-derived-mode fanyi-mode special-mode "Fanyi"
   "Major mode for viewing multi translators result.
 \\{fanyi-mode-map}"
@@ -734,6 +744,7 @@ Example audio is never selected.  Point and folding remain unchanged."
   (setq font-lock-defaults
         (list (append fanyi-mode-font-lock-keywords
                       fanyi-mode-font-lock-keywords-extra)))
+  (setq fanyi--font-lock-provider-keywords (copy-tree fanyi-mode-font-lock-keywords-extra))
   (setq imenu-generic-expression '(("Dict" "^# \\(.*\\)" 1)))
   (setq header-line-format '((:eval (fanyi-format-header-line)))))
 
@@ -845,22 +856,30 @@ Example audio is never selected.  Point and folding remain unchanged."
           (seq-take fanyi--forward-history (- limit (length fanyi--back-history))))))
 
 (defun fanyi--begin-query (buffer word)
-  "Reset BUFFER for WORD, preserving its navigation stacks."
+  "Reset BUFFER's query data for WORD, preserving its mode and reader settings."
   ;; Invalidate callbacks before cancellation can invoke process sentinels.
   (cl-incf fanyi--query-id)
   (when (buffer-live-p fanyi--active-buffer)
     (with-current-buffer fanyi--active-buffer (fanyi--cancel-buffer-tasks)))
   (with-current-buffer buffer
     (unless (eq buffer fanyi--active-buffer) (fanyi--cancel-buffer-tasks))
-    (let ((back fanyi--back-history) (forward fanyi--forward-history)
-          (inhibit-read-only t))
+    (unless (derived-mode-p 'fanyi-mode) (fanyi-mode))
+    (let ((inhibit-read-only t))
       (widen)
       (remove-overlays (point-min) (point-max) 'invisible 'outline)
       (erase-buffer)
-      (fanyi-mode)
+      (dolist (task fanyi--tasks)
+        (when (fanyi--task-start task) (set-marker (fanyi--task-start task) nil))
+        (when (fanyi--task-end task) (set-marker (fanyi--task-end task) nil)))
+      (set-marker (mark-marker) nil)
+      (setq mark-active nil
+            imenu--index-alist nil
+            fanyi--tasks nil
+            fanyi--tasks-completed 0
+            fanyi--tasks-failed 0)
+      (fanyi--update-provider-keywords)
       (setq fanyi-current-word word
-            fanyi--buffer-query-id fanyi--query-id
-            fanyi--back-history back fanyi--forward-history forward)))
+            fanyi--buffer-query-id fanyi--query-id)))
   (setq fanyi--active-buffer buffer))
 
 (defun fanyi--restore-page (page)
