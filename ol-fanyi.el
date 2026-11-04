@@ -31,23 +31,28 @@
 (require 'ol)
 (require 'fanyi)
 
-(org-link-set-parameters "fanyi"
-                         :follow #'fanyi-org-open-link
-                         :store #'fanyi-org-store-link
-                         :complete #'fanyi-org-complete-link)
+;;;###autoload
+(with-eval-after-load 'ol
+  (org-link-set-parameters "fanyi"
+                           :follow #'fanyi-org-open-link
+                           :store #'fanyi-org-store-link
+                           :complete #'fanyi-org-complete-link))
 
+;;;###autoload
 (defun fanyi-org-open-link (word _)
   "Query WORD with `fanyi-dwim' in the current buffer."
   (fanyi-dwim word))
 
+;;;###autoload
 (defun fanyi-org-store-link ()
   "Store a link to the query word of current fanyi buffer."
-  (when (eq major-mode 'fanyi-mode)
+  (when (derived-mode-p 'fanyi-mode)
     (org-link-store-props
      :type "fanyi"
      :link (concat "fanyi:" fanyi-current-word)
      :description fanyi-current-word)))
 
+;;;###autoload
 (defun fanyi-org-complete-link (&optional _)
   "Completion function for fanyi link."
   (concat "fanyi:" (completing-read "Fanyi history for link: " fanyi-history nil nil nil 'fanyi-history)))
