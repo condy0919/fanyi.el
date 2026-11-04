@@ -178,7 +178,31 @@ restart when revisited.  New queries discard the forward history."
   "Provider keywords installed in this buffer's font-lock configuration.")
 
 (cl-defstruct (fanyi--task (:constructor fanyi--make-task))
-  query-id request result result-buffer buffer timer done settled failure not-found start end)
+  "One request with a single lifecycle STATE.
+STATE is pending, succeeded, not-found, failed or cancelled.  FAILURE holds
+an error description; while pending, it can retain the error being retried."
+  query-id request result result-buffer buffer timer (state 'pending) failure start end)
+
+(defun fanyi--task-done (task)
+  "Whether TASK no longer awaits a response."
+  (not (eq (fanyi--task-state task) 'pending)))
+
+(defun fanyi--update-task-counts ()
+  "Recompute displayed totals from this buffer's task states."
+  (setq fanyi--tasks-completed
+        (cl-count-if (lambda (task) (memq (fanyi--task-state task) '(succeeded not-found)))
+                     fanyi--tasks)
+        fanyi--tasks-failed (cl-count 'failed fanyi--tasks :key #'fanyi--task-state)))
+
+(defun fanyi--set-task-state (task state &optional failure)
+  "Set TASK's STATE and FAILURE detail, updating its timer and buffer totals."
+  (setf (fanyi--task-state task) state
+        (fanyi--task-failure task) failure)
+  (unless (eq state 'pending) (fanyi--stop-task-timer task))
+  (when (buffer-live-p (fanyi--task-result-buffer task))
+    (with-current-buffer (fanyi--task-result-buffer task)
+      (fanyi--update-task-counts)))
+  (force-mode-line-update t))
 
 (defun fanyi--task-active-p (task)
   "Return non-nil if TASK still belongs to the current pending query."
@@ -198,7 +222,8 @@ restart when revisited.  New queries discard the forward history."
 (defun fanyi--cancel-task (task)
   "Cancel the network request associated with TASK."
   ;; Invalidate first: deleting a process can invoke its callback.
-  (setf (fanyi--task-done task) t)
+  (when (eq (fanyi--task-state task) 'pending)
+    (fanyi--set-task-state task 'cancelled (fanyi--task-failure task)))
   (fanyi--stop-task-timer task)
   (let ((buffer (fanyi--task-buffer task)) seen)
     (while (and (buffer-live-p buffer) (not (memq buffer seen)))
@@ -218,7 +243,8 @@ restart when revisited.  New queries discard the forward history."
                   fanyi--tasks)))
     ;; Invalidate every callback before cancelling any network process.
     (dolist (task fanyi--tasks)
-      (setf (fanyi--task-done task) t))
+      (when (eq (fanyi--task-state task) 'pending)
+        (fanyi--set-task-state task 'cancelled (fanyi--task-failure task))))
     (mapc #'fanyi--cancel-task fanyi--tasks)
     (dolist (task retries)
       (fanyi--restore-retry-failure task))))
@@ -226,7 +252,7 @@ restart when revisited.  New queries discard the forward history."
 (defun fanyi--restore-retry-failure (task)
   "Restore the unresolved failure when TASK's retry is cancelled."
   (with-current-buffer (fanyi--task-result-buffer task)
-    (cl-incf fanyi--tasks-failed)
+    (fanyi--set-task-state task 'failed (fanyi--task-failure task))
     (fanyi--write-task-error task "Retry cancelled")))
 
 (defun fanyi--quit-task (task condition)
@@ -353,24 +379,17 @@ restart when revisited.  New queries discard the forward history."
     (with-current-buffer (fanyi--task-result-buffer task)
       ;; Replaced buttons and callbacks must never start a duplicate attempt.
       (when (and (derived-mode-p 'fanyi-mode) (memq task fanyi--tasks)
-                 (fanyi--task-done task) (fanyi--task-failure task)
+                 (eq (fanyi--task-state task) 'failed)
                  (= (fanyi--task-query-id task) fanyi--buffer-query-id))
         (fanyi--spawn (fanyi--task-request task) (current-buffer) task)))))
 
-(defun fanyi--finish-task (task &optional failure)
-  "Settle TASK once, reporting FAILURE if non-nil."
+(defun fanyi--finish-task (task &optional failure outcome)
+  "Settle pending TASK with FAILURE or successful OUTCOME, reporting new errors.
+OUTCOME defaults to succeeded; parsers can instead report not-found.
+Cached results update state without calling this request-settlement function."
   (when (fanyi--task-active-p task)
-    (setf (fanyi--task-done task) t
-          (fanyi--task-settled task) t
-          (fanyi--task-failure task) failure)
-    (fanyi--stop-task-timer task)
-    (with-current-buffer (fanyi--task-result-buffer task)
-      (if failure
-          (progn
-            (cl-incf fanyi--tasks-failed)
-            (fanyi--report-task-error task failure))
-        (cl-incf fanyi--tasks-completed)))
-    (force-mode-line-update t)))
+    (fanyi--set-task-state task (if failure 'failed (or outcome 'succeeded)) failure)
+    (when failure (fanyi--report-task-error task failure))))
 
 (defun fanyi--timeout (task)
   "Fail and cancel TASK if its response has not arrived."
@@ -379,22 +398,29 @@ restart when revisited.  New queries discard the forward history."
         (fanyi--finish-task task "Request timed out")
       (fanyi--cancel-task task))))
 
+(defun fanyi--write-task-result (task)
+  "Insert TASK's parsed result without changing its lifecycle state."
+  (fanyi--write-task
+   task (lambda () (fanyi-render-result (fanyi--task-request task) (fanyi--task-result task)))))
+
 (defun fanyi--render-task (task)
   "Render TASK's result atomically and mark it complete."
   (when (fanyi--task-active-p task)
-    (fanyi--write-task
-     task (lambda () (fanyi-render-result (fanyi--task-request task) (fanyi--task-result task))))
+    (fanyi--write-task-result task)
     (fanyi--finish-task task)))
+
+(defun fanyi--write-not-found (task)
+  "Insert TASK's empty-result message without settling or reporting an error."
+  (fanyi--write-task
+   task (lambda ()
+          (insert "# " (fanyi-request-display-name (fanyi--task-request task))
+                  "\n\nNo results found.\n\n"))))
 
 (defun fanyi--render-not-found (task)
   "Display TASK's normal empty result and mark it complete."
   (when (fanyi--task-active-p task)
-    (fanyi--write-task
-     task (lambda ()
-            (insert "# " (fanyi-request-display-name (fanyi--task-request task))
-                    "\n\nNo results found.\n\n")))
-    (setf (fanyi--task-not-found task) t)
-    (fanyi--finish-task task)))
+    (fanyi--write-not-found task)
+    (fanyi--finish-task task nil 'not-found)))
 
 (defun fanyi--handle-response (task url status)
   "Parse and render TASK's response from URL with retrieval STATUS."
@@ -442,9 +468,9 @@ restart when revisited.  New queries discard the forward history."
               (fanyi--task-end task) (copy-marker (fanyi--task-end replacing))
               (fanyi--task-failure task) (fanyi--task-failure replacing))
         (setq fanyi--tasks (cl-substitute task replacing fanyi--tasks :test #'eq))
-        (cl-decf fanyi--tasks-failed)
         (set-marker (fanyi--task-start replacing) nil)
-        (set-marker (fanyi--task-end replacing) nil)))
+        (set-marker (fanyi--task-end replacing) nil))
+      (fanyi--update-task-counts))
     (fanyi--start-task task)))
 
 (defun fanyi--start-task (task)
@@ -483,11 +509,14 @@ restart when revisited.  New queries discard the forward history."
 
 (defun fanyi-format-header-line ()
   "Used as `header-line-format'."
-  (let ((pending (cl-count-if-not #'fanyi--task-done fanyi--tasks))
+  (let ((pending (cl-count 'pending fanyi--tasks :key #'fanyi--task-state))
+        (cancelled (cl-count 'cancelled fanyi--tasks :key #'fanyi--task-state))
         (truncated (if (> (length fanyi-current-word) fanyi-headline-max-length)
                        (concat (substring fanyi-current-word 0 fanyi-headline-max-length) "...")
                      (or fanyi-current-word ""))))
-    (concat (if (> pending 0) "Translating " "Ready: ")
+    (concat (cond ((> pending 0) "Translating ")
+                  ((> cancelled 0) "Incomplete: ")
+                  (t "Ready: "))
             ;; Header strings returned by :eval still interpret percent forms.
             ;; Escape only the displayed text, after applying the query limit.
             (propertize (replace-regexp-in-string "%" "%%" truncated t t)
@@ -501,7 +530,10 @@ restart when revisited.  New queries discard the forward history."
                         'help-echo "Completed dictionaries, including empty results")
             " "
             (propertize (format "Failed %d" fanyi--tasks-failed)
-                        'face 'fanyi-tasks-failed-face 'help-echo "Failed dictionaries"))))
+                        'face 'fanyi-tasks-failed-face 'help-echo "Failed dictionaries")
+            (when (> cancelled 0)
+              (propertize (format " Cancelled %d" cancelled) 'face 'shadow
+                          'help-echo "Cancelled dictionaries; refresh or revisit to resume")))))
 
 (defun fanyi-eldoc-function (_callback &rest _ignored)
   "Return help at point for `fanyi-mode' ElDoc."
@@ -873,7 +905,7 @@ Example audio is never selected.  Point and folding remain unchanged."
           (let ((state (assq (fanyi--window-identity window) windows)))
             (set-window-point window (if state (nth 1 state) point))
             (set-window-start window (if state (nth 2 state)
-                                      (or (nth 2 (car windows)) point)) t)))))))
+                                       (or (nth 2 (car windows)) point)) t)))))))
 
 (defun fanyi--save-page ()
   "Snapshot this query's resolved requests, outcomes and reading state."
@@ -882,11 +914,7 @@ Example audio is never selected.  Point and folding remain unchanged."
    :tasks (mapcar
            (lambda (task)
              (list (fanyi--task-request task)
-                   (cond ((not (fanyi--task-done task)) 'pending)
-                         ((fanyi--task-failure task) 'failed)
-                         ((fanyi--task-not-found task) 'not-found)
-                         ((fanyi--task-settled task) 'completed)
-                         (t 'pending))
+                   (fanyi--task-state task)
                    (fanyi--task-result task) (fanyi--task-failure task)))
            fanyi--tasks)))
 
@@ -941,14 +969,22 @@ Example audio is never selected.  Point and folding remain unchanged."
            (lambda (task entry)
              (condition-case err
                  (pcase (nth 1 entry)
-                   ('pending
+                   ((or 'pending 'cancelled)
                     (push task pending)
                     (when (fanyi--task-failure task)
                       (fanyi--write-task-error task (fanyi--task-failure task))))
-                   ('failed (fanyi--finish-task task (fanyi--task-failure task)))
-                   ('not-found (fanyi--render-not-found task))
-                   (_ (fanyi--render-task task)))
-               (error (fanyi--finish-task task (error-message-string err)))))
+                   ('failed
+                    (fanyi--set-task-state task 'failed (fanyi--task-failure task))
+                    (fanyi--write-task-error task (fanyi--task-failure task)))
+                   ('not-found
+                    (fanyi--write-not-found task)
+                    (fanyi--set-task-state task 'not-found))
+                   ('succeeded
+                    (fanyi--write-task-result task)
+                    (fanyi--set-task-state task 'succeeded)))
+               (error
+                (fanyi--set-task-state task 'failed (error-message-string err))
+                (fanyi--report-task-error task (fanyi--task-failure task)))))
            (reverse fanyi--tasks) (reverse (fanyi--page-tasks page)))
           (fanyi--restore-reader (fanyi--page-view page))
           ;; Restore anchors before pending callbacks can add earlier sections.

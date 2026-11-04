@@ -1,0 +1,72 @@
+;;; fanyi-task-state-tests.el --- Explicit lifecycle outcomes -*- lexical-binding: t; -*-
+
+(require 'fanyi-test-support)
+
+(ert-deftest fanyi-task-states-distinguish-results-failures-and-cancellation ()
+  (fanyi-test--with-query
+    (let ((empty (fanyi-test--provider)))
+      (setf (fanyi-provider-parse empty) (lambda (&rest _) (throw 'not-found nil)))
+      (setq fanyi-providers (list (fanyi-test--provider) empty
+                                  (fanyi-test--provider) (fanyi-test--provider)))
+      (fanyi-dwim "old")
+      (let* ((saved (get-buffer fanyi-buffer-name))
+             (tasks (reverse (fanyi-test--query-state 'fanyi--tasks))))
+        (push saved fanyi-test--buffers)
+        (should (equal (mapcar #'fanyi--task-state tasks) '(pending pending pending pending)))
+        (fanyi-test--respond (nth 0 fanyi-test--requests))
+        (fanyi-test--respond (nth 1 fanyi-test--requests))
+        (fanyi--timeout (nth 2 tasks))
+        (with-current-buffer saved
+          (rename-buffer (generate-new-buffer-name " *fanyi-state-saved*")))
+        (setq fanyi-providers (list (fanyi-test--provider)))
+        (fanyi-dwim "new")
+        (with-current-buffer saved
+          (should (equal (mapcar #'fanyi--task-state tasks)
+                         '(succeeded not-found failed cancelled)))
+          (should (= fanyi--tasks-completed 2))
+          (should (= fanyi--tasks-failed 1))
+          (should-not (cl-some #'fanyi--task-timer tasks))
+          (should (equal (substring-no-properties (fanyi-format-header-line))
+                         "Incomplete: old Pending 0 Done 2 Failed 1 Cancelled 1"))
+          ;; A late cancelled callback cannot change the state or the totals.
+          (fanyi-test--respond (nth 3 fanyi-test--requests) nil "obsolete")
+          (should (eq (fanyi--task-state (nth 3 tasks)) 'cancelled))
+          (should (= fanyi--tasks-completed 2))
+          (should-not (string-match-p "obsolete" (buffer-string))))))))
+
+(ert-deftest fanyi-history-redraws-errors-without-reporting-or-settling-them-again ()
+  (fanyi-test--with-query
+    (let ((reports 0) (settlements 0)
+          (report (symbol-function 'fanyi--report-task-error))
+          (finish (symbol-function 'fanyi--finish-task)))
+      (cl-letf (((symbol-function 'fanyi--report-task-error)
+                 (lambda (&rest args) (cl-incf reports) (apply report args)))
+                ((symbol-function 'fanyi--finish-task)
+                 (lambda (&rest args) (cl-incf settlements) (apply finish args))))
+        (fanyi-dwim "failed")
+        (fanyi-test--respond (car fanyi-test--requests) '(:error (error http 500)))
+        (fanyi-dwim "healthy")
+        (fanyi-test--respond (cadr fanyi-test--requests))
+        (with-current-buffer fanyi-buffer-name
+          (dotimes (_ 2)
+            (fanyi-back)
+            (should (= fanyi--tasks-failed 1))
+            (should (eq (fanyi--task-state (car fanyi--tasks)) 'failed))
+            (should (fanyi-test--button-data #'fanyi--retry-task))
+            (fanyi-forward)
+            (should (= fanyi--tasks-completed 1)))
+          (should (= reports 1))
+          (should (= settlements 2))
+          (should (= (length fanyi-test--requests) 2))
+          (fanyi-back)
+          (fanyi--retry-task (car fanyi--tasks))
+          (should (eq (fanyi--task-state (car fanyi--tasks)) 'pending))
+          (should (= fanyi--tasks-failed 0))
+          (fanyi-test--respond (nth 2 fanyi-test--requests) '(:error (error http 503)))
+          (should (= reports 2))
+          (should (= settlements 3))
+          (should (eq (fanyi--task-state (car fanyi--tasks)) 'failed))
+          (should (= fanyi--tasks-failed 1)))))))
+
+(provide 'fanyi-task-state-tests)
+;;; fanyi-task-state-tests.el ends here

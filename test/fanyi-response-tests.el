@@ -54,7 +54,7 @@
     (should (= (fanyi-test--query-state 'fanyi--tasks-completed) 1))
     (with-current-buffer fanyi-buffer-name
       (should (string-match-p "No results found" (buffer-string)))
-      (should (fanyi--task-not-found (car fanyi--tasks)))
+      (should (eq (fanyi--task-state (car fanyi--tasks)) 'not-found))
       (should-not (fanyi--task-timer (car fanyi--tasks)))
       (should-not (fanyi-test--button-data #'fanyi--retry-task))
       (should-not (string-match-p "Could not parse" (buffer-string))))))

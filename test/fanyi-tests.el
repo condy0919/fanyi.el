@@ -304,7 +304,7 @@
         (should (equal fanyi-current-word "Dragon"))
         (should (equal (buffer-string) "dragon: old definition\n"))
         (should (equal (substring-no-properties (fanyi-format-header-line))
-                       "Ready: Dragon Pending 0 Done 1 Failed 0"))
+                       "Incomplete: Dragon Pending 0 Done 1 Failed 0 Cancelled 1"))
         (fanyi-copy-query-word)
         (should (equal (car kill-ring) "Dragon"))
         (should (equal (car (fanyi-bookmark-make-record)) "Dragon"))
