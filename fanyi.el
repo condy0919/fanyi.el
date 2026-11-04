@@ -780,6 +780,11 @@ Example audio is never selected.  Point and folding remain unchanged."
                    (lambda (a b) (< (fanyi-shr--region-start a)
                                     (fanyi-shr--region-start b))))))
 
+(defun fanyi--window-identity (window)
+  "Return a stable token for WINDOW without retaining the window in history."
+  (or (window-parameter window 'fanyi-history-identity)
+      (set-window-parameter window 'fanyi-history-identity (make-symbol "fanyi-window"))))
+
 (defun fanyi--save-reader ()
   "Capture reading position, selection, narrowing and folds without markers."
   (let ((bounds (and (buffer-narrowed-p) (cons (point-min) (point-max)))))
@@ -791,7 +796,8 @@ Example audio is never selected.  Point and folding remain unchanged."
             :bounds (and bounds (cons (fanyi--reader-anchor (car bounds))
                                       (fanyi--reader-anchor (cdr bounds))))
             :windows (mapcar (lambda (window)
-                               (list (fanyi--reader-anchor (window-point window))
+                               (list (fanyi--window-identity window)
+                                     (fanyi--reader-anchor (window-point window))
                                      (fanyi--reader-anchor (window-start window))))
                              (get-buffer-window-list (current-buffer) nil t))
             :outline (cl-loop for overlay in (overlays-in (point-min) (point-max))
@@ -817,7 +823,7 @@ Example audio is never selected.  Point and folding remain unchanged."
                    (fanyi--reader-position (plist-get view :mark))))
         (bounds (plist-get view :bounds))
         (windows (mapcar (lambda (state)
-                           (mapcar #'fanyi--reader-position state))
+                           (cons (car state) (mapcar #'fanyi--reader-position (cdr state))))
                          (plist-get view :windows))))
     (when bounds
       (narrow-to-region (fanyi--reader-position (car bounds))
@@ -826,12 +832,13 @@ Example audio is never selected.  Point and folding remain unchanged."
     (set-marker (mark-marker) mark)
     (setq mark-active (and mark (plist-get view :active))
           deactivate-mark nil)
-    ;; Window identities are deliberately not cached: only windows still
-    ;; displaying this buffer receive the saved views, in display order.
-    (cl-mapc (lambda (window state)
-               (set-window-point window (car state))
-               (set-window-start window (cadr state) t))
-             (get-buffer-window-list (current-buffer) nil t) windows)))
+    ;; Window-list order rotates with focus.  Match surviving windows by token;
+    ;; new windows use the page's primary view, never an unrelated buffer's view.
+    (dolist (window (get-buffer-window-list (current-buffer) nil t))
+      (let ((state (assq (fanyi--window-identity window) windows)))
+        (set-window-point window (if state (nth 1 state) position))
+        (set-window-start window (if state (nth 2 state)
+                                  (or (nth 2 (car windows)) position)) t)))))
 
 (defun fanyi--save-page ()
   "Snapshot this query's resolved requests, outcomes and reading state."
