@@ -456,20 +456,25 @@ Nil disables the timeout."
 
 (defun fanyi-format-header-line ()
   "Used as `header-line-format'."
-  (let ((truncated (if (> (length fanyi-current-word) fanyi-headline-max-length)
+  (let ((pending (cl-count-if-not #'fanyi--task-done fanyi--tasks))
+        (truncated (if (> (length fanyi-current-word) fanyi-headline-max-length)
                        (concat (substring fanyi-current-word 0 fanyi-headline-max-length) "...")
                      (or fanyi-current-word ""))))
-    (concat "Translating "
+    (concat (if (> pending 0) "Translating " "Ready: ")
             ;; Header strings returned by :eval still interpret percent forms.
             ;; Escape only the displayed text, after applying the query limit.
             (propertize (replace-regexp-in-string "%" "%%" truncated t t)
                         'face 'fanyi-word-face)
             " "
-            (propertize (number-to-string (cl-count-if-not #'fanyi--task-done fanyi--tasks)) 'face 'fanyi-tasks-pending-face)
+            (propertize (format "Pending %d" pending)
+                        'face 'fanyi-tasks-pending-face 'help-echo "Pending dictionaries")
             " "
-            (propertize (number-to-string fanyi--tasks-completed) 'face 'fanyi-tasks-completed-face)
+            (propertize (format "Done %d" fanyi--tasks-completed)
+                        'face 'fanyi-tasks-completed-face
+                        'help-echo "Completed dictionaries, including empty results")
             " "
-            (propertize (number-to-string fanyi--tasks-failed) 'face 'fanyi-tasks-failed-face))))
+            (propertize (format "Failed %d" fanyi--tasks-failed)
+                        'face 'fanyi-tasks-failed-face 'help-echo "Failed dictionaries"))))
 
 (defun fanyi-eldoc-function (_callback &rest _ignored)
   "Return help at point for `fanyi-mode' ElDoc."

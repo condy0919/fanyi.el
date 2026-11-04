@@ -304,7 +304,7 @@
         (should (equal fanyi-current-word "Dragon"))
         (should (equal (buffer-string) "dragon: old definition\n"))
         (should (equal (substring-no-properties (fanyi-format-header-line))
-                       "Translating Dragon 0 1 0"))
+                       "Ready: Dragon Pending 0 Done 1 Failed 0"))
         (fanyi-copy-query-word)
         (should (equal (car kill-ring) "Dragon"))
         (should (equal (car (fanyi-bookmark-make-record)) "Dragon"))
@@ -315,7 +315,7 @@
       (with-current-buffer fanyi-buffer-name
         (should (equal fanyi-current-word "Sun"))
         (should (equal (substring-no-properties (fanyi-format-header-line))
-                       "Translating Sun 0 2 0"))))))
+                       "Ready: Sun Pending 0 Done 2 Failed 0"))))))
 
 (ert-deftest fanyi-query-accepts-success-status-and-cleans-response ()
   (fanyi-test--with-query
@@ -818,7 +818,7 @@
         (fanyi-dwim word)
         (with-current-buffer fanyi-buffer-name
           (should (equal (substring-no-properties (fanyi-format-header-line))
-                         (concat "Translating " displayed " 1 0 0")))
+                         (concat "Translating " displayed " Pending 1 Done 0 Failed 0")))
           (should (equal fanyi-current-word word))
           (should (equal (fanyi-request-word (fanyi--task-request (car fanyi--tasks)))
                          (downcase word)))
