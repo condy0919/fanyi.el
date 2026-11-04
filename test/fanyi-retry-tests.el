@@ -3,6 +3,28 @@
 (require 'fanyi-test-support)
 (require 'fanyi-longman)
 
+(ert-deftest fanyi-retry-remains-available-with-read-only-diagnostic-log ()
+  (let ((fanyi-log-buffer-name (generate-new-buffer-name " *fanyi-test-log*")))
+    (unwind-protect
+        (fanyi-test--with-query
+          (setq fanyi-log t)
+          (with-current-buffer (get-buffer-create fanyi-log-buffer-name) (special-mode))
+          (fanyi-dwim "sample")
+          (fanyi-test--respond (car fanyi-test--requests) '(:error (error http 503)))
+          (with-current-buffer fanyi-buffer-name
+            (should (= fanyi--tasks-failed 1))
+            (should (string-match-p "Request failed" (buffer-string)))
+            (let ((task (car (fanyi-test--button-data #'fanyi--retry-task))))
+              (should task)
+              (fanyi--retry-task task)
+              (fanyi-test--respond (car (last fanyi-test--requests)) nil "recovered")
+              (should (= fanyi--tasks-completed 1))
+              (should (= fanyi--tasks-failed 0))
+              (should (string-match-p "recovered" (buffer-string)))))
+          (with-current-buffer fanyi-log-buffer-name
+            (should (string-match-p "503" (buffer-string)))))
+      (when (get-buffer fanyi-log-buffer-name) (kill-buffer fanyi-log-buffer-name)))))
+
 (ert-deftest fanyi-retry-replaces-only-failure-and-preserves-html-reading-state ()
   (fanyi-test--with-query
     (setq fanyi-buffer-name (generate-new-buffer-name "fanyi-retry-test"))

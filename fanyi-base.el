@@ -262,7 +262,12 @@ The FMT and ARGS will be passed to `format-message'."
           (text (apply #'format-message fmt args)))
       (with-mutex fanyi-log-buffer-mtx
         (with-current-buffer (get-buffer-create fanyi-log-buffer-name)
-          (insert timestamp " " text "\n"))))))
+          (let ((inhibit-read-only t))
+            (save-excursion
+              (save-restriction
+                (widen)
+                (goto-char (point-max))
+                (insert timestamp " " text "\n")))))))))
 
 (defun fanyi-user-error (fmt &rest args)
   "Signal a user error by passing FMT and ARGS to `user-error'.

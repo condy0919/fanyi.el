@@ -271,5 +271,26 @@
       (when (get-buffer fanyi-log-buffer-name)
         (kill-buffer fanyi-log-buffer-name)))))
 
+(ert-deftest fanyi-log-appends-in-read-only-narrowed-buffer-without-moving-reader ()
+  (let ((fanyi-log t)
+        (fanyi-log-buffer-name (generate-new-buffer-name " *fanyi-test-log*")))
+    (unwind-protect
+        (progn
+          (fanyi-log "first")
+          (fanyi-log "second")
+          (with-current-buffer fanyi-log-buffer-name
+            (special-mode)
+            (goto-char (point-min))
+            (narrow-to-region (point-min) (line-end-position))
+            (let ((position (point)) (end (point-max)))
+              (fanyi-log "third")
+              (should buffer-read-only)
+              (should (= (point) position))
+              (should (= (point-max) end))
+              (save-restriction
+                (widen)
+                (should (string-match-p "first\n.*second\n.*third\n\\'" (buffer-string)))))))
+      (when (get-buffer fanyi-log-buffer-name) (kill-buffer fanyi-log-buffer-name)))))
+
 (provide 'fanyi-base-tests)
 ;;; fanyi-base-tests.el ends here
