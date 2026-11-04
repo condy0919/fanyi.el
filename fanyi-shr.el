@@ -26,6 +26,28 @@ equivalent text extraction on Emacs 29 and 30."
                    (if (stringp child) child (fanyi-shr-dom-text child)))
                  (dom-children node) ""))))
 
+(defun fanyi-shr-wrap-lines (text width)
+  "Wrap TEXT to WIDTH columns and return a list of lines.
+Keep text properties and all non-whitespace characters.  Fill paragraphs
+before splitting overlong words; retain empty lines between paragraphs.
+WIDTH is at least one column.  A character wider than WIDTH occupies its
+own line so unusually narrow windows never discard characters."
+  (let ((width (max 1 width)) lines)
+    (with-temp-buffer
+      (insert text)
+      (let ((fill-column width)
+            (fill-prefix nil)
+            (adaptive-fill-mode nil)
+            (sentence-end-double-space nil))
+        (fill-region (point-min) (point-max)))
+      (dolist (line (split-string (buffer-string) "\n"))
+        (while (> (string-width line) width)
+          (let ((length (max 1 (length (truncate-string-to-width line width)))))
+            (push (substring line 0 length) lines)
+            (setq line (substring line length))))
+        (push line lines)))
+    (nreverse lines)))
+
 (cl-defstruct (fanyi-shr--region (:constructor fanyi-shr--region-create))
   start end dom renderers style-function layout failed-layout sections)
 

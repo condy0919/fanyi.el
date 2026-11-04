@@ -395,26 +395,8 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
               (/ (window-body-width nil t) (max 1 (window-font-width))))))
 
 (defun fanyi-haici--wrap-lines (text width)
-  "Wrap TEXT to WIDTH columns without dropping non-whitespace characters.
-Break unusually long unspaced words as well as ordinary prose."
-  (let ((width (max 1 width)) lines)
-    (with-temp-buffer
-      (insert (string-trim text))
-      (let ((fill-column width)
-            (fill-prefix nil)
-            (adaptive-fill-mode nil)
-            (sentence-end-double-space nil))
-        (fill-region (point-min) (point-max)))
-      (dolist (line (split-string (buffer-string) "\n"))
-        (while (> (string-width line) width)
-          (let* ((part (truncate-string-to-width line width))
-                 ;; A double-width character must still fit in a one-column
-                 ;; window.  Consume it rather than producing an empty line.
-                 (length (max 1 (length part))))
-            (push (substring line 0 length) lines)
-            (setq line (substring line length))))
-        (push line lines)))
-    (nreverse lines)))
+  "Trim TEXT and wrap it into lines of WIDTH columns."
+  (fanyi-shr-wrap-lines (string-trim text) width))
 
 (defun fanyi-haici--insert-word (entry text)
   "Insert TEXT as ENTRY's native query button.

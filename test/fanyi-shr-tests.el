@@ -4,6 +4,33 @@
 (require 'fanyi-longman)
 (require 'shr)
 
+(ert-deftest fanyi-shr-wrap-lines-keeps-long-words-and-wide-characters ()
+  (dolist (text '("" "abcdefghijklmnopqrstuvwxyz" "中文释义完整换行"
+                  "alpha beta 中文 gamma"))
+    (dolist (width '(0 1 2 3 8 20))
+      (let ((lines (fanyi-shr-wrap-lines text width)))
+        (should (equal (replace-regexp-in-string "[ \t\r\n]+" "" (mapconcat #'identity lines ""))
+                       (replace-regexp-in-string "[ \t\r\n]+" "" text)))
+        (dolist (line lines)
+          ;; A wide character cannot fit in a single column, but must still
+          ;; survive as a complete character rather than an empty result.
+          (should (or (<= (string-width line) (max 1 width))
+                      (= (length line) 1))))))))
+
+(ert-deftest fanyi-shr-wrap-lines-preserves-properties-and-paragraph-boundaries ()
+  (let* ((text (concat "  " (propertize "abcdefghij" 'face 'bold 'font-lock-face 'italic
+                                        'help-echo "Keep the word's metadata")
+                       "\n\n" (propertize "中文释义" 'face 'shadow) "\n"))
+         (before (copy-sequence text))
+         (lines (fanyi-shr-wrap-lines text 5))
+         (joined (mapconcat #'identity lines "\n")))
+    (should (equal (mapcar #'substring-no-properties lines)
+                   '("  abc" "defgh" "ij" "" "中文" "释义" "")))
+    (should (equal-including-properties
+             (replace-regexp-in-string "[ \t\r\n]+" "" joined)
+             (replace-regexp-in-string "[ \t\r\n]+" "" text)))
+    (should (equal-including-properties text before))))
+
 (ert-deftest fanyi-shr-dom-text-preserves-inline-text-on-old-and-new-emacs ()
   (let ((native (and (fboundp 'dom-inner-text) (symbol-function 'dom-inner-text))))
     (dolist (implementation (if native (list native nil) '(nil)))

@@ -158,26 +158,8 @@ Keep semicolons within one meaning and unfamiliar labels as ordinary text."
    width))
 
 (defun fanyi-youdao-thesaurus--fill-text (text width)
-  "Wrap TEXT to WIDTH columns, including words without breakable spaces.
-Keep text properties and all non-whitespace characters so semantic faces
-and cached reflow anchors survive line wrapping."
-  (let ((width (max 1 width)) lines)
-    (with-temp-buffer
-      (insert text)
-      (let ((fill-column width)
-            (fill-prefix nil)
-            (adaptive-fill-mode nil)
-            (sentence-end-double-space nil))
-        (fill-region (point-min) (point-max)))
-      (dolist (line (split-string (buffer-string) "\n"))
-        (while (> (string-width line) width)
-          ;; Consume at least one character even when a wide glyph cannot
-          ;; fit in an exceptionally narrow window.
-          (let ((length (max 1 (length (truncate-string-to-width line width)))))
-            (push (substring line 0 length) lines)
-            (setq line (substring line length))))
-        (push line lines)))
-    (mapconcat #'identity (nreverse lines) "\n")))
+  "Return TEXT wrapped to WIDTH columns, preserving text properties."
+  (mapconcat #'identity (fanyi-shr-wrap-lines text width) "\n"))
 
 (defun fanyi-youdao-thesaurus--shr-entries (dom)
   "Render DOM's entries as aligned columns or stacked word blocks."
