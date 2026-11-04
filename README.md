@@ -51,10 +51,11 @@ Or use `use-package`:
 | `M-x fanyi-dwim2` | Query the active region or word at point immediately; prompt if neither exists |
 | `M-x fanyi-from-history` | Select and repeat a previous query |
 
-Queries trim surrounding whitespace and reject empty input. Dictionary links,
+Queries trim surrounding whitespace, collapse spaces, tabs and line breaks into
+single spaces, and reject empty input. Dictionary links,
 bookmarks and Org links use the same query history; repeated queries move to
-the front. The original query text is kept in the buffer and history, while
-requests use lowercase text.
+the front. The normalized query keeps its original case in the buffer and
+history, while requests use lowercase text.
 
 Results open in `*fanyi*`. The header shows the query followed by the counts of
 pending, completed and failed dictionaries. Each buffer retains its own query

@@ -599,7 +599,7 @@ the visible button at point."
 
 ;;;###autoload
 (defun fanyi-dwim (word)
-  "Translate WORD after trimming surrounding whitespace.
+  "Translate WORD after trimming and collapsing whitespace.
 Record every accepted query in `fanyi-history', with the most recent first."
   (interactive (let* ((history-add-new-input nil)
                       (default (if (use-region-p)
@@ -611,7 +611,8 @@ Record every accepted query in `fanyi-history', with the most recent first."
                  (list (read-string prompt nil 'fanyi-history default))))
   (unless (stringp word)
     (user-error "Query must be a string"))
-  (setq word (string-trim (substring-no-properties word)))
+  (setq word (string-trim (replace-regexp-in-string
+                          "[ \t\r\n]+" " " (substring-no-properties word))))
   (when (string-empty-p word)
     (user-error "Query must not be empty"))
   (unless fanyi-providers

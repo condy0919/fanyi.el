@@ -4,13 +4,13 @@
 
 (ert-deftest fanyi-query-normalizes-input-before-building-requests ()
   (fanyi-test--with-query
-    (fanyi-dwim " \tChase  the Dragon\n ")
+    (fanyi-dwim " \tChase  the\r\n\tDragon\n ")
     (let ((request (fanyi--task-request (car (fanyi-test--query-state 'fanyi--tasks)))))
-      (should (equal (fanyi-request-word request) "chase  the dragon"))
+      (should (equal (fanyi-request-word request) "chase the dragon"))
       (should (equal (fanyi-request-url request)
-                     "https://example.invalid/chase%20%20the%20dragon")))
-    (should (equal (fanyi-test--query-state 'fanyi-current-word) "Chase  the Dragon"))
-    (should (equal fanyi-history '("Chase  the Dragon")))))
+                     "https://example.invalid/chase%20the%20dragon")))
+    (should (equal (fanyi-test--query-state 'fanyi-current-word) "Chase the Dragon"))
+    (should (equal fanyi-history '("Chase the Dragon")))))
 
 (ert-deftest fanyi-query-invalid-input-preserves-running-query ()
   (fanyi-test--with-query
