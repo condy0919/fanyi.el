@@ -160,6 +160,27 @@ Keep semicolons within one meaning and unfamiliar labels as ordinary text."
       (fill-region (point-min) (point-max)))
     (buffer-string)))
 
+(defun fanyi-youdao-thesaurus--fill-word (word width)
+  "Wrap WORD to WIDTH columns, including words without breakable spaces.
+Keep all non-whitespace characters so cached reflow can restore text anchors."
+  (let ((width (max 1 width)) lines)
+    (with-temp-buffer
+      (insert word)
+      (let ((fill-column width)
+            (fill-prefix nil)
+            (adaptive-fill-mode nil)
+            (sentence-end-double-space nil))
+        (fill-region (point-min) (point-max)))
+      (dolist (line (split-string (buffer-string) "\n"))
+        (while (> (string-width line) width)
+          ;; Consume at least one character even when a wide glyph cannot
+          ;; fit in an exceptionally narrow window.
+          (let ((length (max 1 (length (truncate-string-to-width line width)))))
+            (push (substring line 0 length) lines)
+            (setq line (substring line length))))
+        (push line lines)))
+    (mapconcat #'identity (nreverse lines) "\n")))
+
 (defun fanyi-youdao-thesaurus--shr-entries (dom)
   "Render DOM's entries as aligned columns or stacked word blocks."
   (let* ((entries (dom-children dom))
@@ -174,7 +195,7 @@ Keep semicolons within one meaning and unfamiliar labels as ordinary text."
     (dolist (entry entries)
       (let ((word (dom-attr entry 'word))
             (start (point)))
-        (insert word)
+        (insert (if columns word (fanyi-youdao-thesaurus--fill-word word width)))
         (make-text-button start (point) :type 'fanyi-youdao-thesaurus-button
                           'button-data word
                           'help-echo (concat "Query " word))
