@@ -2,6 +2,7 @@
 
 EMACS ?= emacs
 CASK ?= cask
+TEST_FILES := $(wildcard test/*-tests.el)
 
 compile:
 	$(EMACS) -Q --batch \
@@ -11,24 +12,7 @@ compile:
 
 test:
 	$(EMACS) -Q --batch \
-	-L . -L test -l test/fanyi-tests.el -l test/fanyi-base-tests.el \
-	-l test/fanyi-retry-tests.el \
-	-l test/fanyi-config-tests.el \
-	-l test/fanyi-provider-tests.el \
-	-l test/fanyi-youdao-ui-tests.el \
-	-l test/fanyi-haici-tests.el -l test/fanyi-longman-tests.el \
-	-l test/fanyi-response-tests.el \
-	-l test/fanyi-etymon-tests.el \
-	-l test/fanyi-shr-tests.el \
-	-l test/fanyi-font-lock-tests.el \
-	-l test/fanyi-navigation-tests.el \
-	-l test/fanyi-bookmark-tests.el \
-	-l test/fanyi-shr-reflow-tests.el \
-	-l test/fanyi-shr-section-tests.el \
-	-l test/fanyi-longman-style-tests.el \
-	-l test/fanyi-longman-sun-tests.el \
-	-l test/fanyi-longman-explode-tests.el \
-	-l test/fanyi-longman-section-tests.el \
+	-L . -L test $(addprefix -l ,$(TEST_FILES)) \
 	-f ert-run-tests-batch-and-exit
 
 clean:
