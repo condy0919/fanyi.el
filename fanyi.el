@@ -557,6 +557,8 @@ Record every accepted query in `fanyi-history', with the most recent first."
   (setq word (string-trim (substring-no-properties word)))
   (when (string-empty-p word)
     (user-error "Query must not be empty"))
+  (unless fanyi-providers
+    (user-error "No dictionary providers enabled"))
   (let ((requests (mapcar (lambda (provider)
                             (fanyi-make-request (fanyi--resolve-provider provider)
                                                 (downcase word)))

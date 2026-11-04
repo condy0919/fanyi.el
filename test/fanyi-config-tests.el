@@ -54,6 +54,42 @@
             (should (= (length fanyi-test--requests) 2)))
         (setplist 'fanyi-providers properties)))))
 
+(ert-deftest fanyi-config-empty-providers-preserves-existing-query ()
+  (fanyi-test--with-query
+    (setq fanyi-providers (list (car fanyi-providers) (car fanyi-providers)))
+    (fanyi-dwim "running")
+    (fanyi-test--respond (car fanyi-test--requests) nil "ready definition")
+    (let* ((result-buffer fanyi--active-buffer)
+           (query-id fanyi--query-id)
+           (tasks (fanyi-test--query-state 'fanyi--tasks))
+           (pending (cl-find-if-not #'fanyi--task-done tasks))
+           (timer (fanyi--task-timer pending))
+           (text (with-current-buffer result-buffer (buffer-string))))
+      (setq fanyi-providers nil)
+      (let ((err (should-error (fanyi-dwim "next") :type 'user-error)))
+        (should (equal (error-message-string err) "No dictionary providers enabled")))
+      (should (eq fanyi--active-buffer result-buffer))
+      (should (= fanyi--query-id query-id))
+      (should (eq tasks (fanyi-test--query-state 'fanyi--tasks)))
+      (should (equal fanyi-history '("running")))
+      (should (= (length fanyi-test--requests) 2))
+      (should (buffer-live-p (fanyi--task-buffer pending)))
+      (should (fanyi--task-active-p pending))
+      (should (eq (fanyi--task-timer pending) timer))
+      (should (memq timer timer-list))
+      (with-current-buffer result-buffer
+        (should (= fanyi--buffer-query-id query-id))
+        (should (equal fanyi-current-word "running"))
+        (should (equal-including-properties text (buffer-string)))
+        (should (= fanyi--tasks-completed 1)))
+      ;; Disabling providers affects future queries, not a pending response.
+      (fanyi-test--respond (cadr fanyi-test--requests) nil "later definition")
+      (with-current-buffer result-buffer
+        (should (= fanyi--tasks-completed 2))
+        (should (= fanyi--tasks-failed 0))
+        (should (equal (buffer-string) (concat text "running: later definition\n"))))
+      (should (fanyi--task-done pending)))))
+
 (ert-deftest fanyi-config-requests-are-independent-of-provider-descriptor ()
   (fanyi-test--with-query
     (let* ((template (car fanyi-providers))
