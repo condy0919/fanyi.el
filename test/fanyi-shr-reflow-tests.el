@@ -5,6 +5,35 @@
 (require 'outline)
 (require 'fanyi-shr)
 
+(ert-deftest fanyi-shr-anchors-preserve-word-boundaries-and-unicode ()
+  (with-temp-buffer
+    (let* ((old " \talpha \n beta\r中🙂文  gamma  ")
+           (new "alpha\tbeta \n中🙂文\n gamma")
+           (fanyi-shr--regions
+            (list (fanyi-shr--region-create
+                   :start (copy-marker 1) :end (copy-marker 1 t))))
+           anchors)
+      (insert old)
+      ;; The two sides of a whitespace run share a character count, but
+      ;; must restore to the end of the old word or start of the next one.
+      (dolist (entry '(("alpha" . 0) ("alpha" . 5) ("beta" . 0)
+                       ("beta" . 4) ("🙂" . 0) ("gamma" . 0) ("gamma" . 5)))
+        (goto-char (point-min))
+        (search-forward (car entry))
+        (push (cons entry (fanyi-shr--anchor (+ (match-beginning 0) (cdr entry))))
+              anchors))
+      (erase-buffer)
+      (insert new)
+      (dolist (anchor anchors)
+        (goto-char (point-min))
+        (search-forward (caar anchor))
+        (should (= (fanyi-shr--position (cdr anchor))
+                   (+ (match-beginning 0) (cdar anchor)))))
+      ;; A shortened document clamps an old text anchor at its last word.
+      (erase-buffer)
+      (insert "alpha  ")
+      (should (= (fanyi-shr--position (cdar anchors)) 6)))))
+
 (ert-deftest fanyi-shr-font-scaling-reflows-automatic-width-in-both-directions ()
   (fanyi-shr-test--with-window
     (let ((body-width (symbol-function 'window-body-width))
