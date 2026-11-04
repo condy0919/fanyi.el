@@ -131,7 +131,7 @@ static char* speaker_xpm[] = {
     (pcase (cadr spec)
       (`(:window ,parameter ,value)
        (when-let* ((entry (assq parameter (window-parameters window)))
-                   (_ (eq (cdr entry) value)))
+                   ((eq (cdr entry) value)))
          (fanyi--filter-face (nth 2 spec) window)))))
    (t (cons (fanyi--filter-face (car spec) window)
             (fanyi--filter-face (cdr spec) window)))))

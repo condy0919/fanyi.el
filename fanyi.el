@@ -600,7 +600,7 @@ the visible button at point."
     (when button
       (goto-char (button-start button))
       (when-let* ((help (button-get button 'help-echo))
-                  (_ (stringp help)))
+                  ((stringp help)))
         (message "%s" help)))
     button))
 
@@ -648,7 +648,7 @@ headings in that direction, and respect the accessible buffer region."
       (skip-chars-forward " \t" end)
       (when-let* ((button (button-at (point)))
                   (section (button-get button 'fanyi-shr-section))
-                  (_ (not (invisible-p (point)))))
+                  ((not (invisible-p (point)))))
         (when (or (<= origin (fanyi-shr--section-heading-end section))
                   ;; Ignore trailing indentation, but do not interpret text
                   ;; after a heading button as part of the heading itself.
