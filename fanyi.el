@@ -314,17 +314,15 @@ Nil disables the timeout."
   (fanyi--write-task
    task
    (lambda ()
-     (let ((name (url-host (url-generic-parse-url
-                            (fanyi-request-url (fanyi--task-request task))))))
-       (insert "# " (or name "Dictionary") "\n\n" description "\n\n")
+     (let ((name (fanyi-request-display-name (fanyi--task-request task))))
+       (insert "# " name "\n\n" description "\n\n")
        (insert-button (if (fanyi--task-done task) "Retry dictionary" "Retrying dictionary…")
                       'action #'fanyi--retry-task 'button-data task 'follow-link t)
        (insert "\n\n")))))
 
 (defun fanyi--report-task-error (task description)
   "Display TASK's failure DESCRIPTION and a retry action."
-  (let ((name (url-host (url-generic-parse-url
-                         (fanyi-request-url (fanyi--task-request task))))))
+  (let ((name (fanyi-request-display-name (fanyi--task-request task))))
     (fanyi-log "%s: %s" name description)
     (when fanyi-verbose (message "%s: %s" name description)))
   (fanyi--write-task-error task description))

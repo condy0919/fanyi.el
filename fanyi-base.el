@@ -327,13 +327,19 @@ URL is a format string accepting an encoded query word.  API-TYPE is
 and may adjust it.  PARSE receives (response request) and returns a result;
 RENDER receives (result request) and inserts at point in the current buffer.
 Browser providers do not need PARSE."
-  url sound-url (method "GET") headers body api-type prepare parse render)
+  name url sound-url (method "GET") headers body api-type prepare parse render)
 
 (cl-defstruct (fanyi-request (:constructor fanyi-request-create))
   "A single query's resolved parameters and callbacks.
 WORD is the query text; URL is the final encoded URL.  The result is stored
 separately, so parsing and rendering do not modify this request."
-  word url sound-url method headers body api-type parse render)
+  name word url sound-url method headers body api-type parse render)
+
+(defun fanyi-request-display-name (request)
+  "Return REQUEST's dictionary name, falling back to its URL host."
+  (or (fanyi-request-name request)
+      (url-host (url-generic-parse-url (fanyi-request-url request)))
+      "Dictionary"))
 
 (defun fanyi--copy-request-value (value)
   "Copy strings and lists in request configuration VALUE."
@@ -348,6 +354,9 @@ separately, so parsing and rendering do not modify this request."
 Copy mutable HTTP settings and capture callbacks before invoking PREPARE.
 Subsequent provider configuration changes apply only to future requests."
   (unless (and (fanyi-provider-p provider)
+               (or (null (fanyi-provider-name provider))
+                   (and (stringp (fanyi-provider-name provider))
+                        (not (string-empty-p (fanyi-provider-name provider)))))
                (stringp (fanyi-provider-url provider))
                (memq (fanyi-provider-api-type provider) '(xml json browser))
                (functionp (fanyi-provider-render provider))
@@ -358,6 +367,7 @@ Subsequent provider configuration changes apply only to future requests."
     (user-error "Invalid dictionary provider: %S" provider))
   (let ((request
          (fanyi-request-create
+          :name (fanyi--copy-request-value (fanyi-provider-name provider))
           :word (copy-sequence word)
           :url (format (fanyi-provider-url provider) (url-hexify-string word))
           :sound-url (fanyi--copy-request-value (fanyi-provider-sound-url provider))

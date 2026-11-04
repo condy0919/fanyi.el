@@ -829,9 +829,9 @@ Keep the underlying text available for searching and copying."
                                                  fanyi-longman-signpost-face
                                                  fanyi-longman-synopp-face)))))
 
-(defun fanyi-longman-render (content _request)
+(defun fanyi-longman-render (content request)
   "Insert prepared CONTENT at point with Fanyi headings and actions."
-  (insert "# Longman\n\n")
+  (insert "# " (fanyi-request-display-name request) "\n\n")
   (fanyi-shr-insert
    `(fanyi-face ((face . fanyi-longman-body-face)) ,content)
    '((a . fanyi-longman--shr-link)
@@ -857,7 +857,8 @@ Keep the underlying text available for searching and copying."
   (insert "\n"))
 
 (defconst fanyi-longman-provider
-  (fanyi-provider-create :url "https://www.ldoceonline.com/dictionary/%s"
+  (fanyi-provider-create :name "Longman"
+                         :url "https://www.ldoceonline.com/dictionary/%s"
                          :api-type 'xml
                          :prepare #'fanyi-longman--prepare-request
                          :parse #'fanyi-longman-parse

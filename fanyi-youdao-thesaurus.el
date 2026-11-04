@@ -198,9 +198,9 @@ Keep semicolons within one meaning and unfamiliar labels as ordinary text."
   (list fanyi-youdao-thesaurus-layout fanyi-youdao-thesaurus-indent
         (window-font-width window)))
 
-(defun fanyi-youdao-thesaurus-render (result _request)
+(defun fanyi-youdao-thesaurus-render (result request)
   "Insert RESULT at point in the current buffer."
-  (insert "# 有道同义词词典\n\n")
+  (insert "# " (fanyi-request-display-name request) "\n\n")
   (fanyi-shr-insert
    `(fanyi-youdao-entries nil
                           ,@(mapcar (lambda (entry)
@@ -212,7 +212,8 @@ Keep semicolons within one meaning and unfamiliar labels as ordinary text."
   (insert "\n"))
 
 (defconst fanyi-youdao-thesaurus-provider
-  (fanyi-provider-create :url "https://dict.youdao.com/suggest?q=%s&doctype=json"
+  (fanyi-provider-create :name "有道同义词词典"
+                         :url "https://dict.youdao.com/suggest?q=%s&doctype=json"
                          :api-type 'json
                          :prepare #'fanyi-youdao-thesaurus-prepare-request
                          :parse #'fanyi-youdao-thesaurus-parse

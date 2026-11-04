@@ -668,7 +668,7 @@ Children use the same word/url attributes as `fanyi-haici--shr-entries'."
 
 (defun fanyi-haici-render (result request)
   "Insert RESULT for REQUEST at point, preserving native dictionary actions."
-  (insert "# 海词\n\n")
+  (insert "# " (fanyi-request-display-name request) "\n\n")
   (let* ((content (copy-tree (fanyi-haici-result-content result)))
          (sections (dom-by-tag content 'fanyi-haici-section))
          (has-dual (seq-some (lambda (section) (eq (dom-attr section 'kind) 'dual)) sections)))
@@ -705,7 +705,8 @@ Children use the same word/url attributes as `fanyi-haici--shr-entries'."
 (add-to-list 'fanyi-mode-font-lock-keywords-extra '("★" . 'fanyi-haici-star-face))
 
 (defconst fanyi-haici-provider
-  (fanyi-provider-create :url "https://dict.cn/%s"
+  (fanyi-provider-create :name "海词"
+                         :url "https://dict.cn/%s"
                          :sound-url "https://audio.dict.cn/%s"
                          :api-type 'xml
                          :parse #'fanyi-haici-parse

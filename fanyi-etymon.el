@@ -35,7 +35,7 @@
 (defun fanyi-etymon-render (_result request)
   "Insert a browser link for REQUEST without fetching dictionary content."
   (let ((url (fanyi-request-url request)))
-    (insert "# Etymonline\n\n")
+    (insert "# " (fanyi-request-display-name request) "\n\n")
     (insert-button "Open in browser"
                    'action (lambda (_) (browse-url-default-browser url))
                    'help-echo url
@@ -43,7 +43,8 @@
     (insert "\n\n")))
 
 (defconst fanyi-etymon-provider
-  (fanyi-provider-create :url "https://www.etymonline.com/word/%s"
+  (fanyi-provider-create :name "Etymonline"
+                         :url "https://www.etymonline.com/word/%s"
                          :api-type 'browser
                          :render #'fanyi-etymon-render)
   "Etymonline browser entry configuration.")
