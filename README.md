@@ -132,6 +132,10 @@ layout, or the previous rendering window if none is selected. Use
 `C-u M-x fanyi-shr-reflow` to force a refresh. Rendering does not fetch page
 scripts, images or other remote assets.
 
+If automatic reflow fails, the previous content remains available. Fanyi retries
+when the layout or rendering settings change, or when you force a refresh,
+instead of repeating the same failure after every command.
+
 ### Haici
 
 The compact header groups the headword, star level, pronunciation and basic

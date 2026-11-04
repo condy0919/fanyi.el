@@ -15,7 +15,7 @@
 (require 'shr)
 
 (cl-defstruct (fanyi-shr--region (:constructor fanyi-shr--region-create))
-  start end dom renderers style-function layout sections)
+  start end dom renderers style-function layout failed-layout sections)
 
 (cl-defstruct (fanyi-shr--section (:constructor fanyi-shr--section-create))
   identity heading-start heading-end body-start body-end overlay closed)
@@ -332,6 +332,10 @@ Use the buffer's default font and character-based layout, with SHR's colors."
       ((error quit)
        (unwind-protect
            (let ((inhibit-quit t))
+             ;; Retry renderer errors only after the layout changes or the
+             ;; reader explicitly requests a refresh.  C-g must remain retryable.
+             (when (memq 'error (get (car error-data) 'error-conditions))
+               (setf (fanyi-shr--region-failed-layout region) layout))
              ;; Text is restored by the change group; restore the old state
              ;; before discarding the replacement's overlays and markers.
              (set-marker (fanyi-shr--region-start region) start)
@@ -351,6 +355,7 @@ Use the buffer's default font and character-based layout, with SHR's colors."
       (set-marker (fanyi-shr--region-start region) start)
       (set-marker (fanyi-shr--region-end region) (point))
       (setf (fanyi-shr--region-layout region) layout
+            (fanyi-shr--region-failed-layout region) nil
             (fanyi-shr--region-sections region) replacement))))
 
 (defun fanyi-shr--outline-folds (regions)
@@ -410,6 +415,7 @@ Use the buffer's default font and character-based layout, with SHR's colors."
 (defun fanyi-shr-reflow (&optional force)
   "Reflow saved HTML for its displayed window without fetching content.
 With FORCE, re-render even if the layout and provider styles have not changed.
+Otherwise, retry a failed render only after its layout or styles change.
 Preserve any narrowing by anchoring its boundaries in the rendered text.
 When several windows display the buffer, prefer its selected window, then its
 previous one."
@@ -420,7 +426,14 @@ previous one."
              (cl-loop for region in fanyi-shr--regions
                       for layout = (fanyi-shr--layout
                                     window (fanyi-shr--region-style-function region))
-                      unless (and (not force) (equal layout (fanyi-shr--region-layout region)))
+                      for failed = (fanyi-shr--region-failed-layout region)
+                      ;; Visiting the last successful layout also permits a
+                      ;; retry when the reader returns to the failed layout.
+                      do (when (and failed (not (equal layout failed)))
+                           (setf (fanyi-shr--region-failed-layout region) nil))
+                      unless (and (not force)
+                                  (or (equal layout (fanyi-shr--region-layout region))
+                                      (equal layout failed)))
                       collect (cons region layout))))
         (when updates
           (let ((bounds
