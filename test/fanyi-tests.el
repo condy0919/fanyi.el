@@ -740,5 +740,71 @@
           (should (= (point-max) (cdr bounds)))
           (should (= (point) (point-max))))))))
 
+(ert-deftest fanyi-query-background-window-keeps-its-selection-at-insertion-boundaries ()
+  (dolist (selection '(upper-forward upper-backward lower-forward lower-backward cursor))
+    (fanyi-test--with-query
+      (setq fanyi-providers (list (car fanyi-providers) (car fanyi-providers) (car fanyi-providers)))
+      (fanyi-dwim "word")
+      (fanyi-test--respond (car fanyi-test--requests) nil "first")
+      (fanyi-test--respond (nth 2 fanyi-test--requests) nil "last")
+      (with-current-buffer fanyi-buffer-name
+        (save-window-excursion
+          (delete-other-windows)
+          (set-window-buffer nil (current-buffer))
+          (let ((result-window (selected-window))
+                (other-window (split-window-right)))
+            (with-temp-buffer
+              (set-window-buffer other-window (current-buffer))
+              (with-current-buffer fanyi-buffer-name
+                (goto-char (fanyi--task-start (car fanyi--tasks)))
+                (pcase selection
+                  ((or 'upper-forward 'upper-backward) (set-mark (point-min)))
+                  ((or 'lower-forward 'lower-backward) (set-mark (+ (point) 4)))
+                  ('cursor (set-mark (point-min))))
+                (when (memq selection '(upper-backward lower-forward))
+                  (exchange-point-and-mark))
+                (let* ((mark-active (not (eq selection 'cursor)))
+                       (transient-mark-mode t) (deactivate-mark nil)
+                       (selected (and mark-active (buffer-substring-no-properties (point) (mark)))))
+                  (select-window other-window)
+                  (fanyi-test--respond (cadr fanyi-test--requests) nil "middle")
+                  (should (eq (selected-window) other-window))
+                  (select-window result-window)
+                  (if selected
+                      (progn
+                        (should (use-region-p))
+                        (should (equal selected (buffer-substring-no-properties (point) (mark)))))
+                    (should-not mark-active)
+                    (should (= (point) (fanyi--task-start (car fanyi--tasks))))))))))))))
+
+(ert-deftest fanyi-query-same-buffer-windows-use-their-own-selection-endpoints ()
+  (dolist (mark-side '(nil before after))
+    (fanyi-test--with-query
+      (setq fanyi-providers (list (car fanyi-providers) (car fanyi-providers) (car fanyi-providers)))
+      (fanyi-dwim "word")
+      (fanyi-test--respond (car fanyi-test--requests) nil "first")
+      (fanyi-test--respond (nth 2 fanyi-test--requests) nil "last")
+      (with-current-buffer fanyi-buffer-name
+        (save-window-excursion
+          (delete-other-windows)
+          (set-window-buffer nil (current-buffer))
+          (let* ((reader (selected-window))
+                 (other-window (split-window-right))
+                 (boundary (marker-position (fanyi--task-start (car fanyi--tasks)))))
+            (goto-char (point-min))
+            (set-window-point other-window boundary)
+            (set-mark (if (eq mark-side 'after) (+ boundary 4) (1+ (point-min))))
+            (let* ((mark-active (and mark-side t))
+                   (transient-mark-mode t) (deactivate-mark nil)
+                   (selected (and mark-active (buffer-substring-no-properties (mark) (window-point other-window)))))
+              (fanyi-test--respond (cadr fanyi-test--requests) nil "middle")
+              (should (eq (selected-window) reader))
+              (should (= (point) (point-min)))
+              (should (= (window-point other-window)
+                         (if (eq mark-side 'before) boundary
+                           (fanyi--task-start (car fanyi--tasks)))))
+              (when selected
+                (should (equal selected (buffer-substring-no-properties (mark) (window-point other-window))))))))))))
+
 (provide 'fanyi-tests)
 ;;; fanyi-tests.el ends here

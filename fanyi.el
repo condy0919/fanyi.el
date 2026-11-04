@@ -280,7 +280,8 @@ Nil disables the timeout."
                          (mapcar (lambda (window)
                                    (list window
                                          (and (= (window-point window) end)
-                                              (or (not (eq window (selected-window))) point-follows))
+                                              (not (and mark-active (mark t)
+                                                        (< (mark) (window-point window)))))
                                          (= (window-start window) end)))
                                  (get-buffer-window-list (current-buffer) nil t))))
            (deactivate-mark deactivate-mark)
