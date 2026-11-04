@@ -59,7 +59,8 @@ history, while requests use lowercase text.
 
 Results open in `*fanyi*`. The header shows the query followed by the counts of
 pending, completed and failed dictionaries, with labels and hover hints. It
-changes from `Translating` to `Ready` when no requests remain. Each buffer retains
+changes from `Translating` to `Ready` when no requests remain. Cancelled requests
+instead show `Incomplete` with a `Cancelled` count. Each buffer retains
 its own query and request state, so you can rename it to keep an earlier lookup.
 Starting another query cancels pending requests from the previous lookup.
 
@@ -94,6 +95,11 @@ shared between its back and forward stacks; set it to `0` to disable caching.
 A new query clears the forward stack. `g` refreshes the current page without
 adding a duplicate history entry. These in-memory pages disappear with the
 buffer; `h` still uses the separate query-word history and performs a fresh lookup.
+New queries, refreshes and history navigation preserve buffer-local display
+settings, text scaling and derived modes. When several windows show the result,
+each surviving window recovers its own reading position. If a cached dictionary
+cannot be rendered, Fanyi reveals its error and retry button, dropping affected
+narrowing or folds. Revisiting an existing error does not report it again in the log.
 
 ### Imenu, bookmarks and Org links
 
@@ -147,6 +153,8 @@ Haici, Longman and Youdao use Emacs's built-in `shr` rendering infrastructure.
 character-based layout; semantic faces still supply highlighting and emphasis.
 SVG labels have searchable, copyable text underneath and a text fallback when
 images are disabled or unavailable.
+Image colors and styles also follow buffer-local face remapping, such as
+`face-remap-add-relative`, including window-filtered remaps.
 
 Resizing the displayed window or scaling the buffer's text reflows cached content
 without another request. Automatic wrapping uses the actual character width;
