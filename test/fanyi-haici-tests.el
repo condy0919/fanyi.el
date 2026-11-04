@@ -396,5 +396,22 @@
       (should (equal (get-text-property (fanyi-haici-test--position "★★★") 'help-echo)
                      "3 常用词")))))
 
+(ert-deftest fanyi-haici-preserves-complete-syllables-and-falls-back-to-visible-word ()
+  (dolist (word '("mother-in-law" "ice cream" "café" "rock’n’roll" "sam·ple"))
+    (dolist (prefix '("" "音节划分：" "音节划分: "))
+      (let* ((response (fanyi-test--read-fixture "haici.html"))
+             (keyword (car (dom-by-class response "keyword")))
+             (request (fanyi-make-request fanyi-haici-provider "sample")))
+        (dom-set-attribute keyword 'tip (concat prefix word " "))
+        (should (equal (fanyi-haici-result-syllable (fanyi-haici-parse response request)) word)))))
+  (dolist (tip '(nil "" " \t " "音节划分： "))
+    (let* ((response (fanyi-test--read-fixture "haici.html"))
+           (keyword (car (dom-by-class response "keyword")))
+           (request (fanyi-make-request fanyi-haici-provider "query")))
+      (dom-set-attribute keyword 'tip tip)
+      (should (equal (fanyi-haici-result-syllable (fanyi-haici-parse response request)) "sample"))
+      (dom-remove-node response keyword)
+      (should (equal (fanyi-haici-result-syllable (fanyi-haici-parse response request)) "query")))))
+
 (provide 'fanyi-haici-tests)
 ;;; fanyi-haici-tests.el ends here

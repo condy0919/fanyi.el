@@ -141,6 +141,18 @@ static char* speaker_xpm[] = {
   "Return NODE's text with HTML whitespace collapsed."
   (string-trim (replace-regexp-in-string "[ \t\r\n]+" " " (dom-texts node ""))))
 
+(defun fanyi-haici--syllable (dom)
+  "Read the complete syllabified headword from DOM, or its visible keyword."
+  (let* ((keyword (dom-by-class dom "keyword"))
+         (tip (dom-attr keyword 'tip))
+         (syllable (and (stringp tip)
+                        (string-trim
+                         (replace-regexp-in-string
+                          "\\`[ \t]*音节划分[ \t]*[:：][ \t]*" "" tip))))
+         (word (fanyi-haici--text keyword)))
+    (cond ((fanyi-haici--present-p syllable) syllable)
+          ((fanyi-haici--present-p word) word))))
+
 (defun fanyi-haici--link-url (href base)
   "Resolve an HTTP HREF against BASE, ignoring browser script actions."
   (when (fanyi-haici--present-p href)
@@ -304,14 +316,11 @@ Signal `fanyi-parse-error' when no usable definitions can be extracted."
                                            (dom-by-tag group 'li))))
                           (dom-non-text-children (fanyi-haici-result-content result))))
       (signal 'fanyi-parse-error '("Haici response contains no usable definitions")))
-    (setf (fanyi-haici-result-syllable result) (fanyi-request-word request))
+    (setf (fanyi-haici-result-syllable result)
+          (or (fanyi-haici--syllable dom) (fanyi-request-word request)))
     (setf (fanyi-haici-result-level-label result)
           (fanyi-haici--text (dom-by-class dom "level-title")))
     (save-match-data
-      ;; Syllable, could be nil.
-      (when-let* ((str (dom-attr (dom-by-class dom "keyword") 'tip)))
-        (when (string-match "\\([a-zA-Z·]+\\)" str)
-          (setf (fanyi-haici-result-syllable result) (match-string 1 str))))
       ;; Star and description, could be nil.
       (when-let* ((str (dom-attr (dom-by-class dom "level-title") 'level)))
         (when (string-match "\\([12345]\\)" str)

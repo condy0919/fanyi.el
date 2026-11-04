@@ -361,9 +361,22 @@ The saved page puts the corpus label and title in sibling containers."
           (when (cl-intersection classes '("exaGroup" "corpus") :test #'equal)
             '(corpus))
           (when (and (member "Head" classes)
-                     (fanyi-longman--nodes node "HYPHENATION"))
+                     (fanyi-longman--visible-hyphenation-p node))
             '(hyphenated))
           context))
+
+(defun fanyi-longman--visible-hyphenation-p (node &optional hyphenated)
+  "Whether NODE contains visible, nonblank hyphenated headword text.
+HYPHENATED means NODE is inside a HYPHENATION element.  Check ancestor
+visibility as well as the element itself before replacing the plain headword."
+  (if (stringp node)
+      (and hyphenated (string-match-p "[^[:space:]\u00a0]" node))
+    (let ((classes (split-string (or (dom-attr node 'class) ""))))
+      (unless (fanyi-longman--hidden-node-p node classes nil)
+        (seq-some (lambda (child)
+                    (fanyi-longman--visible-hyphenation-p
+                     child (or hyphenated (member "HYPHENATION" classes))))
+                  (dom-children node))))))
 
 (defun fanyi-longman--hidden-node-p (node classes context)
   "Return non-nil if NODE with CLASSES is omitted in CONTEXT."

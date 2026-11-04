@@ -9,6 +9,35 @@
     (insert html)
     (libxml-parse-html-region (point-min) (point-max))))
 
+(ert-deftest fanyi-longman-keeps-headword-without-visible-hyphenation ()
+  (dolist (hyphenation '("<span class='HYPHENATION'></span>"
+                         "<span class='HYPHENATION'> \n\t </span>"
+                         "<span class='HYPHENATION'>&nbsp;</span>"
+                         "<span class='HYPHENATION' hidden='hidden'>sam‧ple</span>"
+                         "<span style='display:none'><span class='HYPHENATION'>sam‧ple</span></span>"
+                         "<span class='HYPHENATION'><span class='suppressed'>sam‧ple</span></span>"))
+    (let* ((dom (fanyi-test--longman-html
+                 (concat "<div class='dictionary'><div class='dictentry'><span class='Head'>"
+                         "<span class='HWD'>sample</span>" hyphenation
+                         "</span><span class='DEF'>A definition.</span></div></div>")))
+           (before (copy-tree dom)))
+      (fanyi-test--with-rendered-response fanyi-longman-provider dom
+        (should (equal dom before))
+        (should (= (how-many "\\bsample\\b" (point-min) (point-max)) 1))
+        (should-not (string-match-p "sam‧ple" (buffer-string)))
+        (should (string-match-p "A definition\\." (buffer-string)))))))
+
+(ert-deftest fanyi-longman-prefers-usable-hyphenated-headword ()
+  (dolist (hyphenation '("sam‧ple" "<b>sam</b>‧ple"))
+    (let ((dom (fanyi-test--longman-html
+                (concat "<div class='dictionary'><div class='dictentry'><span class='Head'>"
+                        "<span class='HWD'>sample</span><span class='HYPHENATION'>"
+                        hyphenation "</span></span><span class='DEF'>A definition.</span></div></div>"))))
+      (fanyi-test--with-rendered-response fanyi-longman-provider dom
+        (should (= (how-many "sam‧ple" (point-min) (point-max)) 1))
+        (should-not (string-match-p "\\bsample\\b" (buffer-string)))
+        (should-not (fanyi-longman--nodes result "HWD"))))))
+
 (ert-deftest fanyi-longman-phrase-links-preserve-word-and-source-url ()
   (fanyi-test--with-query
     (let ((fanyi-providers (list fanyi-longman-provider (fanyi-test--provider))))
