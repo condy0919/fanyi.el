@@ -634,7 +634,7 @@ Children use the same word/url attributes as `fanyi-haici--shr-entries'."
                                                         :data ,fanyi-haici-speaker-xpm
                                                         :ascent center
                                                         :color-symbols
-                                                        (("color" . ,(face-attribute face :foreground)))))))
+                                                        (("color" . ,(face-attribute face :foreground nil 'default)))))))
                         'action #'fanyi-play-sound
                         'button-data (format sound-url audio)
                         'face face
@@ -690,11 +690,14 @@ Children use the same word/url attributes as `fanyi-haici--shr-entries'."
 
 (defun fanyi-haici--render-style (window)
   "Return settings affecting Haici's layout in WINDOW."
-  (list fanyi-use-glyphs fanyi-haici-expanded-sections
-        (window-font-width window) (window-font-height window)
-        (display-images-p (window-frame window))
-        (face-attribute 'default :family (window-frame window) t)
-        (face-attribute 'fanyi-haici-label-face :foreground (window-frame window) t)))
+  (let ((frame (window-frame window)))
+    (list fanyi-use-glyphs fanyi-haici-expanded-sections
+          (window-font-width window) (window-font-height window)
+          (display-images-p frame)
+          (face-attribute 'default :family frame t)
+          (face-attribute 'fanyi-haici-label-face :foreground frame t)
+          (face-attribute 'fanyi-female-speaker-face :foreground frame 'default)
+          (face-attribute 'fanyi-male-speaker-face :foreground frame 'default))))
 
 (defun fanyi-haici-render (result request)
   "Insert RESULT for REQUEST at point, preserving native dictionary actions."
